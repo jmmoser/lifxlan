@@ -574,9 +574,8 @@ function decodeType(type, bytes, offsetRef) {
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
- * @param {boolean} [warnIfMoreBufferRemaining=true]
  */
-export function decode(bytes, offsetRef, warnIfMoreBufferRemaining = true) {
+export function decode(bytes, offsetRef) {
   const buffer = bytes.buffer;
   const view = new DataView(bytes.buffer);
 
@@ -616,10 +615,6 @@ export function decode(bytes, offsetRef, warnIfMoreBufferRemaining = true) {
   const reserved_protocol_header_2 = decodeBytes(bytes, offsetRef, 2);
 
   const payload = decodeType(type, bytes, offsetRef);
-
-  if (warnIfMoreBufferRemaining && offsetRef.current !== buffer.byteLength) {
-    console.error('Packet has more data that was not decoded', offsetRef, buffer);
-  }
   
   return {
     buffer,

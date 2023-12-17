@@ -1,6 +1,8 @@
-Work in progress.
+No dependencies. Bring your own socket.
 
-Example:
+Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://github.com/oven-sh/bun/issues/1630).
+
+Node.js:
 ```javascript
 import dgram from 'node:dgram';
 import { Client } from 'lifxlan';
@@ -30,6 +32,39 @@ socket.once('listening', () => {
 });
 
 socket.bind(50032);
+```
+
+Deno:
+```javascript
+import { Client } from 'lifxlan';
+
+const client = Deno.listenDatagram({
+  hostname: '0.0.0.0',
+  port: 50032,
+  transport: 'udp',
+});
+
+const lifx = Client({
+  onSend(message, port, hostname) {
+    client.send(message, { port, hostname });
+  },
+  async onDevice(device) {
+    if (device.label && device.groupLabel) {
+      console.log(`Group: ${device.groupLabel}, Name: ${device.label}`);
+    }
+  },
+});
+
+setTimeout(() => {
+  lifx.close();
+  client.close();
+}, 5000);
+
+lifx.discover();
+
+for await (const [data, remote] of client) {
+  lifx.onReceived(data, remote.port, remote.hostname);
+}
 ```
 
 You can also use multiple sockets. For example, you could use one for unicast and the other for broadcast:
