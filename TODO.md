@@ -1,5 +1,0 @@
-- finish writing is<Packet> functions in protocol but move somewhere else
-- finish all commands
-- remove types and payload decoders from protocol
-- client devices discovery add configuraiton, dont get label, dont get group, interval, back-off
-- client send add configuration, timeout
