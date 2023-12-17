@@ -9,8 +9,8 @@ const socket = dgram.createSocket('udp4');
 
 const lifx = Client({
   onSend(message, port, host, broadcast) {
-    client.setBroadcast(broadcast);
-    client.send(message, port, host);
+    socket.setBroadcast(broadcast);
+    socket.send(message, port, host);
   },
   onDevice(device) {
     if (device.label && device.groupLabel) {
