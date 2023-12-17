@@ -1,0 +1,20 @@
+{
+  "name": "lifxlan",
+  "version": "0.0.0",
+  "description": "LIFX LAN protocol in JavaScript",
+  "exports": "./src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "lifx",
+    "lan"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jmmoser/lifxlan.git"
+  },
+  "author": "Justin Moser",
+  "license": "MIT"
+}
