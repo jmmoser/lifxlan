@@ -1,13 +1,74 @@
-import * as Protocol from './protocol.js';
+import * as Encoding from './encoding.js';
+import { TYPE } from './constants.js';
+
+/**
+ * @template OutputType
+ * @typedef {(bytes: Uint8Array, offsetRef: { current: number; }) => OutputType} Decoder
+ */
 
 /**
  * @template OutputType
  * @typedef {{
  *   type: number;
  *   payload: Uint8Array | undefined;
- *   decoder: (bytes: Uint8Array, offsetRef: { current: number; }) => OutputType;
+ *   decoder: Decoder<OutputType>;
  * }} Command
  */
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateVersion>>}
+ */
+export function GetVersionCommand() {
+  return {
+    type: TYPE.GetVersion,
+    payload: undefined,
+    decoder: Encoding.decodeStateVersion,
+  };
+}
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateHostFirmware>>}
+ */
+export function GetHostFirmwareCommand() {
+  return {
+    type: TYPE.GetHostFirmware,
+    payload: undefined,
+    decoder: Encoding.decodeStateHostFirmware,
+  };
+}
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateLabel>>}
+ */
+export function GetLabelCommand() {
+  return {
+    type: TYPE.GetLabel,
+    payload: undefined,
+    decoder: Encoding.decodeStateLabel,
+  };
+}
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateGroup>>}
+ */
+export function GetGroupCommand() {
+  return {
+    type: TYPE.GetGroup,
+    payload: undefined,
+    decoder: Encoding.decodeStateGroup,
+  };
+}
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
+ */
+export function GetServiceCommand() {
+  return {
+    type: TYPE.SetColor,
+    payload: undefined,
+    decoder: Encoding.decodeStateService,
+  };
+}
 
 /**
  * @param {number} hue
@@ -15,7 +76,7 @@ import * as Protocol from './protocol.js';
  * @param {number} brightness
  * @param {number} kelvin
  * @param {number} duration
- * @returns {Command<ReturnType<typeof import('./protocol.js').decodeLightState>>}
+ * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
  */
 export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
   const payload = new Uint8Array(13);
@@ -26,34 +87,34 @@ export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
   view.setUint16(7, kelvin, true);
   view.setUint32(9, duration, true);
   return {
-    type: Protocol.TYPE.SetColor,
+    type: TYPE.SetColor,
     payload,
-    decoder: Protocol.decodeLightState,
+    decoder: Encoding.decodeLightState,
   };
 }
 
 /**
  * @param {boolean} on
- * @returns {Command<ReturnType<typeof import('./protocol.js').decodeStatePower>>}
+ * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
 export function SetPowerCommand(on) {
   const payload = new Uint8Array(2);
   const view = new DataView(payload.buffer);
   view.setUint16(0, on ? 0xFFFF : 0, true);
   return {
-    type: Protocol.TYPE.SetPower,
+    type: TYPE.SetPower,
     payload,
-    decoder: Protocol.decodeStatePower,
+    decoder: Encoding.decodeStatePower,
   };
 }
 
 /**
- * @returns {Command<ReturnType<typeof import('./protocol.js').decodeStatePower>>}
+ * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
 export function GetPowerCommand() {
   return {
-    type: Protocol.TYPE.GetPower,
+    type: TYPE.GetPower,
     payload: undefined,
-    decoder: Protocol.decodeStatePower,
+    decoder: Encoding.decodeStatePower,
   };
 }

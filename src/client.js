@@ -1,5 +1,24 @@
-import * as Protocol from './protocol.js';
-import { PromiseWithResolvers } from './utils.js';
+import {
+  TYPE,
+  SERVICE_TYPE,
+  PORT,
+  BROADCAST_ADDRESS,
+  NO_TARGET,
+} from './constants.js';
+import {
+  encode,
+  decodeHeader,
+  decodeStateService,
+  decodeStateGroup,
+  decodeStateLabel,
+  decodeLightState,
+  decodeStateVersion,
+  decodeStateHostFirmware,
+} from './encoding.js';
+import {
+  PromiseWithResolvers,
+  convertTargetToSerialNumber,
+} from './utils.js';
 
 /**
  * @typedef {'light' | 'switch'} DeviceType
@@ -10,20 +29,40 @@ import { PromiseWithResolvers } from './utils.js';
  *   address: string;
  *   port: number;
  *   target: Uint8Array;
+ *   serialNumber: string;
  *   label?: string;
- *   groupLabel?: string;
- *   groupId?: string;
+ *   group?: ReturnType<typeof decodeStateGroup>;
  *   type?: DeviceType;
  *   source: number;
+ *   color?: ReturnType<typeof decodeLightState>;
+ *   version?: ReturnType<typeof decodeStateVersion>;
+ *   hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
  * }} Device
  */
 
 /**
+ * @param {string} serialNumber
+ * @param {number} port
+ * @param {string} address
+ * @param {Uint8Array} target
+ * @param {number} source
+ * @returns {Device}
+ */
+function createDevice(serialNumber, port, address, target, source) {
+  return {
+    serialNumber,
+    port,
+    address,
+    target,
+    source,
+  };
+}
+
+/**
  * @param {{
- *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void,
- *   onDevice?: (device: Device) => void,
+ *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
+ *   onDevice?: (device: Device) => void;
  * }} options
- * @returns 
  */
 export function Client(options) {
   let deviceSource = 3; // 0 and 1 are reserved and we use 2 for discovering
@@ -34,8 +73,8 @@ export function Client(options) {
   }
 
   /**
-   * @type {Map<string, (payload: unknown) => void>}
-   */
+  * @type {Map<string, (bytes: Uint8Array, offsetRef: { current: number; }) => unknown>}
+  */
   const responseHandlerMap = new Map();
 
   /**
@@ -49,9 +88,10 @@ export function Client(options) {
   /**
    * @template T
    * @param {number} source 
-   * @param {number} sequence 
+   * @param {number} sequence
+   * @param {import('./commands.js').Decoder<T>} decoder
    */
-  function registerRequest(source, sequence) {
+  function registerRequest(source, sequence, decoder) {
     const { resolve, reject, promise } = /** @type {typeof PromiseWithResolvers<T>} */ (PromiseWithResolvers)();
 
     const key = buildMessageKey(source, sequence);
@@ -61,10 +101,12 @@ export function Client(options) {
       reject(new Error('Timeout'));
     }, 5000);
 
-    responseHandlerMap.set(key, (res) => {
+    responseHandlerMap.set(key, (bytes, offsetRef) => {
       clearTimeout(timeout);
       responseHandlerMap.delete(key);
-      resolve(/** @type {T} */ (res));
+      const payload = decoder(bytes, offsetRef);
+      resolve(/** @type {T} */(payload));
+      return payload;
     });
 
     return promise;
@@ -73,41 +115,45 @@ export function Client(options) {
   /**
    * @param {number} source 
    * @param {number} sequence 
-   * @param {unknown} payload 
+   * @param {Uint8Array} payload
+   * @param {{ current: number; }} offsetRef
    */
-  function handleResponse(source, sequence, payload) {
+  function handleResponse(source, sequence, payload, offsetRef) {
     const entry = responseHandlerMap.get(buildMessageKey(source, sequence));
     if (entry) {
-      entry(payload);
+      return entry(payload, offsetRef);
     }
   }
 
   const knownDevices = /** @type {Device[]} */ ([]);
+  // /** @type {Map<string, Device>} */
+  // const knownDevices = new Map();
 
   /**
    * @type {Map<string, ((device: Device) => void)[]>}
    */
-  const getDevicePromises = new Map();
+  const getDeviceResolvers = new Map();
 
   /**
-   * @param {number} port 
-   * @param {string} address 
-   * @param {Uint8Array} target 
+   * @param {number} port
+   * @param {string} address
+   * @param {Uint8Array} target
    */
   function registerDevice(port, address, target) {
+    const serialNumber = convertTargetToSerialNumber(target);
     for (let i = 0; i < knownDevices.length; i++) {
       const device = knownDevices[i];
-      if (device.address === address && device.port === port) {
+      if (device.serialNumber === serialNumber) {
+        device.port = port;
+        device.address = address;
         return knownDevices[i];
       }
     }
-    const device = /** @type {Device} */ ({
-      port,
-      address,
-      target,
-      source: ++deviceSource,
-    });
+    const device = createDevice(serialNumber, port, address, target, ++deviceSource);
     knownDevices.push(device);
+    if (options.onDevice) {
+      options.onDevice(device);
+    }
     return device;
   }
 
@@ -116,7 +162,7 @@ export function Client(options) {
     if (discoverTimeout) {
       clearTimeout(discoverTimeout);
     }
-    options.onSend(Protocol.encode(true, 2, Protocol.NO_TARGET, true, false, 0, Protocol.TYPE.GetService), Protocol.PORT, Protocol.BROADCAST_ADDRESS, true);
+    options.onSend(encode(true, 2, NO_TARGET, true, false, 0, TYPE.GetService), PORT, BROADCAST_ADDRESS, true);
     discoverTimeout = setTimeout(discoverDevices, 2000);
   }
 
@@ -142,10 +188,10 @@ export function Client(options) {
       const seqence = incrementSequence();
       const source = device ? device.source : 2;
 
-      const bytes = Protocol.encode(
+      const bytes = encode(
         !device,
         source,
-        device ? device.target : Protocol.NO_TARGET,
+        device ? device.target : NO_TARGET,
         true,
         false,
         seqence,
@@ -156,91 +202,103 @@ export function Client(options) {
       if (device) {
         options.onSend(bytes, device.port, device.address, false);
       } else {
-        options.onSend(bytes, Protocol.PORT, Protocol.BROADCAST_ADDRESS, true);
+        options.onSend(bytes, PORT, BROADCAST_ADDRESS, true);
       }
 
-      return registerRequest(source, sequence);
+      return registerRequest(source, sequence, command.decoder);
     },
     /**
-     * @param {string} label 
+     * @param {string} serialNumber 
      */
-    getDevice(label) {
+    getDevice(serialNumber) {
       for (let i = 0; i < knownDevices.length; i++) {
         const device = knownDevices[i];
-        if (device.label === label) {
+        if (device.serialNumber === serialNumber) {
           return knownDevices[i];
         }
       }
 
       const { resolve, promise } = /** @type {typeof PromiseWithResolvers<Device>} */ (PromiseWithResolvers)();
 
-      const existingPromises = getDevicePromises.get(label);
-      if (!existingPromises) {
-        getDevicePromises.set(label, [resolve]);
+      const deviceResolvers = getDeviceResolvers.get(serialNumber);
+      if (!deviceResolvers) {
+        getDeviceResolvers.set(serialNumber, [resolve]);
       } else {
-        existingPromises.push(resolve);
+        deviceResolvers.push(resolve);
       }
 
       return promise;
     },
     /**
      * @param {Uint8Array} message
-     * @param {number} port 
-     * @param {string} address 
+     * @param {number} port
+     * @param {string} address
      */
     onReceived(message, port, address) {
-      const packet = Protocol.decode(message, { current: 0 });
+      const offsetRef = { current: 0 };
+      const header = decodeHeader(message, offsetRef);
 
-      const device = registerDevice(port, address, packet.target.bytes);
+      // TODO: every response could be handled, could use this.send() with commands to decode payload
+      const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, message, { current: offsetRef.current });
 
-      if (Protocol.isStateService(packet)) {
-        if (packet.payload.service.code !== Protocol.SERVICE_TYPE.UDP) {
-          // ignore all other types as they are reserved
-          return;
-        }
-        if (options.onDevice && (!device.label || !device.groupId)) {
-          options.onDevice(device);
-        }
-        if (!device.label) {
-          options.onSend(Protocol.encode(false, device.source, device.target, true, false, 0, Protocol.TYPE.GetLabel), port, address, false);
-        }
-        if (!device.groupLabel) {
-          options.onSend(Protocol.encode(false, device.source, device.target, true, false, 0, Protocol.TYPE.GetGroup), port, address, false);
-        }
-      } else if (Protocol.isStateGroup(packet)) {
-        const { group, label } = packet.payload;
+      const device = registerDevice(port, address, header.target);
 
-        if (device.groupId !== group || device.groupLabel !== label) {
-          device.groupId = group;
-          device.groupLabel = label;
-          if (options.onDevice) {
-            options.onDevice(device);
+      switch (header.type) {
+        case TYPE.StateService: {
+          const payload = decodeStateService(message, offsetRef);
+          if (payload.service.code !== SERVICE_TYPE.UDP) {
+            // ignore all other types as they are reserved
+            return;
           }
-        }
-      } else if (Protocol.isStateLabel(packet)) {
-        const label = packet.payload;
-
-        if (device.label !== label) {
-          device.label = label;
-          if (options.onDevice) {
-            options.onDevice(device);
+          if (!device.label) {
+            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetLabel), port, address, false);
           }
+          if (!device.group) {
+            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetGroup), port, address, false);
+          }
+          if (!device.color) {
+            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetColor), port, address, false);
+          }
+          if (!device.version) {
+            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetVersion), port, address, false);
+          }
+          if (!device.hostFirmware) {
+            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetHostFirmware), port, address, false);
+          }
+          break;
         }
+        case TYPE.StateGroup:
+          device.group = decodeStateGroup(message, offsetRef);
+          break;
+        case TYPE.StateLabel:
+          device.label = decodeStateLabel(message, offsetRef);
+          break;
+        case TYPE.LightState:
+          device.color = decodeLightState(message, offsetRef);
+          device.type = 'light';
+          break;
+        case TYPE.StateVersion:
+          device.version = decodeStateVersion(message, offsetRef);
+          break;
+        case TYPE.StateHostFirmware:
+          device.hostFirmware = decodeStateHostFirmware(message, offsetRef);
+          break;
+        default:
+          break;
       }
 
-      handleResponse(packet.source, packet.sequence, packet.payload);
-
-      if (device.label) {
-        const resolvers = getDevicePromises.get(device.label);
-        if (resolvers) {
-          getDevicePromises.delete(device.label);
-          resolvers.forEach((resolver) => {
-            resolver(device);
-          });
-        }
+      const resolvers = getDeviceResolvers.get(device.serialNumber);
+      if (resolvers) {
+        getDeviceResolvers.delete(device.serialNumber);
+        resolvers.forEach((resolver) => {
+          resolver(device);
+        });
       }
 
-      return packet;
+      return {
+        header,
+        payload: possiblyDecodedResponsePayload,
+      };
     }
   }
 }

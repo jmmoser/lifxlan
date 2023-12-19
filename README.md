@@ -10,8 +10,7 @@ import { Client } from 'lifxlan';
 const socket = dgram.createSocket('udp4');
 
 const lifx = Client({
-  onSend(message, port, address, broadcast) {
-    socket.setBroadcast(broadcast);
+  onSend(message, port, address) {
     socket.send(message, port, address);
   },
   onDevice(device) {
@@ -28,6 +27,7 @@ socket.on('message', (message, remote) => {
 });
 
 socket.once('listening', () => {
+  socket.setBroadcast(true);
   lifx.discover();
 });
 

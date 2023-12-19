@@ -24,3 +24,11 @@ export function PromiseWithResolvers<T>(): {
  * @param {number} b The blue color value
  */
 export function rgbToHsl(r: number, g: number, b: number): readonly [number, number, number];
+/**
+ * @param {number} rssi
+ */
+export function getRssiStatus(rssi: number): "none" | "very bad" | "somewhat bad" | "alright" | "good";
+/**
+ * @param {Uint8Array} slice
+ */
+export function convertTargetToSerialNumber(slice: Uint8Array): any;

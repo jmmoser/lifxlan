@@ -1,12 +1,13 @@
 {
   "name": "lifxlan",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "types": "rm -rf ./types && npx -p typescript tsc $(npx glob \"src/**/*.js\") --declaration --allowJs --emitDeclarationOnly --outDir types"
   },
   "keywords": [
     "lifx",

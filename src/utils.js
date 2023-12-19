@@ -53,3 +53,35 @@ export function rgbToHsl(r, g, b) {
 
   return /** @type {const} */ ([h, s, l]);
 }
+
+/**
+ * @param {number} rssi 
+ */
+export function getRssiStatus(rssi) {
+  if (rssi === 200) return 'none';
+
+  if (rssi < -80 || rssi === 4 || rssi === 5 || rssi === 6) {
+    return 'very bad';
+  }
+
+  if (rssi < -70 || (rssi >= 7 && rssi <= 11)) {
+    return 'somewhat bad';
+  }
+
+  if (rssi < -60 || (rssi >= 12 && rssi <= 16)) {
+    return 'alright';
+  }
+
+  if (rssi < 0 || rssi > 16) {
+    return 'good';
+  }
+
+  return 'none';
+}
+
+/**
+ * @param {Uint8Array} slice 
+ */
+export function convertTargetToSerialNumber(slice) {
+  return Array.from(slice).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
