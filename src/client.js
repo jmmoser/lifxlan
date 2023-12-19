@@ -126,8 +126,6 @@ export function Client(options) {
   }
 
   const knownDevices = /** @type {Device[]} */ ([]);
-  // /** @type {Map<string, Device>} */
-  // const knownDevices = new Map();
 
   /**
    * @type {Map<string, ((device: Device) => void)[]>}
