@@ -31,6 +31,10 @@ export function GetGroupCommand(): Command<ReturnType<typeof Encoding.decodeStat
  */
 export function GetServiceCommand(): Command<ReturnType<typeof Encoding.decodeStateService>>;
 /**
+ * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
+ */
+export function GetColorCommand(): Command<ReturnType<typeof Encoding.decodeLightState>>;
+/**
  * @param {number} hue
  * @param {number} saturation
  * @param {number} brightness

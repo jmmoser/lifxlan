@@ -71,6 +71,17 @@ export function GetServiceCommand() {
 }
 
 /**
+ * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
+ */
+export function GetColorCommand() {
+  return {
+    type: TYPE.GetColor,
+    payload: undefined,
+    decoder: Encoding.decodeLightState,
+  };
+}
+
+/**
  * @param {number} hue
  * @param {number} saturation
  * @param {number} brightness

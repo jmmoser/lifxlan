@@ -66,10 +66,10 @@ function createDevice(serialNumber, port, address, target, source) {
  */
 export function Client(options) {
   let deviceSource = 3; // 0 and 1 are reserved and we use 2 for discovering
-  let sequence = 0;
+  let _sequence = 0;
 
   function incrementSequence() {
-    return ++sequence % 0x100;
+    return ++_sequence % 0x100;
   }
 
   /**
@@ -183,7 +183,7 @@ export function Client(options) {
      * @returns {Promise<T>}}
      */
     send(command, device) {
-      const seqence = incrementSequence();
+      const sequence = incrementSequence();
       const source = device ? device.source : 2;
 
       const bytes = encode(
@@ -192,7 +192,7 @@ export function Client(options) {
         device ? device.target : NO_TARGET,
         true,
         false,
-        seqence,
+        sequence,
         command.type,
         command.payload,
       );
