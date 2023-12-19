@@ -14,11 +14,9 @@ const lifx = Client({
     socket.send(message, port, address);
   },
   onDevice(device) {
-    if (device.label && device.groupLabel) {
-      console.log(`Group: ${device.groupLabel}, Name: ${device.label}`);
-      lifx.close();
-      socket.close();
-    }
+    console.log(device.serialNumber, device.address);
+    lifx.close();
+    socket.close();
   },
 });
 
@@ -48,17 +46,12 @@ const lifx = Client({
   onSend(message, port, hostname) {
     client.send(message, { port, hostname });
   },
-  async onDevice(device) {
-    if (device.label && device.groupLabel) {
-      console.log(`Group: ${device.groupLabel}, Name: ${device.label}`);
-    }
+  onDevice(device) {
+    console.log(device.serialNumber, device.address);
+    lifx.close();
+    client.close();
   },
 });
-
-setTimeout(() => {
-  lifx.close();
-  client.close();
-}, 5000);
 
 lifx.discover();
 
@@ -84,12 +77,10 @@ const lifx = Client({
     }
   },
   onDevice(device) {
-    if (device.label && device.groupLabel) {
-      console.log(`Group: ${device.groupLabel}, Name: ${device.label}`);
-      lifx.close();
-      broadcastSocket.close();
-      unicastSocket.close();
-    }
+    console.log(device.serialNumber, device.address);
+    lifx.close();
+    broadcastSocket.close();
+    unicastSocket.close();
   },
 });
 
