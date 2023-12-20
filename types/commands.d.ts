@@ -6,10 +6,14 @@
  * @template OutputType
  * @typedef {{
  *   type: number;
- *   payload: Uint8Array | undefined;
+ *   payload?: Uint8Array;
  *   decoder: Decoder<OutputType>;
  * }} Command
  */
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
+ */
+export function GetServiceCommand(): Command<ReturnType<typeof Encoding.decodeStateService>>;
 /**
  * @returns {Command<ReturnType<typeof Encoding.decodeStateVersion>>}
  */
@@ -26,10 +30,6 @@ export function GetLabelCommand(): Command<ReturnType<typeof Encoding.decodeStat
  * @returns {Command<ReturnType<typeof Encoding.decodeStateGroup>>}
  */
 export function GetGroupCommand(): Command<ReturnType<typeof Encoding.decodeStateGroup>>;
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
- */
-export function GetServiceCommand(): Command<ReturnType<typeof Encoding.decodeStateService>>;
 /**
  * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
  */
@@ -57,7 +57,7 @@ export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
 }) => OutputType;
 export type Command<OutputType> = {
     type: number;
-    payload: Uint8Array | undefined;
+    payload?: Uint8Array;
     decoder: Decoder<OutputType>;
 };
 import * as Encoding from './encoding.js';

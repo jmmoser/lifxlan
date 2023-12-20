@@ -8,20 +8,27 @@ export function Client(options: {
     onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
     onDevice?: (device: Device) => void;
 }): {
-    discover(): void;
-    close(): void;
-    readonly devices: Device[];
+    readonly devices: Map<string, Device>;
     /**
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} [device]
-     * @returns {Promise<T>}}
      */
-    send<T>(command: import("./commands.js").Command<T>, device?: Device): Promise<T>;
+    broadcast<T>(command: import("./commands.js").Command<T>): void;
+    /**
+     * @template T
+     * @param {import('./commands.js').Command<T>} command
+     * @param {Device} device
+     * @returns {Promise<T>}
+     */
+    send<T_1>(command: import("./commands.js").Command<T_1>, device: Device): Promise<T_1>;
+    /**
+     * @param {Device} device
+     */
+    refreshDeviceInfo(device: Device): Promise<void>;
     /**
      * @param {string} serialNumber
      */
-    getDevice(serialNumber: string): Device | Promise<Device>;
+    getDevice(serialNumber: string): any;
     /**
      * @param {Uint8Array} message
      * @param {number} port

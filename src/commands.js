@@ -10,10 +10,20 @@ import { TYPE } from './constants.js';
  * @template OutputType
  * @typedef {{
  *   type: number;
- *   payload: Uint8Array | undefined;
+ *   payload?: Uint8Array;
  *   decoder: Decoder<OutputType>;
  * }} Command
  */
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
+ */
+export function GetServiceCommand() {
+  return {
+    type: TYPE.GetService,
+    decoder: Encoding.decodeStateService,
+  };
+}
 
 /**
  * @returns {Command<ReturnType<typeof Encoding.decodeStateVersion>>}
@@ -21,7 +31,6 @@ import { TYPE } from './constants.js';
 export function GetVersionCommand() {
   return {
     type: TYPE.GetVersion,
-    payload: undefined,
     decoder: Encoding.decodeStateVersion,
   };
 }
@@ -32,7 +41,6 @@ export function GetVersionCommand() {
 export function GetHostFirmwareCommand() {
   return {
     type: TYPE.GetHostFirmware,
-    payload: undefined,
     decoder: Encoding.decodeStateHostFirmware,
   };
 }
@@ -43,7 +51,6 @@ export function GetHostFirmwareCommand() {
 export function GetLabelCommand() {
   return {
     type: TYPE.GetLabel,
-    payload: undefined,
     decoder: Encoding.decodeStateLabel,
   };
 }
@@ -54,19 +61,7 @@ export function GetLabelCommand() {
 export function GetGroupCommand() {
   return {
     type: TYPE.GetGroup,
-    payload: undefined,
     decoder: Encoding.decodeStateGroup,
-  };
-}
-
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
- */
-export function GetServiceCommand() {
-  return {
-    type: TYPE.SetColor,
-    payload: undefined,
-    decoder: Encoding.decodeStateService,
   };
 }
 
@@ -76,7 +71,6 @@ export function GetServiceCommand() {
 export function GetColorCommand() {
   return {
     type: TYPE.GetColor,
-    payload: undefined,
     decoder: Encoding.decodeLightState,
   };
 }
@@ -125,7 +119,6 @@ export function SetPowerCommand(on) {
 export function GetPowerCommand() {
   return {
     type: TYPE.GetPower,
-    payload: undefined,
     decoder: Encoding.decodeStatePower,
   };
 }

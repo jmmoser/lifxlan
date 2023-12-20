@@ -1,3 +1,4 @@
+import { GetColorCommand, GetGroupCommand, GetHostFirmwareCommand, GetLabelCommand, GetVersionCommand } from './commands.js';
 import {
   TYPE,
   SERVICE_TYPE,
@@ -65,7 +66,7 @@ function createDevice(serialNumber, port, address, target, source) {
  * }} options
  */
 export function Client(options) {
-  let deviceSource = 3; // 0 and 1 are reserved and we use 2 for discovering
+  let deviceSource = 3; // 0 and 1 are reserved and we use 2 for broadcasting
   let _sequence = 0;
 
   function incrementSequence() {
@@ -125,12 +126,9 @@ export function Client(options) {
     }
   }
 
-  const knownDevices = /** @type {Device[]} */ ([]);
+  const knownDevices = /** @type {Map<string, Device>} */ (new Map());
 
-  /**
-   * @type {Map<string, ((device: Device) => void)[]>}
-   */
-  const getDeviceResolvers = new Map();
+  const getDeviceResolvers = /** @type {Map<string, ((device: Device) => void)[]>} */ (new Map());
 
   /**
    * @param {number} port
@@ -139,57 +137,46 @@ export function Client(options) {
    */
   function registerDevice(port, address, target) {
     const serialNumber = convertTargetToSerialNumber(target);
-    for (let i = 0; i < knownDevices.length; i++) {
-      const device = knownDevices[i];
-      if (device.serialNumber === serialNumber) {
-        device.port = port;
-        device.address = address;
-        return knownDevices[i];
-      }
+    const existingDevice = knownDevices.get(serialNumber);
+    if (existingDevice) {
+      existingDevice.port = port;
+      existingDevice.address = address;
+      return existingDevice;
     }
     const device = createDevice(serialNumber, port, address, target, ++deviceSource);
-    knownDevices.push(device);
+    knownDevices.set(serialNumber, device);
     if (options.onDevice) {
       options.onDevice(device);
     }
     return device;
   }
 
-  let discoverTimeout;
-  function discoverDevices() {
-    if (discoverTimeout) {
-      clearTimeout(discoverTimeout);
-    }
-    options.onSend(encode(true, 2, NO_TARGET, true, false, 0, TYPE.GetService), PORT, BROADCAST_ADDRESS, true);
-    discoverTimeout = setTimeout(discoverDevices, 2000);
-  }
-
   return {
-    discover() {
-      discoverDevices();
-    },
-    close() {
-      if (discoverTimeout) {
-        clearTimeout(discoverTimeout);
-      }
-    },
     get devices() {
       return knownDevices;
     },
     /**
      * @template T
-     * @param {import('./commands.js').Command<T>} command 
-     * @param {Device} [device]
-     * @returns {Promise<T>}}
+     * @param {import('./commands.js').Command<T>} command
+     */
+    broadcast(command) {
+      const bytes = encode(true, 2, NO_TARGET, true, false, 0, command.type, command.payload);
+      options.onSend(bytes, PORT, BROADCAST_ADDRESS, true);
+    },
+    /**
+     * @template T
+     * @param {import('./commands.js').Command<T>} command
+     * @param {Device} device
+     * @returns {Promise<T>}
      */
     send(command, device) {
       const sequence = incrementSequence();
-      const source = device ? device.source : 2;
+      const source = device.source;
 
       const bytes = encode(
         !device,
         source,
-        device ? device.target : NO_TARGET,
+        device.target,
         true,
         false,
         sequence,
@@ -197,23 +184,29 @@ export function Client(options) {
         command.payload,
       );
 
-      if (device) {
-        options.onSend(bytes, device.port, device.address, false);
-      } else {
-        options.onSend(bytes, PORT, BROADCAST_ADDRESS, true);
-      }
+      options.onSend(bytes, device.port, device.address, false);
 
       return registerRequest(source, sequence, command.decoder);
+    },
+    /**
+     * @param {Device} device
+     */
+    async refreshDeviceInfo(device) {
+      await Promise.allSettled([
+        this.send(GetLabelCommand(), device),
+        this.send(GetGroupCommand(), device),
+        this.send(GetColorCommand(), device),
+        this.send(GetVersionCommand(), device),
+        this.send(GetHostFirmwareCommand(), device),
+      ]);
     },
     /**
      * @param {string} serialNumber 
      */
     getDevice(serialNumber) {
-      for (let i = 0; i < knownDevices.length; i++) {
-        const device = knownDevices[i];
-        if (device.serialNumber === serialNumber) {
-          return knownDevices[i];
-        }
+      const device = knownDevices.get(serialNumber);
+      if (device) {
+        return device;
       }
 
       const { resolve, promise } = /** @type {typeof PromiseWithResolvers<Device>} */ (PromiseWithResolvers)();
@@ -236,35 +229,11 @@ export function Client(options) {
       const offsetRef = { current: 0 };
       const header = decodeHeader(message, offsetRef);
 
-      // TODO: every response could be handled, could use this.send() with commands to decode payload
-      const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, message, { current: offsetRef.current });
-
       const device = registerDevice(port, address, header.target);
 
+      const currentOffset = offsetRef.current;
+
       switch (header.type) {
-        case TYPE.StateService: {
-          const payload = decodeStateService(message, offsetRef);
-          if (payload.service.code !== SERVICE_TYPE.UDP) {
-            // ignore all other types as they are reserved
-            return;
-          }
-          if (!device.label) {
-            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetLabel), port, address, false);
-          }
-          if (!device.group) {
-            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetGroup), port, address, false);
-          }
-          if (!device.color) {
-            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetColor), port, address, false);
-          }
-          if (!device.version) {
-            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetVersion), port, address, false);
-          }
-          if (!device.hostFirmware) {
-            options.onSend(encode(false, device.source, device.target, true, false, 0, TYPE.GetHostFirmware), port, address, false);
-          }
-          break;
-        }
         case TYPE.StateGroup:
           device.group = decodeStateGroup(message, offsetRef);
           break;
@@ -284,6 +253,11 @@ export function Client(options) {
         default:
           break;
       }
+
+      offsetRef.current = currentOffset;
+
+      // TODO: every response could be handled, could use this.send() with commands to decode payload
+      const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, message, offsetRef);
 
       const resolvers = getDeviceResolvers.get(device.serialNumber);
       if (resolvers) {

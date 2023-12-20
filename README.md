@@ -5,7 +5,7 @@ Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://
 Node.js:
 ```javascript
 import dgram from 'node:dgram';
-import { Client } from 'lifxlan';
+import { Client, GetServiceCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -15,18 +15,18 @@ const lifx = Client({
   },
   onDevice(device) {
     console.log(device.serialNumber, device.address);
-    lifx.close();
     socket.close();
   },
 });
 
+// Forward messages to client
 socket.on('message', (message, remote) => {
   lifx.onReceived(message, remote.port, remote.address);
 });
 
 socket.once('listening', () => {
   socket.setBroadcast(true);
-  lifx.discover();
+  lifx.broadcast(GetServiceCommand());
 });
 
 socket.bind(50032);
@@ -36,7 +36,7 @@ Deno:
 ```javascript
 import { Client } from 'lifxlan';
 
-const client = Deno.listenDatagram({
+const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
   port: 50032,
   transport: 'udp',
@@ -44,18 +44,17 @@ const client = Deno.listenDatagram({
 
 const lifx = Client({
   onSend(message, port, hostname) {
-    client.send(message, { port, hostname });
+    socket.send(message, { port, hostname });
   },
   onDevice(device) {
     console.log(device.serialNumber, device.address);
-    lifx.close();
-    client.close();
+    socket.close();
   },
 });
 
-lifx.discover();
+lifx.broadcast(GetServiceCommand());
 
-for await (const [data, remote] of client) {
+for await (const [data, remote] of socket) {
   lifx.onReceived(data, remote.port, remote.hostname);
 }
 ```
@@ -78,7 +77,6 @@ const lifx = Client({
   },
   onDevice(device) {
     console.log(device.serialNumber, device.address);
-    lifx.close();
     broadcastSocket.close();
     unicastSocket.close();
   },
@@ -90,7 +88,7 @@ broadcastSocket.on('message', (message, remote) => {
 
 broadcastSocket.once('listening', () => {
   broadcastSocket.setBroadcast(true);
-  lifx.discover();
+  lifx.broadcast(GetServiceCommand());
 });
 
 broadcastSocket.bind(50032);
