@@ -34,7 +34,7 @@ socket.bind(50032);
 
 Deno:
 ```javascript
-import { Client } from 'lifxlan';
+import { Client, GetServiceCommand } from 'lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -62,7 +62,7 @@ for await (const [data, remote] of socket) {
 You can also use multiple sockets. For example, you could use one for unicast and the other for broadcast:
 ```javascript
 import dgram from 'node:dgram';
-import { Client } from 'lifxlan';
+import { Client, GetServiceCommand } from 'lifxlan';
 
 const broadcastSocket = dgram.createSocket('udp4');
 const unicastSocket = dgram.createSocket('udp4');
