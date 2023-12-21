@@ -1,7 +1,6 @@
 import { GetColorCommand, GetGroupCommand, GetHostFirmwareCommand, GetLabelCommand, GetVersionCommand } from './commands.js';
 import {
   TYPE,
-  SERVICE_TYPE,
   PORT,
   BROADCAST_ADDRESS,
   NO_TARGET,
@@ -9,7 +8,6 @@ import {
 import {
   encode,
   decodeHeader,
-  decodeStateService,
   decodeStateGroup,
   decodeStateLabel,
   decodeLightState,
@@ -40,6 +38,12 @@ import {
  *   version?: ReturnType<typeof decodeStateVersion>;
  *   hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
  * }} Device
+ */
+
+/**
+ * @typedef {{
+ *   signal?: AbortSignal;
+ * }} SendOptions
  */
 
 /**
@@ -92,8 +96,9 @@ export function Client(options) {
    * @param {number} source 
    * @param {number} sequence
    * @param {import('./commands.js').Decoder<T>} decoder
+   * @param {SendOptions} [opts]
    */
-  function registerRequest(source, sequence, decoder) {
+  function registerRequest(source, sequence, decoder, opts) {
     const { resolve, reject, promise } = /** @type {typeof PromiseWithResolvers<T>} */ (PromiseWithResolvers)();
 
     const key = buildMessageKey(source, sequence);
@@ -174,6 +179,28 @@ export function Client(options) {
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
+     */
+    sendWithoutResponse(command, device) {
+      const sequence = incrementSequence();
+      const source = device.source;
+
+      const bytes = encode(
+        false,
+        source,
+        device.target,
+        false,
+        false,
+        sequence,
+        command.type,
+        command.payload,
+      );
+
+      options.onSend(bytes, device.port, device.address, false);
+    },
+    /**
+     * @template T
+     * @param {import('./commands.js').Command<T>} command
+     * @param {Device} device
      * @returns {Promise<T>}
      */
     send(command, device) {
@@ -181,7 +208,7 @@ export function Client(options) {
       const source = device.source;
 
       const bytes = encode(
-        !device,
+        false,
         source,
         device.target,
         true,
@@ -238,7 +265,7 @@ export function Client(options) {
 
       const device = registerDevice(port, address, header.target);
 
-      const currentOffset = offsetRef.current;
+      const payloadOffset = offsetRef.current;
 
       switch (header.type) {
         case TYPE.StateGroup:
@@ -261,7 +288,7 @@ export function Client(options) {
           break;
       }
 
-      offsetRef.current = currentOffset;
+      offsetRef.current = payloadOffset;
 
       // TODO: every response could be handled, could use this.send() with commands to decode payload
       const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, header.type, message, offsetRef);
