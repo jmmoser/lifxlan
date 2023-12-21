@@ -263,8 +263,6 @@ export function Client(options) {
 
       offsetRef.current = currentOffset;
 
-      console.log(header);
-
       // TODO: every response could be handled, could use this.send() with commands to decode payload
       const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, header.type, message, offsetRef);
 
