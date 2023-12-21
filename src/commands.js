@@ -122,3 +122,43 @@ export function GetPowerCommand() {
     decoder: Encoding.decodeStatePower,
   };
 }
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
+ */
+export function GetInfraredCommand() {
+  return {
+    type: TYPE.GetInfrared,
+    decoder: Encoding.decodeStateInfrared,
+  };
+}
+
+/**
+ * @param {number} brightness
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
+ */
+export function SetInfraredCommand(brightness) {
+  const payload = new Uint8Array(2);
+  const view = new DataView(payload.buffer);
+  view.setUint16(0, brightness, true);
+  return {
+    type: TYPE.SetInfrared,
+    payload,
+    decoder: Encoding.decodeStateInfrared,
+  };
+}
+
+/**
+ * @param {number} relay_index
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateRPower>>}
+ */
+export function GetRPowerCommand(relay_index) {
+  const payload = new Uint8Array(1);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, relay_index);
+  return {
+    type: TYPE.GetRPower,
+    payload,
+    decoder: Encoding.decodeStateRPower,
+  };
+}

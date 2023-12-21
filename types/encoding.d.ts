@@ -169,6 +169,16 @@ export function decodeStatePower(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
+export function decodeStateRPower(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    relay_index: number;
+    level: number;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
 export function decodeHeader(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {

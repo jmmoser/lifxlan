@@ -11,21 +11,24 @@ const socket = dgram.createSocket('udp4');
 
 const lifx = Client({
   onSend(message, port, address) {
+    // The client has a message that should be sent out
     socket.send(message, port, address);
   },
   onDevice(device) {
+    // A device has been discovered
     console.log(device.serialNumber, device.address);
     socket.close();
   },
 });
 
-// Forward messages to client
 socket.on('message', (message, remote) => {
+  // Forward received messages to the client
   lifx.onReceived(message, remote.port, remote.address);
 });
 
 socket.once('listening', () => {
   socket.setBroadcast(true);
+  // Discover devices on the network
   lifx.broadcast(GetServiceCommand());
 });
 

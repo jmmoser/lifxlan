@@ -344,6 +344,20 @@ export function decodeStatePower(bytes, offsetRef) {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
+export function decodeStateRPower(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer);
+  const relay_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const level = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  return {
+    relay_index,
+    level,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
 export function decodeHeader(bytes, offsetRef) {
   const buffer = bytes.buffer;
   const view = new DataView(bytes.buffer);

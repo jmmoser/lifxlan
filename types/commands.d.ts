@@ -52,6 +52,20 @@ export function SetPowerCommand(on: boolean): Command<ReturnType<typeof Encoding
  * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
 export function GetPowerCommand(): Command<ReturnType<typeof Encoding.decodeStatePower>>;
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
+ */
+export function GetInfraredCommand(): Command<ReturnType<typeof Encoding.decodeStateInfrared>>;
+/**
+ * @param {number} brightness
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
+ */
+export function SetInfraredCommand(brightness: number): Command<ReturnType<typeof Encoding.decodeStateInfrared>>;
+/**
+ * @param {number} relay_index
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateRPower>>}
+ */
+export function GetRPowerCommand(relay_index: number): Command<ReturnType<typeof Encoding.decodeStateRPower>>;
 export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
     current: number;
 }) => OutputType;

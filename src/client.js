@@ -15,6 +15,7 @@ import {
   decodeLightState,
   decodeStateVersion,
   decodeStateHostFirmware,
+  decodeStateUnhandled,
 } from './encoding.js';
 import {
   PromiseWithResolvers,
@@ -74,7 +75,7 @@ export function Client(options) {
   }
 
   /**
-  * @type {Map<string, (bytes: Uint8Array, offsetRef: { current: number; }) => unknown>}
+  * @type {Map<string, (type: number, bytes: Uint8Array, offsetRef: { current: number; }) => unknown>}
   */
   const responseHandlerMap = new Map();
 
@@ -102,9 +103,14 @@ export function Client(options) {
       reject(new Error('Timeout'));
     }, 5000);
 
-    responseHandlerMap.set(key, (bytes, offsetRef) => {
+    responseHandlerMap.set(key, (type, bytes, offsetRef) => {
       clearTimeout(timeout);
       responseHandlerMap.delete(key);
+      if (type === TYPE.StateUnhandled) {
+        const requestType = decodeStateUnhandled(bytes, offsetRef);
+        reject(new Error('Unhandled request type: ' + requestType));
+        return undefined;
+      }
       const payload = decoder(bytes, offsetRef);
       resolve(/** @type {T} */(payload));
       return payload;
@@ -115,14 +121,15 @@ export function Client(options) {
 
   /**
    * @param {number} source 
-   * @param {number} sequence 
+   * @param {number} sequence
+   * @param {number} type
    * @param {Uint8Array} payload
    * @param {{ current: number; }} offsetRef
    */
-  function handleResponse(source, sequence, payload, offsetRef) {
+  function handleResponse(source, sequence, type, payload, offsetRef) {
     const entry = responseHandlerMap.get(buildMessageKey(source, sequence));
     if (entry) {
-      return entry(payload, offsetRef);
+      return entry(type, payload, offsetRef);
     }
   }
 
@@ -256,8 +263,10 @@ export function Client(options) {
 
       offsetRef.current = currentOffset;
 
+      console.log(header);
+
       // TODO: every response could be handled, could use this.send() with commands to decode payload
-      const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, message, offsetRef);
+      const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, header.type, message, offsetRef);
 
       const resolvers = getDeviceResolvers.get(device.serialNumber);
       if (resolvers) {
