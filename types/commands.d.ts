@@ -66,6 +66,15 @@ export function SetInfraredCommand(brightness: number): Command<ReturnType<typeo
  * @returns {Command<ReturnType<typeof Encoding.decodeStateRPower>>}
  */
 export function GetRPowerCommand(relay_index: number): Command<ReturnType<typeof Encoding.decodeStateRPower>>;
+/**
+ * @param {Uint8Array} echoing
+ * @returns {Command<ReturnType<typeof Encoding.decodeEchoResponse>>}
+ */
+export function EchoRequestCommand(echoing: Uint8Array): Command<ReturnType<typeof Encoding.decodeEchoResponse>>;
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
+ */
+export function GetLocationCommand(): Command<ReturnType<typeof Encoding.decodeStateLocation>>;
 export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
     current: number;
 }) => OutputType;

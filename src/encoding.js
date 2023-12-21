@@ -358,6 +358,30 @@ export function decodeStateRPower(bytes, offsetRef) {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
+export function decodeEchoResponse(bytes, offsetRef) {
+  const payload = decodeBytes(bytes, offsetRef, 64);
+  return payload;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
+export function decodeStateLocation(bytes, offsetRef) {
+  const location = decodeBytes(bytes, offsetRef, 16);
+  const label = decodeString(bytes, offsetRef, 32);
+  const updated_at = decodeTimestamp(bytes, offsetRef);
+  return {
+    location,
+    label,
+    updated_at,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
 export function decodeHeader(bytes, offsetRef) {
   const buffer = bytes.buffer;
   const view = new DataView(bytes.buffer);

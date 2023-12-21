@@ -18,9 +18,15 @@ export function Client(options: {
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
+     */
+    sendWithoutResponse<T_1>(command: import("./commands.js").Command<T_1>, device: Device): void;
+    /**
+     * @template T
+     * @param {import('./commands.js').Command<T>} command
+     * @param {Device} device
      * @returns {Promise<T>}
      */
-    send<T_1>(command: import("./commands.js").Command<T_1>, device: Device): Promise<T_1>;
+    send<T_2>(command: import("./commands.js").Command<T_2>, device: Device): Promise<T_2>;
     /**
      * @param {Device} device
      */
@@ -72,6 +78,9 @@ export type Device = {
     color?: ReturnType<typeof decodeLightState>;
     version?: ReturnType<typeof decodeStateVersion>;
     hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
+};
+export type SendOptions = {
+    signal?: AbortSignal;
 };
 import { decodeStateGroup } from './encoding.js';
 import { decodeLightState } from './encoding.js';

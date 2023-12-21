@@ -162,3 +162,27 @@ export function GetRPowerCommand(relay_index) {
     decoder: Encoding.decodeStateRPower,
   };
 }
+
+/**
+ * @param {Uint8Array} echoing
+ * @returns {Command<ReturnType<typeof Encoding.decodeEchoResponse>>}
+ */
+export function EchoRequestCommand(echoing) {
+  const payload = new Uint8Array(64);
+  payload.set(echoing);
+  return {
+    type: TYPE.EchoRequest,
+    payload,
+    decoder: Encoding.decodeEchoResponse,
+  };
+}
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
+ */
+export function GetLocationCommand() {
+  return {
+    type: TYPE.GetLocation,
+    decoder: Encoding.decodeStateLocation,
+  };
+}

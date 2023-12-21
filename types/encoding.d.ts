@@ -179,6 +179,24 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
+export function decodeEchoResponse(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): Uint8Array;
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
+export function decodeStateLocation(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    location: Uint8Array;
+    label: string;
+    updated_at: Date;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
 export function decodeHeader(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
