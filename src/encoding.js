@@ -153,9 +153,9 @@ export function decodeStateHostFirmware(bytes, offsetRef) {
  */
 export function decodeLightState(bytes, offsetRef) {
   const view = new DataView(bytes.buffer);
-  const hue = view.getUint16(offsetRef.current, true) / 65536; offsetRef.current += 2;
-  const saturation = view.getUint16(offsetRef.current, true) / 65536; offsetRef.current += 2;
-  const brightness = view.getUint16(offsetRef.current, true) / 65536; offsetRef.current += 2;
+  const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const reserved_2 = decodeBytes(bytes, offsetRef, 2);
   const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
@@ -164,8 +164,11 @@ export function decodeLightState(bytes, offsetRef) {
 
   return {
     hue,
+    hue_level: hue / 65535,
     saturation,
+    saturation_level: saturation / 65535,
     brightness,
+    brightness_level: brightness / 65535,
     kelvin,
     power: {
       level: power,

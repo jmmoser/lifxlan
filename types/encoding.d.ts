@@ -40,8 +40,11 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     hue: number;
+    hue_level: number;
     saturation: number;
+    saturation_level: number;
     brightness: number;
+    brightness_level: number;
     kelvin: number;
     power: {
         level: number;
