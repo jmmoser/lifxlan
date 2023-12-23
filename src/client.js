@@ -68,11 +68,15 @@ function createDevice(serialNumber, port, address, target, source) {
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
  *   onDevice?: (device: Device) => void;
+ *   defaultTimeoutMs?: number;
  * }} options
  */
 export function Client(options) {
   let deviceSource = 3; // 0 and 1 are reserved and we use 2 for broadcasting
   let globalSequence = 0;
+
+  // eslint-disable-next-line no-param-reassign
+  options.defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
 
   function incrementSequence() {
     return ++globalSequence % 0x100;
@@ -92,16 +96,17 @@ export function Client(options) {
   }
 
   // /**
-  //  * @param {number} fallbackTimeout
+  //  * @param {number} fallbackTimeoutMs
   //  * @param {AbortSignal} [signal]
   //  */
-  // function ensureAbortSignal(fallbackTimeout, signal) {
+  // function ensureAbortSignal(fallbackTimeoutMs, signal) {
   //   if (!signal) {
   //     const controller = new AbortController();
-  //     setTimeout(() => controller.abort(new Error('Timeout')), fallbackTimeout);
-  //     return controller.signal;
+  // eslint-disable-next-line max-len
+  //     const timeout = setTimeout(() => controller.abort(new Error('Timeout')), fallbackTimeoutMs);
+  //     return /** @type {const} */ ([controller.signal, () => clearTimeout(timeout)]);
   //   }
-  //   return signal;
+  //   return /** @type {const} */ ([signal, NOOP]);
   // }
 
   /**
@@ -127,7 +132,7 @@ export function Client(options) {
     if (signal) {
       signal.addEventListener('abort', onAbort, { once: true });
     } else {
-      timeout = setTimeout(() => onAbort(new Error('Timeout')), 3000);
+      timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
     }
 
     responseHandlerMap.set(key, (type, bytes, offsetRef) => {
@@ -228,9 +233,10 @@ export function Client(options) {
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
+     * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
-    send(command, device) {
+    send(command, device, signal) {
       const sequence = incrementSequence();
       const { source } = device;
 
@@ -247,7 +253,7 @@ export function Client(options) {
 
       options.onSend(bytes, device.port, device.address, false);
 
-      return registerRequest(source, sequence, command.decoder);
+      return registerRequest(source, sequence, command.decoder, signal);
     },
     /**
      * @param {Device} device

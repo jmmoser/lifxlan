@@ -1,7 +1,7 @@
 /* eslint-disable no-param-reassign */
 
 // eslint-disable-next-line no-unused-vars
-const NOOP = (value) => {};
+export const NOOP = (value) => {};
 
 /**
  * @template T
