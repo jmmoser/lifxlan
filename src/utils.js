@@ -1,3 +1,6 @@
+/* eslint-disable no-param-reassign */
+
+// eslint-disable-next-line no-unused-vars
 const NOOP = (value) => {};
 
 /**
@@ -9,7 +12,8 @@ const NOOP = (value) => {};
  * }}
  */
 export function PromiseWithResolvers() {
-  let resolve = NOOP, reject = NOOP;
+  let resolve = NOOP;
+  let reject = NOOP;
   const promise = new Promise((res, rej) => {
     resolve = res;
     reject = rej;
@@ -50,6 +54,7 @@ export function rgbToHsb(r, g, b) {
   b /= 255;
   const v = Math.max(r, g, b);
   const n = v - Math.min(r, g, b);
+  // eslint-disable-next-line no-nested-ternary
   const h = n === 0 ? 0 : n && v === r ? (g - b) / n : v === g ? 2 + (b - r) / n : 4 + (r - g) / n;
   return /** @type {const} */ ([
     Math.round((60 * (h < 0 ? h + 6 : h)) * (65535 / 360)),
@@ -59,7 +64,7 @@ export function rgbToHsb(r, g, b) {
 }
 
 /**
- * @param {number} rssi 
+ * @param {number} rssi
  */
 export function getRssiStatus(rssi) {
   if (rssi === 200) return 'none';
@@ -84,7 +89,7 @@ export function getRssiStatus(rssi) {
 }
 
 /**
- * @param {Uint8Array} slice 
+ * @param {Uint8Array} slice
  */
 export function convertTargetToSerialNumber(slice) {
   return Array.from(slice).map((byte) => byte.toString(16).padStart(2, '0')).join('');

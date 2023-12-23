@@ -1,4 +1,10 @@
-import { GetColorCommand, GetGroupCommand, GetHostFirmwareCommand, GetLabelCommand, GetVersionCommand } from './commands.js';
+import {
+  GetColorCommand,
+  GetGroupCommand,
+  GetHostFirmwareCommand,
+  GetLabelCommand,
+  GetVersionCommand,
+} from './commands.js';
 import {
   TYPE,
   PORT,
@@ -41,12 +47,6 @@ import {
  */
 
 /**
- * @typedef {{
- *   signal?: AbortSignal;
- * }} SendOptions
- */
-
-/**
  * @param {string} serialNumber
  * @param {number} port
  * @param {string} address
@@ -72,15 +72,15 @@ function createDevice(serialNumber, port, address, target, source) {
  */
 export function Client(options) {
   let deviceSource = 3; // 0 and 1 are reserved and we use 2 for broadcasting
-  let _sequence = 0;
+  let globalSequence = 0;
 
   function incrementSequence() {
-    return ++_sequence % 0x100;
+    return ++globalSequence % 0x100;
   }
 
   /**
-  * @type {Map<string, (type: number, bytes: Uint8Array, offsetRef: { current: number; }) => unknown>}
-  */
+   * @type {Map<string, (type: number, bytes: Uint8Array, ref: { current: number; }) => unknown>}
+   */
   const responseHandlerMap = new Map();
 
   /**
@@ -91,29 +91,55 @@ export function Client(options) {
     return `${source}_${sequence}`;
   }
 
+  // /**
+  //  * @param {number} fallbackTimeout
+  //  * @param {AbortSignal} [signal]
+  //  */
+  // function ensureAbortSignal(fallbackTimeout, signal) {
+  //   if (!signal) {
+  //     const controller = new AbortController();
+  //     setTimeout(() => controller.abort(new Error('Timeout')), fallbackTimeout);
+  //     return controller.signal;
+  //   }
+  //   return signal;
+  // }
+
   /**
    * @template T
-   * @param {number} source 
+   * @param {number} source
    * @param {number} sequence
    * @param {import('./commands.js').Decoder<T>} decoder
-   * @param {SendOptions} [opts]
+   * @param {AbortSignal} [signal]
    */
-  function registerRequest(source, sequence, decoder, opts) {
-    const { resolve, reject, promise } = /** @type {typeof PromiseWithResolvers<T>} */ (PromiseWithResolvers)();
+  function registerRequest(source, sequence, decoder, signal) {
+    /** @typedef {typeof PromiseWithResolvers<T>} Resolvers  */
+    const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
     const key = buildMessageKey(source, sequence);
 
-    const timeout = setTimeout(() => {
+    function onAbort(...args) {
       responseHandlerMap.delete(key);
-      reject(new Error('Timeout'));
-    }, 5000);
+      reject(...args);
+    }
+
+    let timeout;
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    } else {
+      timeout = setTimeout(() => onAbort(new Error('Timeout')), 3000);
+    }
 
     responseHandlerMap.set(key, (type, bytes, offsetRef) => {
-      clearTimeout(timeout);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      } else {
+        clearTimeout(timeout);
+      }
       responseHandlerMap.delete(key);
       if (type === TYPE.StateUnhandled) {
         const requestType = decodeStateUnhandled(bytes, offsetRef);
-        reject(new Error('Unhandled request type: ' + requestType));
+        reject(new Error(`Unhandled request type: ${requestType}`));
         return undefined;
       }
       const payload = decoder(bytes, offsetRef);
@@ -125,7 +151,7 @@ export function Client(options) {
   }
 
   /**
-   * @param {number} source 
+   * @param {number} source
    * @param {number} sequence
    * @param {number} type
    * @param {Uint8Array} payload
@@ -136,6 +162,7 @@ export function Client(options) {
     if (entry) {
       return entry(type, payload, offsetRef);
     }
+    return undefined;
   }
 
   const knownDevices = /** @type {Map<string, Device>} */ (new Map());
@@ -182,7 +209,7 @@ export function Client(options) {
      */
     sendWithoutResponse(command, device) {
       const sequence = incrementSequence();
-      const source = device.source;
+      const { source } = device;
 
       const bytes = encode(
         false,
@@ -205,7 +232,7 @@ export function Client(options) {
      */
     send(command, device) {
       const sequence = incrementSequence();
-      const source = device.source;
+      const { source } = device;
 
       const bytes = encode(
         false,
@@ -235,7 +262,7 @@ export function Client(options) {
       ]);
     },
     /**
-     * @param {string} serialNumber 
+     * @param {string} serialNumber
      */
     getDevice(serialNumber) {
       const device = knownDevices.get(serialNumber);
@@ -243,7 +270,8 @@ export function Client(options) {
         return device;
       }
 
-      const { resolve, promise } = /** @type {typeof PromiseWithResolvers<Device>} */ (PromiseWithResolvers)();
+      /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers  */
+      const { resolve, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
       const deviceResolvers = getDeviceResolvers.get(serialNumber);
       if (!deviceResolvers) {
@@ -290,8 +318,13 @@ export function Client(options) {
 
       offsetRef.current = payloadOffset;
 
-      // TODO: every response could be handled, could use this.send() with commands to decode payload
-      const possiblyDecodedResponsePayload = handleResponse(header.source, header.sequence, header.type, message, offsetRef);
+      const possiblyDecodedResponsePayload = handleResponse(
+        header.source,
+        header.sequence,
+        header.type,
+        message,
+        offsetRef,
+      );
 
       const resolvers = getDeviceResolvers.get(device.serialNumber);
       if (resolvers) {
@@ -305,6 +338,6 @@ export function Client(options) {
         header,
         payload: possiblyDecodedResponsePayload,
       };
-    }
-  }
+    },
+  };
 }

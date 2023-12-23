@@ -3,7 +3,7 @@ import { TYPE } from './constants.js';
 
 /**
  * @template OutputType
- * @typedef {(bytes: Uint8Array, offsetRef: { current: number; }) => OutputType} Decoder
+ * @typedef {(bytes: Uint8Array, offsetRef: Encoding.OffsetRef) => OutputType} Decoder
  */
 
 /**
@@ -14,6 +14,15 @@ import { TYPE } from './constants.js';
  *   decoder: Decoder<OutputType>;
  * }} Command
  */
+
+// /**
+//  * @template T
+//  * @param {Command<T>} command
+//  * @param {number} retries
+//  */
+// export function SimplyRetryStrategy(command, retries) {
+
+// }
 
 /**
  * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
@@ -149,13 +158,13 @@ export function SetInfraredCommand(brightness) {
 }
 
 /**
- * @param {number} relay_index
+ * @param {number} relayIndex
  * @returns {Command<ReturnType<typeof Encoding.decodeStateRPower>>}
  */
-export function GetRPowerCommand(relay_index) {
+export function GetRPowerCommand(relayIndex) {
   const payload = new Uint8Array(1);
   const view = new DataView(payload.buffer);
-  view.setUint8(0, relay_index);
+  view.setUint8(0, relayIndex);
   return {
     type: TYPE.GetRPower,
     payload,

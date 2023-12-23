@@ -1,18 +1,26 @@
 import { getRssiStatus } from './utils.js';
 
 /**
+ * @typedef {{ current: number; }} OffsetRef
+ */
+
+/**
  * @param {boolean} tagged
  * @param {number} source
  * @param {Uint8Array} target
- * @param {boolean} res_required
- * @param {boolean} ack_required
+ * @param {boolean} resRequired
+ * @param {boolean} ackRequired
  * @param {number} sequence
  * @param {number} type
- * @param {Uint8Array} [payload] 
+ * @param {Uint8Array} [payload]
  */
 export function encode(
-  tagged, source,
-  target, res_required, ack_required, sequence,
+  tagged,
+  source,
+  target,
+  resRequired,
+  ackRequired,
+  sequence,
   type,
   payload,
 ) {
@@ -25,46 +33,43 @@ export function encode(
   const bytes = new Uint8Array(size);
   const view = new DataView(bytes.buffer);
 
-  let offset = 0;
-
   /** Frame Header */
 
-  view.setUint16(offset, size, true); offset += 2;
+  view.setUint16(0, size, true);
 
-  view.setUint16(offset, protocol | addressable << 12 | (tagged ? 1 : 0) << 13 | origin << 14, true); offset += 2;
+  view.setUint16(2, protocol | (addressable << 12) | (+tagged << 13) | (origin << 14), true);
 
-  view.setUint32(offset, source, true); offset += 4;
+  view.setUint32(4, source, true);
 
   /** Frame Address */
 
-  bytes.set(target, offset); offset += 6;
+  bytes.set(target, 8);
 
   // last 2 bytes of target are always 0
-  view.setUint16(offset, 0, true); offset += 2;
+  view.setUint16(14, 0, true);
 
   // reserved
   for (let i = 0; i < 6; i++) {
-    view.setUint8(offset + i, 0);
+    view.setUint8(16 + i, 0);
   }
-  offset += 6;
 
-  view.setUint8(offset, (res_required ? 1 : 0) << 0 | (ack_required ? 1 : 0) << 1); offset += 1;
+  view.setUint8(22, ((resRequired ? 1 : 0) << 0) | ((resRequired ? 1 : 0) << 1));
 
-  view.setUint8(offset, sequence); offset += 1;
+  view.setUint8(23, sequence);
 
   /** Protocol Header */
 
   // reserved - 64 bit timestamp
-  view.setBigUint64(offset, 0n, true); offset += 8;
+  view.setBigUint64(24, 0n, true);
 
   // type
-  view.setUint16(offset, type, true); offset += 2;
+  view.setUint16(32, type, true);
 
   // rervered
-  view.setUint16(offset, 0, true); offset += 2;
+  view.setUint16(34, 0, true);
 
   if (payload) {
-    bytes.set(payload, offset);
+    bytes.set(payload, 36);
   }
 
   return bytes;
@@ -110,7 +115,8 @@ function decodeString(bytes, offsetRef, maxLength) {
 
 function decodeTimestamp(bytes, offsetRef) {
   const view = new DataView(bytes.buffer);
-  const time = new Date(Number(view.getBigUint64(offsetRef.current, true) / 1000000n)); offsetRef.current += 8;
+  const time = new Date(Number(view.getBigUint64(offsetRef.current, true) / 1000000n));
+  offsetRef.current += 8;
   return time;
 }
 
@@ -157,10 +163,10 @@ export function decodeLightState(bytes, offsetRef) {
   const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  const reserved_2 = decodeBytes(bytes, offsetRef, 2);
+  const reserved2 = decodeBytes(bytes, offsetRef, 2);
   const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const label = decodeString(bytes, offsetRef, 32);
-  const reserved_8 = decodeBytes(bytes, offsetRef, 8);
+  const reserved8 = decodeBytes(bytes, offsetRef, 8);
 
   return {
     hue,
@@ -175,8 +181,8 @@ export function decodeLightState(bytes, offsetRef) {
       on: power !== 0,
     },
     label,
-    reserved_2,
-    reserved_8,
+    reserved2,
+    reserved8,
   };
 }
 
@@ -187,7 +193,7 @@ export function decodeLightState(bytes, offsetRef) {
 export function decodeStateVersion(bytes, offsetRef) {
   const view = new DataView(bytes.buffer);
   const vendor = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
-  const product = view.getUint32(offsetRef.current, true); offsetRef.current += 4; 
+  const product = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   return {
     vendor,
     product,
@@ -254,8 +260,8 @@ export function decodeStateMeshInfo(bytes, offsetRef) {
     signal,
     tx,
     rx,
-    mcuTemperature: mcuTemperature !== 0 ?
-      `${((mcuTemperature / 100) * 1.8 + 32).toFixed(1)} °F`
+    mcuTemperature: mcuTemperature !== 0
+      ? `${((mcuTemperature / 100) * 1.8 + 32).toFixed(1)} °F`
       : 'Unknown',
   };
 }
@@ -322,11 +328,11 @@ export function decodeStateMCURailVoltage(bytes, offsetRef) {
 export function decodeStateGroup(bytes, offsetRef) {
   const group = Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
   const label = decodeString(bytes, offsetRef, 32);
-  const updated_at = decodeBytes(bytes, offsetRef, 8);
+  const updatedAt = decodeBytes(bytes, offsetRef, 8);
   return {
     group,
     label,
-    updated_at,
+    updatedAt,
   };
 }
 
@@ -339,7 +345,7 @@ export function decodeStatePower(bytes, offsetRef) {
   const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return {
     power,
-    on: power != 0,
+    on: power !== 0,
   };
 }
 
@@ -349,10 +355,10 @@ export function decodeStatePower(bytes, offsetRef) {
  */
 export function decodeStateRPower(bytes, offsetRef) {
   const view = new DataView(bytes.buffer);
-  const relay_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const relayIndex = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const level = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return {
-    relay_index,
+    relayIndex,
     level,
   };
 }
@@ -373,11 +379,11 @@ export function decodeEchoResponse(bytes, offsetRef) {
 export function decodeStateLocation(bytes, offsetRef) {
   const location = decodeBytes(bytes, offsetRef, 16);
   const label = decodeString(bytes, offsetRef, 32);
-  const updated_at = decodeTimestamp(bytes, offsetRef);
+  const updatedAt = decodeTimestamp(bytes, offsetRef);
   return {
     location,
     label,
-    updated_at,
+    updatedAt,
   };
 }
 
@@ -386,7 +392,6 @@ export function decodeStateLocation(bytes, offsetRef) {
  * @param {{ current: number }} offsetRef
  */
 export function decodeHeader(bytes, offsetRef) {
-  const buffer = bytes.buffer;
   const view = new DataView(bytes.buffer);
 
   /** Frame Header */
@@ -394,8 +399,8 @@ export function decodeHeader(bytes, offsetRef) {
   const size = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const flags = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const protocol = flags & 0xFFF;
-  const addressable = (flags >> 12) & 0b1 ? true : false;
-  const tagged = (flags >> 13) & 0b1 ? true : false;
+  const addressable = !!((flags >> 12) & 0b1);
+  const tagged = !!((flags >> 13) & 0b1);
   const origin = (flags >> 14) & 0b11;
 
   const source = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
@@ -405,27 +410,27 @@ export function decodeHeader(bytes, offsetRef) {
   const target = decodeMacAddress(bytes, offsetRef);
 
   // last 2 bytes of target are reserved
-  const reserved_target_2 = decodeBytes(bytes, offsetRef, 2);
+  const reservedTarget2 = decodeBytes(bytes, offsetRef, 2);
 
-  const revered_site_mac_address = decodeMacAddress(bytes, offsetRef);
+  const reveredSiteMacAddress = decodeMacAddress(bytes, offsetRef);
 
   const responseBin = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
-  const res_required = responseBin & 0b1 ? true : false;
-  const ack_required = (responseBin >> 1) & 0b1 ? true : false;
+  const resRequired = !!(responseBin & 0b1);
+  const ackRequired = !!((responseBin >> 1) & 0b1);
 
   const sequence = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
   /** Protocol Header */
 
-  const reserved_timestamp = decodeBytes(bytes, offsetRef, 8);
+  const reservedTimestamp = decodeBytes(bytes, offsetRef, 8);
 
   const type = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
 
-  const reserved_protocol_header_2 = decodeBytes(bytes, offsetRef, 2);
+  const reservedProtocolHeader2 = decodeBytes(bytes, offsetRef, 2);
 
   return {
-    buffer,
+    buffer: bytes.buffer,
     size,
     protocol,
     addressable,
@@ -433,16 +438,16 @@ export function decodeHeader(bytes, offsetRef) {
     origin,
     source,
     target,
-    reserved_target_2,
-    revered_site_mac_address,
-    res_required,
-    ack_required,
+    reservedTarget2,
+    reveredSiteMacAddress,
+    resRequired,
+    ackRequired,
     sequence,
     reserved_timestamp: {
-      buffer: reserved_timestamp,
-      decoded: new DataView(reserved_timestamp.buffer).getBigUint64(0, true),
+      buffer: reservedTimestamp,
+      decoded: new DataView(reservedTimestamp.buffer).getBigUint64(0, true),
     },
-    reserved_protocol_header_2,
+    reservedProtocolHeader2,
     type,
   };
 }
