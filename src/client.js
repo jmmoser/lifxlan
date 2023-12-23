@@ -109,6 +109,10 @@ export function Client(options) {
     }, 5000);
 
     responseHandlerMap.set(key, (type, bytes, offsetRef) => {
+      if (type === TYPE.Acknowledgement) {
+        // TODO
+        return;
+      }
       clearTimeout(timeout);
       responseHandlerMap.delete(key);
       if (type === TYPE.StateUnhandled) {
