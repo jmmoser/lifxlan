@@ -53,7 +53,7 @@ export function encode(
     view.setUint8(16 + i, 0);
   }
 
-  view.setUint8(22, ((resRequired ? 1 : 0) << 0) | ((resRequired ? 1 : 0) << 1));
+  view.setUint8(22, ((resRequired ? 1 : 0) << 0) | ((ackRequired ? 1 : 0) << 1));
 
   view.setUint8(23, sequence);
 

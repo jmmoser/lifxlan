@@ -136,6 +136,10 @@ export function Client(options) {
     }
 
     responseHandlerMap.set(key, (type, bytes, offsetRef) => {
+      if (type === TYPE.Acknowledgement) {
+        // TODO
+        return undefined;
+      }
       if (signal) {
         signal.removeEventListener('abort', onAbort);
       } else {

@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert';
-import { decodeHeader } from '../src/encoding.js';
+import { encode, decodeHeader } from '../src/encoding.js';
 
 describe('encoding', () => {
   test('decode', () => {
@@ -22,5 +22,26 @@ describe('encoding', () => {
     assert.equal(packet.resRequired, false);
     assert.equal(packet.ackRequired, false);
     assert.equal(packet.sequence, 0);
+  });
+
+  test('encode', () => {
+    const bytes = encode(
+      false,
+      1,
+      new Uint8Array([1, 2, 3, 4, 5, 6]),
+      true,
+      false,
+      0,
+      2,
+      new Uint8Array([1, 2, 3, 4, 5, 6]),
+    );
+    assert.deepEqual(bytes, new Uint8Array([
+      0x2a, 0x00, 0x00, 0x14, 0x01, 0x00, 0x00, 0x00,
+      0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x02, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04,
+      0x05, 0x06,
+    ]));
   });
 });
