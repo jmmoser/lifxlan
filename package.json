@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "types": "rm -rf ./types && npx -p typescript tsc $(npx glob \"src/**/*.js\") --declaration --allowJs --emitDeclarationOnly --outDir types"
+    "types": "rm -rf ./types && npx -p typescript tsc src/index.js --declaration --allowJs --emitDeclarationOnly --outDir types"
   },
   "keywords": [
     "lifx",
