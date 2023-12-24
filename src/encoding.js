@@ -426,7 +426,7 @@ export function decodeHeader(bytes, offsetRef) {
   const reservedProtocolHeader2 = decodeBytes(bytes, offsetRef, 2);
 
   return {
-    buffer: bytes.buffer,
+    bytes: bytes.subarray(0, 36),
     size,
     protocol,
     addressable,
@@ -440,7 +440,7 @@ export function decodeHeader(bytes, offsetRef) {
     ackRequired,
     sequence,
     reserved_timestamp: {
-      buffer: reservedTimestamp,
+      bytes: reservedTimestamp,
       decoded: new DataView(reservedTimestamp.buffer).getBigUint64(0, true),
     },
     reservedProtocolHeader2,

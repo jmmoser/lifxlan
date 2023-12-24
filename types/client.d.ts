@@ -45,7 +45,7 @@ export function Client(options: {
      */
     onReceived(message: Uint8Array, port: number, address: string): {
         header: {
-            buffer: ArrayBuffer;
+            bytes: Uint8Array;
             size: number;
             protocol: number;
             addressable: boolean;
@@ -59,7 +59,7 @@ export function Client(options: {
             ackRequired: boolean;
             sequence: number;
             reserved_timestamp: {
-                buffer: Uint8Array;
+                bytes: Uint8Array;
                 decoded: any;
             };
             reservedProtocolHeader2: Uint8Array;

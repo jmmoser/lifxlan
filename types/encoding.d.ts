@@ -203,7 +203,7 @@ export function decodeStateLocation(bytes: Uint8Array, offsetRef: {
 export function decodeHeader(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    buffer: ArrayBuffer;
+    bytes: Uint8Array;
     size: number;
     protocol: number;
     addressable: boolean;
@@ -217,7 +217,7 @@ export function decodeHeader(bytes: Uint8Array, offsetRef: {
     ackRequired: boolean;
     sequence: number;
     reserved_timestamp: {
-        buffer: Uint8Array;
+        bytes: Uint8Array;
         decoded: any;
     };
     reservedProtocolHeader2: Uint8Array;
