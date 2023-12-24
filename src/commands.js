@@ -3,7 +3,7 @@ import { TYPE } from './constants.js';
 
 /**
  * @template OutputType
- * @typedef {(bytes: Uint8Array, offsetRef: Encoding.OffsetRef) => OutputType} Decoder
+ * @typedef {(bytes: Uint8Array, offsetRef: { current: number; }) => OutputType} Decoder
  */
 
 /**
@@ -14,15 +14,6 @@ import { TYPE } from './constants.js';
  *   decoder: Decoder<OutputType>;
  * }} Command
  */
-
-// /**
-//  * @template T
-//  * @param {Command<T>} command
-//  * @param {number} retries
-//  */
-// export function SimplyRetryStrategy(command, retries) {
-
-// }
 
 /**
  * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}

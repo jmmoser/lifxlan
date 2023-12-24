@@ -1,10 +1,6 @@
 import { getRssiStatus } from './utils.js';
 
 /**
- * @typedef {{ current: number; }} OffsetRef
- */
-
-/**
  * @param {boolean} tagged
  * @param {number} source
  * @param {Uint8Array} target
@@ -416,8 +412,11 @@ export function decodeHeader(bytes, offsetRef) {
 
   const responseBin = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
-  const resRequired = !!(responseBin & 0b1);
-  const ackRequired = !!((responseBin >> 1) & 0b1);
+  const resRequired = (responseBin & 0b1) > 0;
+  const ackRequired = (responseBin & 0b10) > 0;
+
+  // const resRequired = !!(responseBin & 0b1);
+  // const ackRequired = !!((responseBin >> 1) & 0b1);
 
   const sequence = view.getUint8(offsetRef.current); offsetRef.current += 1;
 

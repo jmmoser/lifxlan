@@ -1,6 +1,6 @@
 /**
  * @template OutputType
- * @typedef {(bytes: Uint8Array, offsetRef: Encoding.OffsetRef) => OutputType} Decoder
+ * @typedef {(bytes: Uint8Array, offsetRef: { current: number; }) => OutputType} Decoder
  */
 /**
  * @template OutputType
@@ -75,7 +75,9 @@ export function EchoRequestCommand(echoing: Uint8Array): Command<ReturnType<type
  * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
  */
 export function GetLocationCommand(): Command<ReturnType<typeof Encoding.decodeStateLocation>>;
-export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: Encoding.OffsetRef) => OutputType;
+export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
+    current: number;
+}) => OutputType;
 export type Command<OutputType> = {
     type: number;
     payload?: Uint8Array;

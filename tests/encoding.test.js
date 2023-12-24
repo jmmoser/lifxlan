@@ -7,7 +7,7 @@ describe('encoding', () => {
     const bytes = new Uint8Array([
       0x24, 0x00, 0x00, 0x34, 0x99, 0x9c, 0x8c, 0xc9,
       0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x05,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x02, 0x00, 0x00, 0x00,
     ]);
@@ -19,9 +19,21 @@ describe('encoding', () => {
     assert.equal(packet.origin, 0);
     assert.equal(packet.source, 3381435545);
     assert.deepEqual(packet.target, new Uint8Array([1, 2, 3, 4, 5, 6]));
-    assert.equal(packet.resRequired, false);
+    assert.equal(packet.resRequired, true);
     assert.equal(packet.ackRequired, false);
-    assert.equal(packet.sequence, 0);
+    assert.equal(packet.sequence, 5);
+
+    const encodedBytes = encode(
+      packet.tagged,
+      packet.source,
+      packet.target,
+      packet.resRequired,
+      packet.ackRequired,
+      packet.sequence,
+      packet.type,
+      packet.payload,
+    );
+    assert.deepEqual(encodedBytes, bytes);
   });
 
   test('encode', () => {

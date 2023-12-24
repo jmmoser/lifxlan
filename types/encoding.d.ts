@@ -1,7 +1,4 @@
 /**
- * @typedef {{ current: number; }} OffsetRef
- */
-/**
  * @param {boolean} tagged
  * @param {number} source
  * @param {Uint8Array} target
@@ -225,7 +222,4 @@ export function decodeHeader(bytes: Uint8Array, offsetRef: {
     };
     reservedProtocolHeader2: Uint8Array;
     type: number;
-};
-export type OffsetRef = {
-    current: number;
 };
