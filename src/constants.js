@@ -16,7 +16,7 @@ export const SERVICE_TYPE = {
 
 /**
  * @readonly
- * @enum {number} 
+ * @enum {number}
  */
 export const TYPE = {
   GetService: 2,
