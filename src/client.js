@@ -95,20 +95,6 @@ export function Client(options) {
     return `${source}_${sequence}`;
   }
 
-  // /**
-  //  * @param {number} fallbackTimeoutMs
-  //  * @param {AbortSignal} [signal]
-  //  */
-  // function ensureAbortSignal(fallbackTimeoutMs, signal) {
-  //   if (!signal) {
-  //     const controller = new AbortController();
-  // eslint-disable-next-line max-len
-  //     const timeout = setTimeout(() => controller.abort(new Error('Timeout')), fallbackTimeoutMs);
-  //     return /** @type {const} */ ([controller.signal, () => clearTimeout(timeout)]);
-  //   }
-  //   return /** @type {const} */ ([signal, NOOP]);
-  // }
-
   /**
    * @template T
    * @param {number} source

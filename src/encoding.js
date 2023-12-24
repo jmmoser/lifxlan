@@ -415,9 +415,6 @@ export function decodeHeader(bytes, offsetRef) {
   const resRequired = (responseBin & 0b1) > 0;
   const ackRequired = (responseBin & 0b10) > 0;
 
-  // const resRequired = !!(responseBin & 0b1);
-  // const ackRequired = !!((responseBin >> 1) & 0b1);
-
   const sequence = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
   /** Protocol Header */
