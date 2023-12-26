@@ -10,6 +10,12 @@ export function Client(options: {
     onDevice?: (device: Device) => void;
     defaultTimeoutMs?: number;
 }): {
+    /**
+     * @param {string} serialNumber
+     * @param {number} port
+     * @param {string} address
+     */
+    registerDevice(serialNumber: string, port: number, address: string): any;
     readonly devices: Map<string, Device>;
     /**
      * @template T

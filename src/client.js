@@ -168,9 +168,9 @@ export function Client(options) {
    * @param {number} port
    * @param {string} address
    * @param {Uint8Array} target
+   * @param {string} serialNumber
    */
-  function registerDevice(port, address, target) {
-    const serialNumber = convertTargetToSerialNumber(target);
+  function registerDevice(port, address, target, serialNumber) {
     const existingDevice = knownDevices.get(serialNumber);
     if (existingDevice) {
       existingDevice.port = port;
@@ -186,6 +186,21 @@ export function Client(options) {
   }
 
   return {
+    /**
+     * @param {string} serialNumber
+     * @param {number} port
+     * @param {string} address
+     */
+    registerDevice(serialNumber, port, address) {
+      if (serialNumber.length !== 12) {
+        throw new Error('Invalid serial number');
+      }
+      const target = new Uint8Array(6);
+      for (let i = 0; i < 6; i++) {
+        target[i] = parseInt(serialNumber.slice(2 * i, 2 * (i + 1)), 16);
+      }
+      return registerDevice(port, address, target, serialNumber);
+    },
     get devices() {
       return knownDevices;
     },
@@ -287,7 +302,12 @@ export function Client(options) {
       const offsetRef = { current: 0 };
       const header = decodeHeader(message, offsetRef);
 
-      const device = registerDevice(port, address, header.target);
+      const device = registerDevice(
+        port,
+        address,
+        header.target,
+        convertTargetToSerialNumber(header.target),
+      );
 
       const payloadOffset = offsetRef.current;
 
