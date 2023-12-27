@@ -15,6 +15,6 @@
         "import/extensions": ["error", "always"],
         "import/prefer-default-export": "off",
         "no-bitwise": "off",
-        "no-param-reassign": ["error", { "props": true, "ignorePropertyModificationsFor": ["offsetRef"] }]
+        "no-param-reassign": "off"
     }
 }

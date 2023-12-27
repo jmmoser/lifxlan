@@ -8,6 +8,8 @@
  *   type: number;
  *   payload?: Uint8Array;
  *   decoder: Decoder<OutputType>;
+ *   sequence?: number;
+ *   source?: number;
  * }} Command
  */
 /**
@@ -82,5 +84,7 @@ export type Command<OutputType> = {
     type: number;
     payload?: Uint8Array;
     decoder: Decoder<OutputType>;
+    sequence?: number;
+    source?: number;
 };
 import * as Encoding from './encoding.js';

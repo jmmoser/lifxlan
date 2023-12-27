@@ -12,6 +12,8 @@ import { TYPE } from './constants.js';
  *   type: number;
  *   payload?: Uint8Array;
  *   decoder: Decoder<OutputType>;
+ *   sequence?: number;
+ *   source?: number;
  * }} Command
  */
 

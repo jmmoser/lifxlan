@@ -1,5 +1,3 @@
-/* eslint-disable no-param-reassign */
-
 // eslint-disable-next-line no-unused-vars
 export const NOOP = (value) => {};
 

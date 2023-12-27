@@ -39,7 +39,6 @@ import {
  *   label?: string;
  *   group?: ReturnType<typeof decodeStateGroup>;
  *   type?: DeviceType;
- *   source: number;
  *   color?: ReturnType<typeof decodeLightState>;
  *   version?: ReturnType<typeof decodeStateVersion>;
  *   hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
@@ -51,16 +50,14 @@ import {
  * @param {number} port
  * @param {string} address
  * @param {Uint8Array} target
- * @param {number} source
  * @returns {Device}
  */
-function createDevice(serialNumber, port, address, target, source) {
+function createDevice(serialNumber, port, address, target) {
   return {
     serialNumber,
     port,
     address,
     target,
-    source,
   };
 }
 
@@ -72,14 +69,14 @@ function createDevice(serialNumber, port, address, target, source) {
  * }} options
  */
 export function Client(options) {
-  let deviceSource = 3; // 0 and 1 are reserved and we use 2 for broadcasting
-  let globalSequence = 0;
+  let globalSource = 2; // 0 and 1 are reserved
 
-  // eslint-disable-next-line no-param-reassign
   options.defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
 
-  function incrementSequence() {
-    return ++globalSequence % 0x100;
+  function incrementSource() {
+    globalSource = (globalSource + 1) % 0x10000;
+    globalSource = globalSource <= 1 ? 2 : globalSource;
+    return globalSource;
   }
 
   /**
@@ -177,7 +174,7 @@ export function Client(options) {
       existingDevice.address = address;
       return existingDevice;
     }
-    const device = createDevice(serialNumber, port, address, target, ++deviceSource);
+    const device = createDevice(serialNumber, port, address, target);
     knownDevices.set(serialNumber, device);
     if (options.onDevice) {
       options.onDevice(device);
@@ -209,7 +206,20 @@ export function Client(options) {
      * @param {import('./commands.js').Command<T>} command
      */
     broadcast(command) {
-      const bytes = encode(true, 2, NO_TARGET, true, false, 0, command.type, command.payload);
+      command.source = command.source == null ? incrementSource() : command.source;
+      command.sequence = command.sequence == null ? 0 : command.sequence;
+
+      const bytes = encode(
+        true,
+        command.source,
+        NO_TARGET,
+        true,
+        false,
+        command.sequence,
+        command.type,
+        command.payload,
+      );
+
       options.onSend(bytes, PORT, BROADCAST_ADDRESS, true);
     },
     /**
@@ -218,16 +228,16 @@ export function Client(options) {
      * @param {Device} device
      */
     sendWithoutResponse(command, device) {
-      const sequence = incrementSequence();
-      const { source } = device;
+      command.source = command.source == null ? incrementSource() : command.source;
+      command.sequence = command.sequence == null ? 0 : command.sequence;
 
       const bytes = encode(
         false,
-        source,
+        command.source,
         device.target,
         false,
         false,
-        sequence,
+        command.sequence,
         command.type,
         command.payload,
       );
@@ -242,23 +252,25 @@ export function Client(options) {
      * @returns {Promise<T>}
      */
     send(command, device, signal) {
-      const sequence = incrementSequence();
-      const { source } = device;
+      command.source = command.source == null ? incrementSource() : command.source;
+      command.sequence = command.sequence == null ? 0 : command.sequence;
 
       const bytes = encode(
         false,
-        source,
+        command.source,
         device.target,
         true,
         false,
-        sequence,
+        command.sequence,
         command.type,
         command.payload,
       );
 
+      const promise = registerRequest(command.source, command.sequence, command.decoder, signal);
+
       options.onSend(bytes, device.port, device.address, false);
 
-      return registerRequest(source, sequence, command.decoder, signal);
+      return promise;
     },
     /**
      * @param {Device} device

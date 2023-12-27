@@ -83,7 +83,6 @@ export type Device = {
     label?: string;
     group?: ReturnType<typeof decodeStateGroup>;
     type?: DeviceType;
-    source: number;
     color?: ReturnType<typeof decodeLightState>;
     version?: ReturnType<typeof decodeStateVersion>;
     hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
