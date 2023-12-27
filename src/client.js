@@ -100,11 +100,10 @@ export function Client(options) {
   /**
    * @template T
    * @param {number} source
-   * @param {number} sequence
    * @param {import('./commands.js').Decoder<T>} decoder
    * @param {AbortSignal} [signal]
    */
-  function registerRequest(source, sequence, decoder, signal) {
+  function registerRequest(source, decoder, signal) {
     /** @typedef {typeof PromiseWithResolvers<T>} Resolvers  */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
@@ -268,7 +267,7 @@ export function Client(options) {
         command.payload,
       );
 
-      const promise = registerRequest(command.source, command.sequence, command.decoder, signal);
+      const promise = registerRequest(command.source, command.decoder, signal);
 
       options.onSend(bytes, device.port, device.address, false);
 
