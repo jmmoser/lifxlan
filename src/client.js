@@ -73,10 +73,23 @@ export function Client(options) {
 
   options.defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
 
-  function incrementSource() {
-    globalSource = (globalSource + 1) % 0x10000;
-    globalSource = globalSource <= 1 ? 2 : globalSource;
-    return globalSource;
+  /**
+   * @param {number} [source]
+   */
+  function incrementSource(source) {
+    if (source == null) {
+      source = globalSource;
+      globalSource = (globalSource + 1) % 0x10000;
+      globalSource = globalSource <= 1 ? 2 : globalSource;
+    }
+    return source;
+  }
+
+  /**
+   * @param {number} [sequence]
+   */
+  function incrementSequence(sequence) {
+    return sequence == null ? 0 : (sequence + 1) % 0x100;
   }
 
   /**
@@ -206,8 +219,8 @@ export function Client(options) {
      * @param {import('./commands.js').Command<T>} command
      */
     broadcast(command) {
-      command.source = command.source == null ? incrementSource() : command.source;
-      command.sequence = command.sequence == null ? 0 : command.sequence;
+      command.source = incrementSource(command.source);
+      command.sequence = incrementSequence(command.sequence);
 
       const bytes = encode(
         true,
@@ -228,8 +241,8 @@ export function Client(options) {
      * @param {Device} device
      */
     sendWithoutResponse(command, device) {
-      command.source = command.source == null ? incrementSource() : command.source;
-      command.sequence = command.sequence == null ? 0 : command.sequence;
+      command.source = incrementSource(command.source);
+      command.sequence = incrementSequence(command.sequence);
 
       const bytes = encode(
         false,
@@ -252,8 +265,8 @@ export function Client(options) {
      * @returns {Promise<T>}
      */
     send(command, device, signal) {
-      command.source = command.source == null ? incrementSource() : command.source;
-      command.sequence = command.sequence == null ? 0 : command.sequence;
+      command.source = incrementSource(command.source);
+      command.sequence = incrementSequence(command.sequence);
 
       const bytes = encode(
         false,

@@ -13,6 +13,8 @@ describe('client', () => {
         const packet = decodeHeader(messsage, { current: 0 });
         const payload = new Uint8Array(2);
         new DataView(payload.buffer).setUint16(0, 65535, true);
+        assert.equal(packet.source, 2);
+        assert.equal(packet.sequence, 0);
         client.onReceived(
           encode(
             packet.tagged,
