@@ -93,17 +93,9 @@ export function Client(options) {
   }
 
   /**
-   * @type {Map<string, (type: number, bytes: Uint8Array, ref: { current: number; }) => unknown>}
+   * @type {Map<number, (type: number, bytes: Uint8Array, ref: { current: number; }) => unknown>}
    */
   const responseHandlerMap = new Map();
-
-  /**
-   * @param {number} source
-   * @param {number} sequence
-   */
-  function buildMessageKey(source, sequence) {
-    return `${source}_${sequence}`;
-  }
 
   /**
    * @template T
@@ -116,10 +108,8 @@ export function Client(options) {
     /** @typedef {typeof PromiseWithResolvers<T>} Resolvers  */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
-    const key = buildMessageKey(source, sequence);
-
     function onAbort(...args) {
-      responseHandlerMap.delete(key);
+      responseHandlerMap.delete(source);
       reject(...args);
     }
 
@@ -131,7 +121,7 @@ export function Client(options) {
       timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
     }
 
-    responseHandlerMap.set(key, (type, bytes, offsetRef) => {
+    responseHandlerMap.set(source, (type, bytes, offsetRef) => {
       if (type === TYPE.Acknowledgement) {
         // TODO
         return undefined;
@@ -141,7 +131,7 @@ export function Client(options) {
       } else {
         clearTimeout(timeout);
       }
-      responseHandlerMap.delete(key);
+      responseHandlerMap.delete(source);
       if (type === TYPE.StateUnhandled) {
         const requestType = decodeStateUnhandled(bytes, offsetRef);
         reject(new Error(`Unhandled request type: ${requestType}`));
@@ -157,13 +147,12 @@ export function Client(options) {
 
   /**
    * @param {number} source
-   * @param {number} sequence
    * @param {number} type
    * @param {Uint8Array} payload
    * @param {{ current: number; }} offsetRef
    */
-  function handleResponse(source, sequence, type, payload, offsetRef) {
-    const entry = responseHandlerMap.get(buildMessageKey(source, sequence));
+  function handleResponse(source, type, payload, offsetRef) {
+    const entry = responseHandlerMap.get(source);
     if (entry) {
       return entry(type, payload, offsetRef);
     }
@@ -361,7 +350,6 @@ export function Client(options) {
 
       const possiblyDecodedResponsePayload = handleResponse(
         header.source,
-        header.sequence,
         header.type,
         message,
         offsetRef,
