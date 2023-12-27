@@ -98,6 +98,44 @@ export function Client(options) {
   const responseHandlerMap = new Map();
 
   /**
+   * @param {number} source
+   * @param {AbortSignal} [signal]
+   */
+  function registerAckRequest(source, signal) {
+    /** @typedef {typeof PromiseWithResolvers<void>} Resolvers  */
+    const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
+
+    function onAbort(...args) {
+      responseHandlerMap.delete(source);
+      reject(...args);
+    }
+
+    let timeout;
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    } else {
+      timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
+    }
+
+    responseHandlerMap.set(source, (type) => {
+      if (type !== TYPE.Acknowledgement) {
+        // ignore
+        return;
+      }
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      } else {
+        clearTimeout(timeout);
+      }
+      responseHandlerMap.delete(source);
+      resolve();
+    });
+
+    return promise;
+  }
+
+  /**
    * @template T
    * @param {number} source
    * @param {import('./commands.js').Decoder<T>} decoder
@@ -228,7 +266,7 @@ export function Client(options) {
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
      */
-    sendWithoutResponse(command, device) {
+    unicast(command, device) {
       command.source = incrementSource(command.source);
       command.sequence = incrementSequence(command.sequence);
 
@@ -244,6 +282,34 @@ export function Client(options) {
       );
 
       options.onSend(bytes, device.port, device.address, false);
+    },
+    /**
+     * @template T
+     * @param {import('./commands.js').Command<T>} command
+     * @param {Device} device
+     * @param {AbortSignal} [signal]
+     * @returns {Promise<void>}
+     */
+    sendOnlyAcknowledgement(command, device, signal) {
+      command.source = incrementSource(command.source);
+      command.sequence = incrementSequence(command.sequence);
+
+      const bytes = encode(
+        false,
+        command.source,
+        device.target,
+        false,
+        true,
+        command.sequence,
+        command.type,
+        command.payload,
+      );
+
+      const promise = registerAckRequest(command.source, signal);
+
+      options.onSend(bytes, device.port, device.address, false);
+
+      return promise;
     },
     /**
      * @template T

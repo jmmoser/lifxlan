@@ -27,7 +27,15 @@ export function Client(options: {
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
      */
-    sendWithoutResponse<T_1>(command: import("./commands.js").Command<T_1>, device: Device): void;
+    unicast<T_1>(command: import("./commands.js").Command<T_1>, device: Device): void;
+    /**
+     * @template T
+     * @param {import('./commands.js').Command<T>} command
+     * @param {Device} device
+     * @param {AbortSignal} [signal]
+     * @returns {Promise<void>}
+     */
+    sendOnlyAcknowledgement<T_2>(command: import("./commands.js").Command<T_2>, device: Device, signal?: AbortSignal): Promise<void>;
     /**
      * @template T
      * @param {import('./commands.js').Command<T>} command
@@ -35,7 +43,7 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
-    send<T_2>(command: import("./commands.js").Command<T_2>, device: Device, signal?: AbortSignal): Promise<T_2>;
+    send<T_3>(command: import("./commands.js").Command<T_3>, device: Device, signal?: AbortSignal): Promise<T_3>;
     /**
      * @param {Device} device
      */
