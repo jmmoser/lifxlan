@@ -166,11 +166,11 @@ export function decodeLightState(bytes, offsetRef) {
 
   return {
     hue,
-    hue_level: hue / 65535,
+    hueLevel: hue / 65535,
     saturation,
-    saturation_level: saturation / 65535,
+    saturationLevel: saturation / 65535,
     brightness,
-    brightness_level: brightness / 65535,
+    brightnessLevel: brightness / 65535,
     kelvin,
     power: {
       level: power,
@@ -208,58 +208,10 @@ export function decodeStateLabel(bytes, offsetRef) {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
-export function decodeStateAccessPoint(bytes, offsetRef) {
-  const view = new DataView(bytes.buffer);
-  const iface = view.getUint8(offsetRef.current); offsetRef.current += 1;
-  const ssid = decodeString(bytes, offsetRef, 32);
-  const securityProtocol = view.getUint8(offsetRef.current); offsetRef.current += 1;
-  const strength = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  const channel = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  return {
-    iface,
-    ssid,
-    securityProtocol,
-    strength,
-    channel,
-  };
-}
-
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
 export function decodeStateUnhandled(bytes, offsetRef) {
   const view = new DataView(bytes.buffer);
   const type = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return type;
-}
-
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
-export function decodeStateTime(bytes, offsetRef) {
-  return decodeTimestamp(bytes, offsetRef);
-}
-
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
-export function decodeStateMeshInfo(bytes, offsetRef) {
-  const view = new DataView(bytes.buffer);
-  const signal = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
-  const tx = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
-  const rx = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
-  const mcuTemperature = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  return {
-    signal,
-    tx,
-    rx,
-    mcuTemperature: mcuTemperature !== 0
-      ? `${((mcuTemperature / 100) * 1.8 + 32).toFixed(1)} °F`
-      : 'Unknown',
-  };
 }
 
 /**
@@ -305,16 +257,6 @@ export function decodeStateLightPower(bytes, offsetRef) {
   const view = new DataView(bytes.buffer);
   const level = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return level;
-}
-
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
-export function decodeStateMCURailVoltage(bytes, offsetRef) {
-  const view = new DataView(bytes.buffer);
-  const voltage = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
-  return voltage;
 }
 
 /**
@@ -406,24 +348,25 @@ export function decodeHeader(bytes, offsetRef) {
   const target = decodeMacAddress(bytes, offsetRef);
 
   // last 2 bytes of target are reserved
-  const reservedTarget2 = decodeBytes(bytes, offsetRef, 2);
+  const reserved1 = decodeBytes(bytes, offsetRef, 2);
 
-  const reveredSiteMacAddress = decodeMacAddress(bytes, offsetRef);
+  const reserved2 = decodeBytes(bytes, offsetRef, 6);
 
   const responseBin = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
   const resRequired = (responseBin & 0b1) > 0;
   const ackRequired = (responseBin & 0b10) > 0;
+  const reserved3 = (responseBin & 0b11111100) >> 2;
 
   const sequence = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
   /** Protocol Header */
 
-  const reservedTimestamp = decodeBytes(bytes, offsetRef, 8);
+  const reserved4 = decodeBytes(bytes, offsetRef, 8);
 
   const type = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
 
-  const reservedProtocolHeader2 = decodeBytes(bytes, offsetRef, 2);
+  const reserved5 = decodeBytes(bytes, offsetRef, 2);
 
   return {
     bytes: bytes.subarray(0, 36),
@@ -434,16 +377,14 @@ export function decodeHeader(bytes, offsetRef) {
     origin,
     source,
     target,
-    reservedTarget2,
-    reveredSiteMacAddress,
+    reserved1,
+    reserved2,
     resRequired,
     ackRequired,
+    reserved3,
+    reserved4,
     sequence,
-    reserved_timestamp: {
-      bytes: reservedTimestamp,
-      decoded: new DataView(reservedTimestamp.buffer).getBigUint64(0, true),
-    },
-    reservedProtocolHeader2,
+    reserved5,
     type,
   };
 }

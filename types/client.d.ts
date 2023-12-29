@@ -67,16 +67,14 @@ export function Client(options: {
             origin: number;
             source: number;
             target: Uint8Array;
-            reservedTarget2: Uint8Array;
-            reveredSiteMacAddress: Uint8Array;
+            reserved1: Uint8Array;
+            reserved2: Uint8Array;
             resRequired: boolean;
             ackRequired: boolean;
+            reserved3: number;
+            reserved4: Uint8Array;
             sequence: number;
-            reserved_timestamp: {
-                bytes: Uint8Array;
-                decoded: any;
-            };
-            reservedProtocolHeader2: Uint8Array;
+            reserved5: Uint8Array;
             type: number;
         };
         payload: any;

@@ -12,16 +12,26 @@ describe('encoding', () => {
       0x02, 0x00, 0x00, 0x00,
     ]);
     const packet = decodeHeader(bytes, { current: 0 });
-    assert.equal(packet.type, 2);
-    assert.equal(packet.protocol, 1024);
-    assert.equal(packet.addressable, true);
-    assert.equal(packet.tagged, true);
-    assert.equal(packet.origin, 0);
-    assert.equal(packet.source, 3381435545);
-    assert.deepEqual(packet.target, new Uint8Array([1, 2, 3, 4, 5, 6]));
-    assert.equal(packet.resRequired, true);
-    assert.equal(packet.ackRequired, false);
-    assert.equal(packet.sequence, 5);
+
+    assert.deepEqual(packet, {
+      bytes,
+      size: bytes.length,
+      type: 2,
+      protocol: 1024,
+      addressable: true,
+      tagged: true,
+      origin: 0,
+      source: 3381435545,
+      target: new Uint8Array([1, 2, 3, 4, 5, 6]),
+      reserved1: new Uint8Array(2),
+      reserved2: new Uint8Array(6),
+      resRequired: true,
+      ackRequired: false,
+      reserved3: 0,
+      reserved4: new Uint8Array(8),
+      sequence: 5,
+      reserved5: new Uint8Array(2),
+    });
 
     const encodedBytes = encode(
       packet.tagged,

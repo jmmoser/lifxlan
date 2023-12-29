@@ -40,11 +40,11 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     hue: number;
-    hue_level: number;
+    hueLevel: number;
     saturation: number;
-    saturation_level: number;
+    saturationLevel: number;
     brightness: number;
-    brightness_level: number;
+    brightnessLevel: number;
     kelvin: number;
     power: {
         level: number;
@@ -75,41 +75,9 @@ export function decodeStateLabel(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
-export function decodeStateAccessPoint(bytes: Uint8Array, offsetRef: {
-    current: number;
-}): {
-    iface: number;
-    ssid: string;
-    securityProtocol: number;
-    strength: number;
-    channel: number;
-};
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
 export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
-export function decodeStateTime(bytes: Uint8Array, offsetRef: {
-    current: number;
-}): Date;
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
-export function decodeStateMeshInfo(bytes: Uint8Array, offsetRef: {
-    current: number;
-}): {
-    signal: number;
-    tx: number;
-    rx: number;
-    mcuTemperature: string;
-};
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
@@ -138,13 +106,6 @@ export function decodeStateInfrared(bytes: Uint8Array, offsetRef: {
  * @param {{ current: number }} offsetRef
  */
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: {
-    current: number;
-}): number;
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
- */
-export function decodeStateMCURailVoltage(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
 /**
@@ -211,15 +172,13 @@ export function decodeHeader(bytes: Uint8Array, offsetRef: {
     origin: number;
     source: number;
     target: Uint8Array;
-    reservedTarget2: Uint8Array;
-    reveredSiteMacAddress: Uint8Array;
+    reserved1: Uint8Array;
+    reserved2: Uint8Array;
     resRequired: boolean;
     ackRequired: boolean;
+    reserved3: number;
+    reserved4: Uint8Array;
     sequence: number;
-    reserved_timestamp: {
-        bytes: Uint8Array;
-        decoded: any;
-    };
-    reservedProtocolHeader2: Uint8Array;
+    reserved5: Uint8Array;
     type: number;
 };
