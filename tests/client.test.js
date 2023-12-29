@@ -8,7 +8,7 @@ import { GetPowerCommand } from '../src/commands.js';
 describe('client', () => {
   test('send', async () => {
     const client = Client({
-      defaultTimeoutMs: 10,
+      defaultTimeoutMs: 0,
       onSend(messsage, port, address) {
         const packet = decodeHeader(messsage, { current: 0 });
         const payload = new Uint8Array(2);
@@ -40,7 +40,7 @@ describe('client', () => {
   });
   test('sendOnlyAcknowledgement', async () => {
     const client = Client({
-      defaultTimeoutMs: 10,
+      defaultTimeoutMs: 0,
       onSend(messsage, port, address) {
         const packet = decodeHeader(messsage, { current: 0 });
         assert.equal(packet.source, 2);
