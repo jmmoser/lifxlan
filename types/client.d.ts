@@ -61,7 +61,11 @@ export function Client(options: {
         header: {
             bytes: Uint8Array;
             size: number;
-            protocol: number;
+            protocol: number; /**
+             * @param {Uint8Array} message
+             * @param {number} port
+             * @param {string} address
+             */
             addressable: boolean;
             tagged: boolean;
             origin: number;

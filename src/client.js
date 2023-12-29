@@ -118,7 +118,7 @@ export function Client(options) {
       timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
     }
 
-    responseHandlerMap.set(source, (type) => {
+    responseHandlerMap.set(source, (type, bytes, offsetRef) => {
       if (type !== TYPE.Acknowledgement) {
         // ignore
         return;
@@ -129,6 +129,11 @@ export function Client(options) {
         clearTimeout(timeout);
       }
       responseHandlerMap.delete(source);
+      if (type === TYPE.StateUnhandled) {
+        const requestType = decodeStateUnhandled(bytes, offsetRef);
+        reject(new Error(`Unhandled request type: ${requestType}`));
+        return;
+      }
       resolve();
     });
 
