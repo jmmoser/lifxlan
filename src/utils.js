@@ -90,16 +90,10 @@ export function getRssiStatus(rssi) {
  * @param {Uint8Array} slice
  */
 export function convertTargetToSerialNumber(slice) {
-  // Note: This is even faster on node v21.5.0 but not for bun v1.0.20
-  // let str = '';
-  // for (const byte of slice) {
-  //   str += byte.toString(16).padStart(2, '0');
-  // }
-  // return str;
-
   let str = '';
-  slice.forEach((byte) => {
-    str += byte.toString(16).padStart(2, '0');
-  });
+  const { length } = slice;
+  for (let i = 0; i < length; i++) {
+    str += slice[i].toString(16).padStart(2, '0');
+  }
   return str;
 }

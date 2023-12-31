@@ -34,5 +34,5 @@ export function getRssiStatus(rssi: number): "none" | "very bad" | "somewhat bad
 /**
  * @param {Uint8Array} slice
  */
-export function convertTargetToSerialNumber(slice: Uint8Array): any;
+export function convertTargetToSerialNumber(slice: Uint8Array): string;
 export function NOOP(value: any): void;
