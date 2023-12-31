@@ -41,28 +41,14 @@ export function encode(
 
   bytes.set(target, 8);
 
-  // last 2 bytes of target are always 0
-  view.setUint16(14, 0, true);
-
-  // reserved
-  for (let i = 0; i < 6; i++) {
-    view.setUint8(16 + i, 0);
-  }
-
   view.setUint8(22, ((resRequired ? 1 : 0) << 0) | ((ackRequired ? 1 : 0) << 1));
 
   view.setUint8(23, sequence);
 
   /** Protocol Header */
 
-  // reserved - 64 bit timestamp
-  view.setBigUint64(24, 0n, true);
-
   // type
   view.setUint16(32, type, true);
-
-  // rervered
-  view.setUint16(34, 0, true);
 
   if (payload) {
     bytes.set(payload, 36);
