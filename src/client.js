@@ -1,11 +1,4 @@
 import {
-  GetColorCommand,
-  GetGroupCommand,
-  GetHostFirmwareCommand,
-  GetLabelCommand,
-  GetVersionCommand,
-} from './commands.js';
-import {
   TYPE,
   PORT,
   BROADCAST_ADDRESS,
@@ -14,11 +7,6 @@ import {
 import {
   encode,
   decodeHeader,
-  decodeStateGroup,
-  decodeStateLabel,
-  decodeLightState,
-  decodeStateVersion,
-  decodeStateHostFirmware,
   decodeStateUnhandled,
 } from './encoding.js';
 import {
@@ -27,21 +15,11 @@ import {
 } from './utils.js';
 
 /**
- * @typedef {'light' | 'switch'} DeviceType
- */
-
-/**
  * @typedef {{
  *   address: string;
  *   port: number;
  *   target: Uint8Array;
  *   serialNumber: string;
- *   label?: string;
- *   group?: ReturnType<typeof decodeStateGroup>;
- *   type?: DeviceType;
- *   color?: ReturnType<typeof decodeLightState>;
- *   version?: ReturnType<typeof decodeStateVersion>;
- *   hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
  * }} Device
  */
 
@@ -93,7 +71,7 @@ export function Client(options) {
   }
 
   /**
-   * @type {Map<number, (type: number, bytes: Uint8Array, ref: { current: number; }) => unknown>}
+   * @type {Map<number, (type: number, bytes: Uint8Array, ref: { current: number; }) => void>}
    */
   const responseHandlerMap = new Map();
 
@@ -102,7 +80,7 @@ export function Client(options) {
    * @param {AbortSignal} [signal]
    */
   function registerAckRequest(source, signal) {
-    /** @typedef {typeof PromiseWithResolvers<void>} Resolvers  */
+    /** @typedef {typeof PromiseWithResolvers<void>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
     function onAbort(...args) {
@@ -119,22 +97,20 @@ export function Client(options) {
     }
 
     responseHandlerMap.set(source, (type, bytes, offsetRef) => {
-      if (type !== TYPE.Acknowledgement) {
-        // ignore
-        return;
+      if (type === TYPE.Acknowledgement || type === TYPE.StateUnhandled) {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        } else {
+          clearTimeout(timeout);
+        }
+        responseHandlerMap.delete(source);
+        if (type === TYPE.StateUnhandled) {
+          const requestType = decodeStateUnhandled(bytes, offsetRef);
+          reject(new Error(`Unhandled request type: ${requestType}`));
+          return;
+        }
+        resolve();
       }
-      if (signal) {
-        signal.removeEventListener('abort', onAbort);
-      } else {
-        clearTimeout(timeout);
-      }
-      responseHandlerMap.delete(source);
-      if (type === TYPE.StateUnhandled) {
-        const requestType = decodeStateUnhandled(bytes, offsetRef);
-        reject(new Error(`Unhandled request type: ${requestType}`));
-        return;
-      }
-      resolve();
     });
 
     return promise;
@@ -147,7 +123,7 @@ export function Client(options) {
    * @param {AbortSignal} [signal]
    */
   function registerRequest(source, decoder, signal) {
-    /** @typedef {typeof PromiseWithResolvers<T>} Resolvers  */
+    /** @typedef {typeof PromiseWithResolvers<T>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
     function onAbort(...args) {
@@ -165,8 +141,7 @@ export function Client(options) {
 
     responseHandlerMap.set(source, (type, bytes, offsetRef) => {
       if (type === TYPE.Acknowledgement) {
-        // TODO
-        return undefined;
+        return;
       }
       if (signal) {
         signal.removeEventListener('abort', onAbort);
@@ -177,11 +152,9 @@ export function Client(options) {
       if (type === TYPE.StateUnhandled) {
         const requestType = decodeStateUnhandled(bytes, offsetRef);
         reject(new Error(`Unhandled request type: ${requestType}`));
-        return undefined;
+        return;
       }
-      const payload = decoder(bytes, offsetRef);
-      resolve(/** @type {T} */(payload));
-      return payload;
+      resolve(decoder(bytes, offsetRef));
     });
 
     return promise;
@@ -331,18 +304,6 @@ export function Client(options) {
       return promise;
     },
     /**
-     * @param {Device} device
-     */
-    async refreshDeviceInfo(device) {
-      await Promise.allSettled([
-        this.send(GetLabelCommand(), device),
-        this.send(GetGroupCommand(), device),
-        this.send(GetColorCommand(), device),
-        this.send(GetVersionCommand(), device),
-        this.send(GetHostFirmwareCommand(), device),
-      ]);
-    },
-    /**
      * @param {string} serialNumber
      */
     getDevice(serialNumber) {
@@ -351,7 +312,7 @@ export function Client(options) {
         return device;
       }
 
-      /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers  */
+      /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers */
       const { resolve, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
       const deviceResolvers = getDeviceResolvers.get(serialNumber);
@@ -378,31 +339,6 @@ export function Client(options) {
         header.target,
         convertTargetToSerialNumber(header.target),
       );
-
-      const payloadOffset = offsetRef.current;
-
-      switch (header.type) {
-        case TYPE.StateGroup:
-          device.group = decodeStateGroup(message, offsetRef);
-          break;
-        case TYPE.StateLabel:
-          device.label = decodeStateLabel(message, offsetRef);
-          break;
-        case TYPE.LightState:
-          device.color = decodeLightState(message, offsetRef);
-          device.type = 'light';
-          break;
-        case TYPE.StateVersion:
-          device.version = decodeStateVersion(message, offsetRef);
-          break;
-        case TYPE.StateHostFirmware:
-          device.hostFirmware = decodeStateHostFirmware(message, offsetRef);
-          break;
-        default:
-          break;
-      }
-
-      offsetRef.current = payloadOffset;
 
       const payload = message.subarray(offsetRef.current);
 

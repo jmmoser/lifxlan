@@ -45,10 +45,6 @@ export function Client(options: {
      */
     send<T_3>(command: import("./commands.js").Command<T_3>, device: Device, signal?: AbortSignal): Promise<T_3>;
     /**
-     * @param {Device} device
-     */
-    refreshDeviceInfo(device: Device): Promise<void>;
-    /**
      * @param {string} serialNumber
      */
     getDevice(serialNumber: string): any;
@@ -80,20 +76,9 @@ export function Client(options: {
         payload: Uint8Array;
     };
 };
-export type DeviceType = 'light' | 'switch';
 export type Device = {
     address: string;
     port: number;
     target: Uint8Array;
     serialNumber: string;
-    label?: string;
-    group?: ReturnType<typeof decodeStateGroup>;
-    type?: DeviceType;
-    color?: ReturnType<typeof decodeLightState>;
-    version?: ReturnType<typeof decodeStateVersion>;
-    hostFirmware?: ReturnType<typeof decodeStateHostFirmware>;
 };
-import { decodeStateGroup } from './encoding.js';
-import { decodeLightState } from './encoding.js';
-import { decodeStateVersion } from './encoding.js';
-import { decodeStateHostFirmware } from './encoding.js';

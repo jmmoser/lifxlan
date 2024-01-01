@@ -65,4 +65,41 @@ describe('client', () => {
 
     await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
   });
+
+  test('sendOnlyAcknowledgement with StateUnhandled response', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      onSend(messsage, port, address) {
+        const packet = decodeHeader(messsage, { current: 0 });
+        assert.equal(packet.source, 2);
+        assert.equal(packet.sequence, 0);
+        const payload = new Uint8Array(2);
+        new DataView(payload.buffer).setUint16(0, TYPE.StatePower, true);
+        client.onReceived(
+          encode(
+            packet.tagged,
+            packet.source,
+            packet.target,
+            false,
+            false,
+            packet.sequence,
+            TYPE.StateUnhandled,
+            payload,
+          ),
+          port,
+          address,
+        );
+      },
+    });
+
+    const device = client.registerDevice('abcdef123456', 1234, '1.2.3.4');
+
+    try {
+      await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
+      assert.fail('should throw');
+    } catch (err) {
+      assert(err instanceof Error);
+      assert.match(err.message, /Unhandled/);
+    }
+  });
 });
