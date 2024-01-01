@@ -18,17 +18,20 @@ export function Client(options: {
     registerDevice(serialNumber: string, port: number, address: string): any;
     readonly devices: Map<string, Device>;
     /**
+     * Broadcast a command to all devices.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      */
     broadcast<T>(command: import("./commands.js").Command<T>): void;
     /**
+     * Send a command to a device without expecting a response or acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
      */
     unicast<T_1>(command: import("./commands.js").Command<T_1>, device: Device): void;
     /**
+     * Send a command to a device and only require an acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
@@ -37,6 +40,7 @@ export function Client(options: {
      */
     sendOnlyAcknowledgement<T_2>(command: import("./commands.js").Command<T_2>, device: Device, signal?: AbortSignal): Promise<void>;
     /**
+     * Send a command to a device and require a response.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
