@@ -77,7 +77,7 @@ export function Client(options: {
             reserved5: Uint8Array;
             type: number;
         };
-        payload: any;
+        payload: Uint8Array;
     };
 };
 export type DeviceType = 'light' | 'switch';

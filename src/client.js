@@ -187,20 +187,6 @@ export function Client(options) {
     return promise;
   }
 
-  /**
-   * @param {number} source
-   * @param {number} type
-   * @param {Uint8Array} payload
-   * @param {{ current: number; }} offsetRef
-   */
-  function handleResponse(source, type, payload, offsetRef) {
-    const entry = responseHandlerMap.get(source);
-    if (entry) {
-      return entry(type, payload, offsetRef);
-    }
-    return undefined;
-  }
-
   const knownDevices = /** @type {Map<string, Device>} */ (new Map());
 
   const getDeviceResolvers = /** @type {Map<string, ((device: Device) => void)[]>} */ (new Map());
@@ -418,12 +404,12 @@ export function Client(options) {
 
       offsetRef.current = payloadOffset;
 
-      const possiblyDecodedResponsePayload = handleResponse(
-        header.source,
-        header.type,
-        message,
-        offsetRef,
-      );
+      const payload = message.subarray(offsetRef.current);
+
+      const responseHandlerEntry = responseHandlerMap.get(header.source);
+      if (responseHandlerEntry) {
+        responseHandlerEntry(header.type, message, offsetRef);
+      }
 
       const resolvers = getDeviceResolvers.get(device.serialNumber);
       if (resolvers) {
@@ -435,7 +421,7 @@ export function Client(options) {
 
       return {
         header,
-        payload: possiblyDecodedResponsePayload,
+        payload,
       };
     },
   };
