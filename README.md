@@ -1,4 +1,4 @@
-No dependencies. Bring your own socket.
+No dependencies. Batteries not included.
 
 Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://github.com/oven-sh/bun/issues/1630).
 

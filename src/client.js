@@ -205,6 +205,7 @@ export function Client(options) {
       return knownDevices;
     },
     /**
+     * Broadcast a command to all devices.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      */
@@ -216,7 +217,7 @@ export function Client(options) {
         true,
         command.source,
         NO_TARGET,
-        true,
+        false,
         false,
         command.sequence,
         command.type,
@@ -226,6 +227,7 @@ export function Client(options) {
       options.onSend(bytes, PORT, BROADCAST_ADDRESS, true);
     },
     /**
+     * Send a command to a device without expecting a response or acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
@@ -248,6 +250,7 @@ export function Client(options) {
       options.onSend(bytes, device.port, device.address, false);
     },
     /**
+     * Send a command to a device and only require an acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
@@ -276,6 +279,7 @@ export function Client(options) {
       return promise;
     },
     /**
+     * Send a command to a device and require a response.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      * @param {Device} device
