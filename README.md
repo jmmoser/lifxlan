@@ -107,7 +107,7 @@ Example of how to retry:
 ```javascript
 for (let i = 0; i < 3; i++) {
   try {
-    await lifx.send(GetColorCommand(), device);
+    console.log(await lifx.send(GetColorCommand(), device));
     break;
   } catch (err) {
     const delay = Math.random() * Math.min(Math.pow(2, i) * 1000, 30 * 1000);
