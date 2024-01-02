@@ -2,7 +2,7 @@ No dependencies. Batteries not included.
 
 Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://github.com/oven-sh/bun/issues/1630).
 
-Node.js:
+#### Node.js:
 ```javascript
 import dgram from 'node:dgram';
 import { Client, GetServiceCommand } from 'lifxlan';
@@ -35,7 +35,7 @@ socket.once('listening', () => {
 socket.bind(50032);
 ```
 
-Deno:
+#### Deno:
 ```javascript
 import { Client, GetServiceCommand } from 'lifxlan';
 
@@ -50,7 +50,7 @@ const lifx = Client({
     socket.send(message, { port, hostname });
   },
   onDevice(device) {
-    console.log(device.serialNumber, device.address);
+    console.log(device);
     socket.close();
   },
 });
@@ -62,7 +62,7 @@ for await (const [data, remote] of socket) {
 }
 ```
 
-How to turn a light on:
+#### How to turn a light on:
 ```javascript
 import dgram from 'node:dgram';
 import { Client, GetServiceCommand, SetPowerCommand } from 'lifxlan';
@@ -103,7 +103,7 @@ await lifx.sendOnlyAcknowledge(SetPowerCommand(true), device);
 socket.close();
 ```
 
-Example of how to retry:
+#### Example of how to retry:
 ```javascript
 for (let i = 0; i < 3; i++) {
   try {
@@ -116,7 +116,7 @@ for (let i = 0; i < 3; i++) {
 }
 ```
 
-How to specify a custom timeout for a command:
+#### How to specify a custom timeout for a command:
 ```javascript
 const controller = new AbortController();
 
@@ -131,7 +131,7 @@ try {
 }
 ```
 
-How to use one socket for broadcast messages and another socket for unicast messages:
+#### How to use one socket for broadcast messages and another socket for unicast messages:
 ```javascript
 import dgram from 'node:dgram';
 import { Client, GetServiceCommand } from 'lifxlan';
