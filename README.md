@@ -11,12 +11,12 @@ const socket = dgram.createSocket('udp4');
 
 const lifx = Client({
   onSend(message, port, address) {
-    // The client has a message that should be sent out
+    // The client has a message that can be sent out
     socket.send(message, port, address);
   },
   onDevice(device) {
     // A device has been discovered
-    console.log(device.serialNumber, device.address);
+    console.log(device);
     socket.close();
   },
 });
@@ -62,7 +62,76 @@ for await (const [data, remote] of socket) {
 }
 ```
 
-You can also use multiple sockets. For example, you could use one for unicast and the other for broadcast:
+How to turn a light on:
+```javascript
+import dgram from 'node:dgram';
+import { Client, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+
+const socket = dgram.createSocket('udp4');
+
+const lifx = Client({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+});
+
+socket.on('message', (message, remote) => {
+  lifx.onReceived(message, remote.port, remote.address);
+});
+
+await new Promise((resolve, reject) => {
+  socket.once('error', reject);
+  socket.once('listening', resolve);
+  socket.bind(50032);
+});
+
+socket.setBroadcast(true);
+
+// Start scanning for devices
+lifx.broadcast(GetServiceCommand());
+const scanInterval = setInterval(() => {
+  lifx.broadcast(GetServiceCommand());
+}, 1000);
+
+const device = await lifx.getDevice('d07123456789');
+
+// Stop scanning since device was found
+clearInterval(scanInterval);
+
+await lifx.sendOnlyAcknowledge(SetPowerCommand(true), device);
+
+socket.close();
+```
+
+Example of how to retry:
+```javascript
+for (let i = 0; i < 3; i++) {
+  try {
+    await lifx.send(GetColorCommand(), device);
+    break;
+  } catch (err) {
+    const delay = Math.random() * Math.min(Math.pow(2, i) * 1000, 30 * 1000);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+```
+
+How to specify a custom timeout for a command:
+```javascript
+const controller = new AbortController();
+
+const timeout = setTimeout(() => {
+  controller.abort();
+}, 100);
+
+try {
+  console.log(await lifx.send(GetColorCommand(), device, controller.signal));
+} finally {
+  clearTimeout(timeout)
+}
+```
+
+How to use one socket for broadcast messages and another socket for unicast messages:
 ```javascript
 import dgram from 'node:dgram';
 import { Client, GetServiceCommand } from 'lifxlan';
@@ -79,7 +148,7 @@ const lifx = Client({
     }
   },
   onDevice(device) {
-    console.log(device.serialNumber, device.address);
+    console.log(device);
     broadcastSocket.close();
     unicastSocket.close();
   },

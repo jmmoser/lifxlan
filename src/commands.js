@@ -101,13 +101,19 @@ export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
 }
 
 /**
- * @param {boolean} on
+ * @param {number | boolean} power
  * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
-export function SetPowerCommand(on) {
+export function SetPowerCommand(power) {
   const payload = new Uint8Array(2);
   const view = new DataView(payload.buffer);
-  view.setUint16(0, on ? 0xFFFF : 0, true);
+  view.setUint16(
+    0,
+    typeof power === 'number'
+      ? power
+      : power ? 65535 : 0,
+    true,
+  );
   return {
     type: TYPE.SetPower,
     payload,

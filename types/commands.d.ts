@@ -46,10 +46,10 @@ export function GetColorCommand(): Command<ReturnType<typeof Encoding.decodeLigh
  */
 export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Command<ReturnType<typeof Encoding.decodeLightState>>;
 /**
- * @param {boolean} on
+ * @param {number | boolean} power
  * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
-export function SetPowerCommand(on: boolean): Command<ReturnType<typeof Encoding.decodeStatePower>>;
+export function SetPowerCommand(power: number | boolean): Command<ReturnType<typeof Encoding.decodeStatePower>>;
 /**
  * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
