@@ -162,7 +162,7 @@ export function Client(options) {
 
   const knownDevices = /** @type {Map<string, Device>} */ (new Map());
 
-  const getDeviceResolvers = /** @type {Map<string, ((device: Device) => void)[]>} */ (new Map());
+  const deviceResolvers = /** @type {Map<string, Set<(device: Device) => void>>} */ (new Map());
 
   /**
    * @param {number} port
@@ -309,21 +309,54 @@ export function Client(options) {
     },
     /**
      * @param {string} serialNumber
+     * @param {AbortSignal} [signal]
      */
-    getDevice(serialNumber) {
-      const device = knownDevices.get(serialNumber);
-      if (device) {
-        return device;
+    getDevice(serialNumber, signal) {
+      const knownDevice = knownDevices.get(serialNumber);
+      if (knownDevice) {
+        return knownDevice;
       }
 
       /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers */
-      const { resolve, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
+      const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
-      const deviceResolvers = getDeviceResolvers.get(serialNumber);
-      if (!deviceResolvers) {
-        getDeviceResolvers.set(serialNumber, [resolve]);
+      function onAbort(...args) {
+        const resolvers = deviceResolvers.get(serialNumber);
+        if (resolvers) {
+          if (resolvers.size > 1) {
+            resolvers.delete(resolve);
+          } else {
+            deviceResolvers.delete(serialNumber);
+          }
+        }
+        reject(...args);
+      }
+
+      let timeout;
+
+      if (signal) {
+        signal.addEventListener('abort', onAbort, { once: true });
       } else {
-        deviceResolvers.push(resolve);
+        timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
+      }
+
+      /**
+       * @param {Device} device
+       */
+      const resolver = (device) => {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        } else {
+          clearTimeout(timeout);
+        }
+        resolve(device);
+      };
+
+      const resolvers = deviceResolvers.get(serialNumber);
+      if (!resolvers) {
+        deviceResolvers.set(serialNumber, new Set([resolver]));
+      } else {
+        resolvers.add(resolver);
       }
 
       return promise;
@@ -351,9 +384,9 @@ export function Client(options) {
         responseHandlerEntry(header.type, message, offsetRef);
       }
 
-      const resolvers = getDeviceResolvers.get(device.serialNumber);
+      const resolvers = deviceResolvers.get(device.serialNumber);
       if (resolvers) {
-        getDeviceResolvers.delete(device.serialNumber);
+        deviceResolvers.delete(device.serialNumber);
         resolvers.forEach((resolver) => {
           resolver(device);
         });

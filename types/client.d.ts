@@ -50,8 +50,9 @@ export function Client(options: {
     send<T_3>(command: import("./commands.js").Command<T_3>, device: Device, signal?: AbortSignal): Promise<T_3>;
     /**
      * @param {string} serialNumber
+     * @param {AbortSignal} [signal]
      */
-    getDevice(serialNumber: string): any;
+    getDevice(serialNumber: string, signal?: AbortSignal): any;
     /**
      * @param {Uint8Array} message
      * @param {number} port
