@@ -20,6 +20,7 @@ import {
  *   port: number;
  *   target: Uint8Array;
  *   serialNumber: string;
+ *   sequence: number;
  * }} Device
  */
 
@@ -36,7 +37,16 @@ function createDevice(serialNumber, port, address, target) {
     port,
     address,
     target,
+    sequence: 0,
   };
+}
+
+/**
+ * @param {string} serialNumber
+ * @param {number} sequence
+ */
+function getResponseKey(serialNumber, sequence) {
+  return `${serialNumber}:${sequence}`;
 }
 
 /**
@@ -44,24 +54,12 @@ function createDevice(serialNumber, port, address, target) {
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
  *   onDevice?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
+ *   source?: number;
  * }} options
  */
 export function Client(options) {
-  let globalSource = 2; // 0 and 1 are reserved
-
-  options.defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
-
-  /**
-   * @param {number} [source]
-   */
-  function incrementSource(source) {
-    if (source == null) {
-      source = globalSource;
-      globalSource = (globalSource + 1) % 0x10000;
-      globalSource = globalSource <= 1 ? 2 : globalSource;
-    }
-    return source;
-  }
+  const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  const source = options.source ?? Math.floor(Math.random() * 65534) + 2;
 
   /**
    * @param {number} [sequence]
@@ -71,20 +69,23 @@ export function Client(options) {
   }
 
   /**
-   * @type {Map<number, (type: number, bytes: Uint8Array, ref: { current: number; }) => void>}
+   * @type {Map<string, (type: number, bytes: Uint8Array, ref: { current: number; }) => void>}
    */
   const responseHandlerMap = new Map();
 
   /**
-   * @param {number} source
+   * @param {string} serialNumber
+   * @param {number} sequence
    * @param {AbortSignal} [signal]
    */
-  function registerAckRequest(source, signal) {
+  function registerAckRequest(serialNumber, sequence, signal) {
     /** @typedef {typeof PromiseWithResolvers<void>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
+    const key = getResponseKey(serialNumber, sequence);
+
     function onAbort(...args) {
-      responseHandlerMap.delete(source);
+      responseHandlerMap.delete(key);
       reject(...args);
     }
 
@@ -93,17 +94,17 @@ export function Client(options) {
     if (signal) {
       signal.addEventListener('abort', onAbort, { once: true });
     } else {
-      timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
+      timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
     }
 
-    responseHandlerMap.set(source, (type, bytes, offsetRef) => {
+    responseHandlerMap.set(key, (type, bytes, offsetRef) => {
       if (type === TYPE.Acknowledgement || type === TYPE.StateUnhandled) {
         if (signal) {
           signal.removeEventListener('abort', onAbort);
         } else {
           clearTimeout(timeout);
         }
-        responseHandlerMap.delete(source);
+        responseHandlerMap.delete(key);
         if (type === TYPE.StateUnhandled) {
           const requestType = decodeStateUnhandled(bytes, offsetRef);
           reject(new Error(`Unhandled request type: ${requestType}`));
@@ -118,16 +119,19 @@ export function Client(options) {
 
   /**
    * @template T
-   * @param {number} source
-   * @param {import('./commands.js').Decoder<T>} decoder
+   * @param {string} serialNumber
+   * @param {number} sequence
+   * @param {import('./commands.js').Decoder<T>} decode
    * @param {AbortSignal} [signal]
    */
-  function registerRequest(source, decoder, signal) {
+  function registerRequest(serialNumber, sequence, decode, signal) {
     /** @typedef {typeof PromiseWithResolvers<T>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
+    const key = getResponseKey(serialNumber, sequence);
+
     function onAbort(...args) {
-      responseHandlerMap.delete(source);
+      responseHandlerMap.delete(key);
       reject(...args);
     }
 
@@ -136,10 +140,10 @@ export function Client(options) {
     if (signal) {
       signal.addEventListener('abort', onAbort, { once: true });
     } else {
-      timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
+      timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
     }
 
-    responseHandlerMap.set(source, (type, bytes, offsetRef) => {
+    responseHandlerMap.set(key, (type, bytes, offsetRef) => {
       if (type === TYPE.Acknowledgement) {
         return;
       }
@@ -148,13 +152,13 @@ export function Client(options) {
       } else {
         clearTimeout(timeout);
       }
-      responseHandlerMap.delete(source);
+      responseHandlerMap.delete(key);
       if (type === TYPE.StateUnhandled) {
         const requestType = decodeStateUnhandled(bytes, offsetRef);
         reject(new Error(`Unhandled request type: ${requestType}`));
         return;
       }
-      resolve(decoder(bytes, offsetRef));
+      resolve(decode(bytes, offsetRef));
     });
 
     return promise;
@@ -210,16 +214,13 @@ export function Client(options) {
      * @param {import('./commands.js').Command<T>} command
      */
     broadcast(command) {
-      command.source = incrementSource(command.source);
-      command.sequence = incrementSequence(command.sequence);
-
       const bytes = encode(
         true,
-        command.source,
+        source,
         NO_TARGET,
         false,
         false,
-        command.sequence,
+        0,
         command.type,
         command.payload,
       );
@@ -233,21 +234,20 @@ export function Client(options) {
      * @param {Device} device
      */
     unicast(command, device) {
-      command.source = incrementSource(command.source);
-      command.sequence = incrementSequence(command.sequence);
-
       const bytes = encode(
         false,
-        command.source,
+        source,
         device.target,
         false,
         false,
-        command.sequence,
+        device.sequence,
         command.type,
         command.payload,
       );
 
       options.onSend(bytes, device.port, device.address, false);
+
+      device.sequence = incrementSequence(device.sequence);
     },
     /**
      * Send a command to a device and only require an acknowledgement.
@@ -258,21 +258,20 @@ export function Client(options) {
      * @returns {Promise<void>}
      */
     sendOnlyAcknowledgement(command, device, signal) {
-      command.source = incrementSource(command.source);
-      command.sequence = incrementSequence(command.sequence);
-
       const bytes = encode(
         false,
-        command.source,
+        source,
         device.target,
         false,
         true,
-        command.sequence,
+        device.sequence,
         command.type,
         command.payload,
       );
 
-      const promise = registerAckRequest(command.source, signal);
+      const promise = registerAckRequest(device.serialNumber, device.sequence, signal);
+
+      device.sequence = incrementSequence(device.sequence);
 
       options.onSend(bytes, device.port, device.address, false);
 
@@ -287,21 +286,20 @@ export function Client(options) {
      * @returns {Promise<T>}
      */
     send(command, device, signal) {
-      command.source = incrementSource(command.source);
-      command.sequence = incrementSequence(command.sequence);
-
       const bytes = encode(
         false,
-        command.source,
+        source,
         device.target,
         true,
         false,
-        command.sequence,
+        device.sequence,
         command.type,
         command.payload,
       );
 
-      const promise = registerRequest(command.source, command.decoder, signal);
+      const promise = registerRequest(device.serialNumber, device.sequence, command.decode, signal);
+
+      device.sequence = incrementSequence(device.sequence);
 
       options.onSend(bytes, device.port, device.address, false);
 
@@ -337,7 +335,7 @@ export function Client(options) {
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
       } else {
-        timeout = setTimeout(() => onAbort(new Error('Timeout')), options.defaultTimeoutMs);
+        timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
       }
 
       /**
@@ -379,7 +377,10 @@ export function Client(options) {
 
       const payload = message.subarray(offsetRef.current);
 
-      const responseHandlerEntry = responseHandlerMap.get(header.source);
+      const responseHandlerEntry = responseHandlerMap.get(
+        getResponseKey(device.serialNumber, header.sequence),
+      );
+
       if (responseHandlerEntry) {
         responseHandlerEntry(header.type, message, offsetRef);
       }

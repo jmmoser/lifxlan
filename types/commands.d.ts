@@ -7,9 +7,7 @@
  * @typedef {{
  *   type: number;
  *   payload?: Uint8Array;
- *   decoder: Decoder<OutputType>;
- *   sequence?: number;
- *   source?: number;
+ *   decode: Decoder<OutputType>;
  * }} Command
  */
 /**
@@ -83,8 +81,6 @@ export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
 export type Command<OutputType> = {
     type: number;
     payload?: Uint8Array;
-    decoder: Decoder<OutputType>;
-    sequence?: number;
-    source?: number;
+    decode: Decoder<OutputType>;
 };
 import * as Encoding from './encoding.js';

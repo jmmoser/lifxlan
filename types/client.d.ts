@@ -3,12 +3,14 @@
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
  *   onDevice?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
+ *   source?: number;
  * }} options
  */
 export function Client(options: {
     onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
     onDevice?: (device: Device) => void;
     defaultTimeoutMs?: number;
+    source?: number;
 }): {
     /**
      * @param {string} serialNumber
@@ -86,4 +88,5 @@ export type Device = {
     port: number;
     target: Uint8Array;
     serialNumber: string;
+    sequence: number;
 };

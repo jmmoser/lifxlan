@@ -11,9 +11,7 @@ import { TYPE } from './constants.js';
  * @typedef {{
  *   type: number;
  *   payload?: Uint8Array;
- *   decoder: Decoder<OutputType>;
- *   sequence?: number;
- *   source?: number;
+ *   decode: Decoder<OutputType>;
  * }} Command
  */
 
@@ -23,7 +21,7 @@ import { TYPE } from './constants.js';
 export function GetServiceCommand() {
   return {
     type: TYPE.GetService,
-    decoder: Encoding.decodeStateService,
+    decode: Encoding.decodeStateService,
   };
 }
 
@@ -33,7 +31,7 @@ export function GetServiceCommand() {
 export function GetVersionCommand() {
   return {
     type: TYPE.GetVersion,
-    decoder: Encoding.decodeStateVersion,
+    decode: Encoding.decodeStateVersion,
   };
 }
 
@@ -43,7 +41,7 @@ export function GetVersionCommand() {
 export function GetHostFirmwareCommand() {
   return {
     type: TYPE.GetHostFirmware,
-    decoder: Encoding.decodeStateHostFirmware,
+    decode: Encoding.decodeStateHostFirmware,
   };
 }
 
@@ -53,7 +51,7 @@ export function GetHostFirmwareCommand() {
 export function GetLabelCommand() {
   return {
     type: TYPE.GetLabel,
-    decoder: Encoding.decodeStateLabel,
+    decode: Encoding.decodeStateLabel,
   };
 }
 
@@ -63,7 +61,7 @@ export function GetLabelCommand() {
 export function GetGroupCommand() {
   return {
     type: TYPE.GetGroup,
-    decoder: Encoding.decodeStateGroup,
+    decode: Encoding.decodeStateGroup,
   };
 }
 
@@ -73,7 +71,7 @@ export function GetGroupCommand() {
 export function GetColorCommand() {
   return {
     type: TYPE.GetColor,
-    decoder: Encoding.decodeLightState,
+    decode: Encoding.decodeLightState,
   };
 }
 
@@ -96,7 +94,7 @@ export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
   return {
     type: TYPE.SetColor,
     payload,
-    decoder: Encoding.decodeLightState,
+    decode: Encoding.decodeLightState,
   };
 }
 
@@ -117,7 +115,7 @@ export function SetPowerCommand(power) {
   return {
     type: TYPE.SetPower,
     payload,
-    decoder: Encoding.decodeStatePower,
+    decode: Encoding.decodeStatePower,
   };
 }
 
@@ -127,7 +125,7 @@ export function SetPowerCommand(power) {
 export function GetPowerCommand() {
   return {
     type: TYPE.GetPower,
-    decoder: Encoding.decodeStatePower,
+    decode: Encoding.decodeStatePower,
   };
 }
 
@@ -137,7 +135,7 @@ export function GetPowerCommand() {
 export function GetInfraredCommand() {
   return {
     type: TYPE.GetInfrared,
-    decoder: Encoding.decodeStateInfrared,
+    decode: Encoding.decodeStateInfrared,
   };
 }
 
@@ -152,7 +150,7 @@ export function SetInfraredCommand(brightness) {
   return {
     type: TYPE.SetInfrared,
     payload,
-    decoder: Encoding.decodeStateInfrared,
+    decode: Encoding.decodeStateInfrared,
   };
 }
 
@@ -167,7 +165,7 @@ export function GetRPowerCommand(relayIndex) {
   return {
     type: TYPE.GetRPower,
     payload,
-    decoder: Encoding.decodeStateRPower,
+    decode: Encoding.decodeStateRPower,
   };
 }
 
@@ -181,7 +179,7 @@ export function EchoRequestCommand(echoing) {
   return {
     type: TYPE.EchoRequest,
     payload,
-    decoder: Encoding.decodeEchoResponse,
+    decode: Encoding.decodeEchoResponse,
   };
 }
 
@@ -191,6 +189,6 @@ export function EchoRequestCommand(echoing) {
 export function GetLocationCommand() {
   return {
     type: TYPE.GetLocation,
-    decoder: Encoding.decodeStateLocation,
+    decode: Encoding.decodeStateLocation,
   };
 }

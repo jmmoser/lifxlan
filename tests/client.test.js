@@ -9,6 +9,7 @@ describe('client', () => {
   test('send', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
+      source: 2,
       onSend(messsage, port, address) {
         const packet = decodeHeader(messsage, { current: 0 });
         const payload = new Uint8Array(2);
@@ -41,6 +42,7 @@ describe('client', () => {
   test('sendOnlyAcknowledgement', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
+      source: 2,
       onSend(messsage, port, address) {
         const packet = decodeHeader(messsage, { current: 0 });
         assert.equal(packet.source, 2);
@@ -69,6 +71,7 @@ describe('client', () => {
   test('sendOnlyAcknowledgement with StateUnhandled response', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
+      source: 2,
       onSend(messsage, port, address) {
         const packet = decodeHeader(messsage, { current: 0 });
         assert.equal(packet.source, 2);
