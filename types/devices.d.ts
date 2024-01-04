@@ -1,8 +1,8 @@
 /**
  * @param {{
  *   serialNumber: string;
- *   port: number;
  *   address: string;
+ *   port?: number;
  *   target?: Uint8Array;
  *   sequence?: number;
  * }} config
@@ -10,8 +10,8 @@
  */
 export function Device(config: {
     serialNumber: string;
-    port: number;
     address: string;
+    port?: number;
     target?: Uint8Array;
     sequence?: number;
 }): Device;

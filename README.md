@@ -174,7 +174,6 @@ await new Promise((resolve, reject) => {
 
 const device = Device({
   serialNumber: 'd07123456789',
-  port: 56700,
   address: '192.168.1.50',
 });
 

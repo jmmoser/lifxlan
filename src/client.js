@@ -40,7 +40,8 @@ export function Client(options) {
    * @param {number} [sequence]
    */
   function incrementSequence(sequence) {
-    return sequence == null ? 0 : (sequence + 1) % 0x100;
+    /** Only allow up to 254. 255 is used for broadcast messages. */
+    return sequence == null ? 0 : (sequence + 1) % 0xFF;
   }
 
   /**
@@ -152,7 +153,7 @@ export function Client(options) {
         NO_TARGET,
         false,
         false,
-        0,
+        0xFF,
         command.type,
         command.payload,
       );
@@ -246,6 +247,8 @@ export function Client(options) {
       const offsetRef = { current: 0 };
       const header = decodeHeader(message, offsetRef);
 
+      const payload = message.subarray(offsetRef.current);
+
       if (devices) {
         const device = devices.register(
           convertTargetToSerialNumber(header.target),
@@ -265,7 +268,7 @@ export function Client(options) {
 
       return {
         header,
-        payload: message.subarray(offsetRef.current),
+        payload,
       };
     },
   };

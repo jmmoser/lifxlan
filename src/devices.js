@@ -1,6 +1,5 @@
-import {
-  PromiseWithResolvers,
-} from './utils.js';
+import { PORT } from './constants.js';
+import { PromiseWithResolvers } from './utils.js';
 
 /**
  * @typedef {{
@@ -29,16 +28,17 @@ function convertSerialNumberToTarget(serialNumber) {
 /**
  * @param {{
  *   serialNumber: string;
- *   port: number;
  *   address: string;
+ *   port?: number;
  *   target?: Uint8Array;
  *   sequence?: number;
  * }} config
  * @returns {Device}
  */
 export function Device(config) {
+  config.port ??= PORT;
   config.target ??= convertSerialNumberToTarget(config.serialNumber);
-  config.sequence ??= 0;
+  config.sequence = 0;
   return /** @type {Device} */ (config);
 }
 
