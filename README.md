@@ -152,7 +152,7 @@ try {
 #### How to use without device discovery
 ```javascript
 import dgram from 'node:dgram';
-import { Client, createDevice, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { Client, Device, GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -172,7 +172,11 @@ await new Promise((resolve, reject) => {
   socket.bind(50032);
 });
 
-const device = createDevice('d07123456789', 56700, '192.168.1.50');
+const device = Device({
+  serialNumber: 'd07123456789',
+  port: 56700,
+  address: '192.168.1.50',
+});
 
 await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 

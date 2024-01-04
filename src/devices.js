@@ -27,20 +27,19 @@ function convertSerialNumberToTarget(serialNumber) {
 }
 
 /**
- * @param {string} serialNumber
- * @param {number} port
- * @param {string} address
- * @param {Uint8Array} [target]
+ * @param {{
+ *   serialNumber: string;
+ *   port: number;
+ *   address: string;
+ *   target?: Uint8Array;
+ *   sequence?: number;
+ * }} config
  * @returns {Device}
  */
-function createDevice(serialNumber, port, address, target) {
-  return {
-    serialNumber,
-    port,
-    address,
-    target: target ?? convertSerialNumberToTarget(serialNumber),
-    sequence: 0,
-  };
+export function Device(config) {
+  config.target ??= convertSerialNumberToTarget(config.serialNumber);
+  config.sequence ??= 0;
+  return /** @type {Device} */ (config);
 }
 
 /**
@@ -69,7 +68,9 @@ export function Devices(options) {
       existingDevice.address = address;
       return existingDevice;
     }
-    const device = createDevice(serialNumber, port, address, target);
+    const device = Device({
+      serialNumber, port, address, target,
+    });
     knownDevices.set(serialNumber, device);
     if (options.onRegistered) {
       options.onRegistered(device);
