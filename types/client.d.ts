@@ -1,26 +1,19 @@
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
- *   onDevice?: (device: Device) => void;
+ *   devices?: ReturnType<typeof import('./devices.js').Devices>;
  *   defaultTimeoutMs?: number;
  *   source?: number;
  * }} options
  */
 export function Client(options: {
     onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
-    onDevice?: (device: Device) => void;
+    devices?: ReturnType<typeof import('./devices.js').Devices>;
     defaultTimeoutMs?: number;
     source?: number;
 }): {
     /**
-     * @param {string} serialNumber
-     * @param {number} port
-     * @param {string} address
-     */
-    registerDevice(serialNumber: string, port: number, address: string): any;
-    readonly devices: Map<string, Device>;
-    /**
-     * Broadcast a command to all devices.
+     * Broadcast a command to the local network.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      */
@@ -29,32 +22,27 @@ export function Client(options: {
      * Send a command to a device without expecting a response or acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} device
+     * @param {import('./devices.js').Device} device
      */
-    unicast<T_1>(command: import("./commands.js").Command<T_1>, device: Device): void;
+    unicast<T_1>(command: import("./commands.js").Command<T_1>, device: import('./devices.js').Device): void;
     /**
      * Send a command to a device and only require an acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} device
+     * @param {import('./devices.js').Device} device
      * @param {AbortSignal} [signal]
      * @returns {Promise<void>}
      */
-    sendOnlyAcknowledgement<T_2>(command: import("./commands.js").Command<T_2>, device: Device, signal?: AbortSignal): Promise<void>;
+    sendOnlyAcknowledgement<T_2>(command: import("./commands.js").Command<T_2>, device: import('./devices.js').Device, signal?: AbortSignal): Promise<void>;
     /**
      * Send a command to a device and require a response.
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} device
+     * @param {import('./devices.js').Device} device
      * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
-    send<T_3>(command: import("./commands.js").Command<T_3>, device: Device, signal?: AbortSignal): Promise<T_3>;
-    /**
-     * @param {string} serialNumber
-     * @param {AbortSignal} [signal]
-     */
-    getDevice(serialNumber: string, signal?: AbortSignal): any;
+    send<T_3>(command: import("./commands.js").Command<T_3>, device: import('./devices.js').Device, signal?: AbortSignal): Promise<T_3>;
     /**
      * @param {Uint8Array} message
      * @param {number} port
@@ -82,11 +70,4 @@ export function Client(options: {
         };
         payload: Uint8Array;
     };
-};
-export type Device = {
-    address: string;
-    port: number;
-    target: Uint8Array;
-    serialNumber: string;
-    sequence: number;
 };

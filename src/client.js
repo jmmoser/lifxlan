@@ -15,33 +15,6 @@ import {
 } from './utils.js';
 
 /**
- * @typedef {{
- *   address: string;
- *   port: number;
- *   target: Uint8Array;
- *   serialNumber: string;
- *   sequence: number;
- * }} Device
- */
-
-/**
- * @param {string} serialNumber
- * @param {number} port
- * @param {string} address
- * @param {Uint8Array} target
- * @returns {Device}
- */
-function createDevice(serialNumber, port, address, target) {
-  return {
-    serialNumber,
-    port,
-    address,
-    target,
-    sequence: 0,
-  };
-}
-
-/**
  * @param {string} serialNumber
  * @param {number} sequence
  */
@@ -52,7 +25,7 @@ function getResponseKey(serialNumber, sequence) {
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
- *   onDevice?: (device: Device) => void;
+ *   devices?: ReturnType<typeof import('./devices.js').Devices>;
  *   defaultTimeoutMs?: number;
  *   source?: number;
  * }} options
@@ -60,6 +33,8 @@ function getResponseKey(serialNumber, sequence) {
 export function Client(options) {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const source = options.source ?? Math.floor(Math.random() * 65534) + 2;
+
+  const { onSend, devices } = options;
 
   /**
    * @param {number} [sequence]
@@ -164,52 +139,9 @@ export function Client(options) {
     return promise;
   }
 
-  const knownDevices = /** @type {Map<string, Device>} */ (new Map());
-
-  const deviceResolvers = /** @type {Map<string, Set<(device: Device) => void>>} */ (new Map());
-
-  /**
-   * @param {number} port
-   * @param {string} address
-   * @param {Uint8Array} target
-   * @param {string} serialNumber
-   */
-  function registerDevice(port, address, target, serialNumber) {
-    const existingDevice = knownDevices.get(serialNumber);
-    if (existingDevice) {
-      existingDevice.port = port;
-      existingDevice.address = address;
-      return existingDevice;
-    }
-    const device = createDevice(serialNumber, port, address, target);
-    knownDevices.set(serialNumber, device);
-    if (options.onDevice) {
-      options.onDevice(device);
-    }
-    return device;
-  }
-
   return {
     /**
-     * @param {string} serialNumber
-     * @param {number} port
-     * @param {string} address
-     */
-    registerDevice(serialNumber, port, address) {
-      if (serialNumber.length !== 12) {
-        throw new Error('Invalid serial number');
-      }
-      const target = new Uint8Array(6);
-      for (let i = 0; i < 6; i++) {
-        target[i] = parseInt(serialNumber.slice(2 * i, 2 * (i + 1)), 16);
-      }
-      return registerDevice(port, address, target, serialNumber);
-    },
-    get devices() {
-      return knownDevices;
-    },
-    /**
-     * Broadcast a command to all devices.
+     * Broadcast a command to the local network.
      * @template T
      * @param {import('./commands.js').Command<T>} command
      */
@@ -225,13 +157,13 @@ export function Client(options) {
         command.payload,
       );
 
-      options.onSend(bytes, PORT, BROADCAST_ADDRESS, true);
+      onSend(bytes, PORT, BROADCAST_ADDRESS, true);
     },
     /**
      * Send a command to a device without expecting a response or acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} device
+     * @param {import('./devices.js').Device} device
      */
     unicast(command, device) {
       const bytes = encode(
@@ -245,7 +177,7 @@ export function Client(options) {
         command.payload,
       );
 
-      options.onSend(bytes, device.port, device.address, false);
+      onSend(bytes, device.port, device.address, false);
 
       device.sequence = incrementSequence(device.sequence);
     },
@@ -253,7 +185,7 @@ export function Client(options) {
      * Send a command to a device and only require an acknowledgement.
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} device
+     * @param {import('./devices.js').Device} device
      * @param {AbortSignal} [signal]
      * @returns {Promise<void>}
      */
@@ -273,7 +205,7 @@ export function Client(options) {
 
       device.sequence = incrementSequence(device.sequence);
 
-      options.onSend(bytes, device.port, device.address, false);
+      onSend(bytes, device.port, device.address, false);
 
       return promise;
     },
@@ -281,7 +213,7 @@ export function Client(options) {
      * Send a command to a device and require a response.
      * @template T
      * @param {import('./commands.js').Command<T>} command
-     * @param {Device} device
+     * @param {import('./devices.js').Device} device
      * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
@@ -301,61 +233,7 @@ export function Client(options) {
 
       device.sequence = incrementSequence(device.sequence);
 
-      options.onSend(bytes, device.port, device.address, false);
-
-      return promise;
-    },
-    /**
-     * @param {string} serialNumber
-     * @param {AbortSignal} [signal]
-     */
-    getDevice(serialNumber, signal) {
-      const knownDevice = knownDevices.get(serialNumber);
-      if (knownDevice) {
-        return knownDevice;
-      }
-
-      /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers */
-      const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
-
-      function onAbort(...args) {
-        const resolvers = deviceResolvers.get(serialNumber);
-        if (resolvers) {
-          if (resolvers.size > 1) {
-            resolvers.delete(resolve);
-          } else {
-            deviceResolvers.delete(serialNumber);
-          }
-        }
-        reject(...args);
-      }
-
-      let timeout;
-
-      if (signal) {
-        signal.addEventListener('abort', onAbort, { once: true });
-      } else {
-        timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
-      }
-
-      /**
-       * @param {Device} device
-       */
-      const resolver = (device) => {
-        if (signal) {
-          signal.removeEventListener('abort', onAbort);
-        } else {
-          clearTimeout(timeout);
-        }
-        resolve(device);
-      };
-
-      const resolvers = deviceResolvers.get(serialNumber);
-      if (!resolvers) {
-        deviceResolvers.set(serialNumber, new Set([resolver]));
-      } else {
-        resolvers.add(resolver);
-      }
+      onSend(bytes, device.port, device.address, false);
 
       return promise;
     },
@@ -368,34 +246,26 @@ export function Client(options) {
       const offsetRef = { current: 0 };
       const header = decodeHeader(message, offsetRef);
 
-      const device = registerDevice(
-        port,
-        address,
-        header.target,
-        convertTargetToSerialNumber(header.target),
-      );
+      if (devices) {
+        const device = devices.register(
+          convertTargetToSerialNumber(header.target),
+          port,
+          address,
+          header.target,
+        );
 
-      const payload = message.subarray(offsetRef.current);
+        const responseHandlerEntry = responseHandlerMap.get(
+          getResponseKey(device.serialNumber, header.sequence),
+        );
 
-      const responseHandlerEntry = responseHandlerMap.get(
-        getResponseKey(device.serialNumber, header.sequence),
-      );
-
-      if (responseHandlerEntry) {
-        responseHandlerEntry(header.type, message, offsetRef);
-      }
-
-      const resolvers = deviceResolvers.get(device.serialNumber);
-      if (resolvers) {
-        deviceResolvers.delete(device.serialNumber);
-        resolvers.forEach((resolver) => {
-          resolver(device);
-        });
+        if (responseHandlerEntry) {
+          responseHandlerEntry(header.type, message, offsetRef);
+        }
       }
 
       return {
         header,
-        payload,
+        payload: message.subarray(offsetRef.current),
       };
     },
   };

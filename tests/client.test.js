@@ -1,13 +1,16 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert';
 import { Client } from '../src/client.js';
+import { Devices } from '../src/devices.js';
 import { TYPE } from '../src/constants.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPowerCommand } from '../src/commands.js';
 
 describe('client', () => {
   test('send', async () => {
+    const devices = Devices({});
     const client = Client({
+      devices,
       defaultTimeoutMs: 0,
       source: 2,
       onSend(messsage, port, address) {
@@ -33,14 +36,16 @@ describe('client', () => {
       },
     });
 
-    const device = client.registerDevice('abcdef123456', 1234, '1.2.3.4');
+    const device = devices.register('abcdef123456', 1234, '1.2.3.4');
 
     const res = await client.send(GetPowerCommand(), device);
 
     assert.equal(res.on, true);
   });
   test('sendOnlyAcknowledgement', async () => {
+    const devices = Devices({});
     const client = Client({
+      devices,
       defaultTimeoutMs: 0,
       source: 2,
       onSend(messsage, port, address) {
@@ -63,13 +68,15 @@ describe('client', () => {
       },
     });
 
-    const device = client.registerDevice('abcdef123456', 1234, '1.2.3.4');
+    const device = devices.register('abcdef123456', 1234, '1.2.3.4');
 
     await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
   });
 
   test('sendOnlyAcknowledgement with StateUnhandled response', async () => {
+    const devices = Devices({});
     const client = Client({
+      devices,
       defaultTimeoutMs: 0,
       source: 2,
       onSend(messsage, port, address) {
@@ -95,7 +102,7 @@ describe('client', () => {
       },
     });
 
-    const device = client.registerDevice('abcdef123456', 1234, '1.2.3.4');
+    const device = devices.register('abcdef123456', 1234, '1.2.3.4');
 
     try {
       await client.sendOnlyAcknowledgement(GetPowerCommand(), device);

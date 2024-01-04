@@ -2,34 +2,49 @@ No dependencies. Batteries not included.
 
 Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://github.com/oven-sh/bun/issues/1630).
 
+
+### How to use
+
+1. Bring your own socket
+2. Create Devices object or implement your own
+3. Create Client
+4. Scan for devices with GetServiceCommand or register devices manually
+5. Send commands to the devices to control them
+
+### Examples
+
 #### Node.js:
 ```javascript
 import dgram from 'node:dgram';
-import { Client, GetServiceCommand } from 'lifxlan';
+import { Client, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
-const lifx = Client({
-  onSend(message, port, address) {
-    // The client has a message that can be sent out
-    socket.send(message, port, address);
-  },
-  onDevice(device) {
+const devices = Devices({
+  onRegistered(device) {
     // A device has been discovered
     console.log(device);
     socket.close();
   },
 });
 
+const client = Client({
+  devices,
+  onSend(message, port, address) {
+    // The client has a message that can be sent out
+    socket.send(message, port, address);
+  },
+});
+
 socket.on('message', (message, remote) => {
   // Forward received messages to the client
-  lifx.onReceived(message, remote.port, remote.address);
+  client.onReceived(message, remote.port, remote.address);
 });
 
 socket.once('listening', () => {
   socket.setBroadcast(true);
   // Discover devices on the network
-  lifx.broadcast(GetServiceCommand());
+  client.broadcast(GetServiceCommand());
 });
 
 socket.bind(50032);
@@ -37,7 +52,7 @@ socket.bind(50032);
 
 #### Deno:
 ```javascript
-import { Client, GetServiceCommand } from 'lifxlan';
+import { Client, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -45,38 +60,50 @@ const socket = Deno.listenDatagram({
   transport: 'udp',
 });
 
-const lifx = Client({
-  onSend(message, port, hostname) {
-    socket.send(message, { port, hostname });
-  },
-  onDevice(device) {
+const devices = Devices({
+  onRegistered(device) {
     console.log(device);
     socket.close();
   },
 });
 
-lifx.broadcast(GetServiceCommand());
+const client = Client({
+  devices,
+  onSend(message, port, hostname) {
+    socket.send(message, { port, hostname });
+  },
+});
+
+client.broadcast(GetServiceCommand());
 
 for await (const [data, remote] of socket) {
-  lifx.onReceived(data, remote.port, remote.hostname);
+  client.onReceived(data, remote.port, remote.hostname);
 }
 ```
 
 #### How to turn a light on:
 ```javascript
 import dgram from 'node:dgram';
-import { Client, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { Client, Devices, GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
-const lifx = Client({
+const devices = Devices({
+  onRegistered(device) {
+    console.log(device);
+    socket.close();
+  },
+});
+
+const client = Client({
+  devices,
   onSend(message, port, address) {
     socket.send(message, port, address);
   },
 });
 
 socket.on('message', (message, remote) => {
-  lifx.onReceived(message, remote.port, remote.address);
+  client.onReceived(message, remote.port, remote.address);
 });
 
 await new Promise((resolve, reject) => {
@@ -88,26 +115,26 @@ await new Promise((resolve, reject) => {
 socket.setBroadcast(true);
 
 // Start scanning for devices
-lifx.broadcast(GetServiceCommand());
+client.broadcast(GetServiceCommand());
 const scanInterval = setInterval(() => {
-  lifx.broadcast(GetServiceCommand());
+  client.broadcast(GetServiceCommand());
 }, 1000);
 
-const device = await lifx.getDevice('d07123456789');
+const device = await devices.get('d07123456789');
 
 // Stop scanning since device was found
 clearInterval(scanInterval);
 
-await lifx.sendOnlyAcknowledge(SetPowerCommand(true), device);
+await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 
 socket.close();
 ```
 
-#### Example of how to retry:
+#### How to retry:
 ```javascript
 for (let i = 0; i < 3; i++) {
   try {
-    console.log(await lifx.send(GetColorCommand(), device));
+    console.log(await client.send(GetColorCommand(), device));
     break;
   } catch (err) {
     const delay = Math.random() * Math.min(Math.pow(2, i) * 1000, 30 * 1000);
@@ -116,7 +143,7 @@ for (let i = 0; i < 3; i++) {
 }
 ```
 
-#### How to specify a custom timeout for a command:
+#### How to specify a custom timeout:
 ```javascript
 const controller = new AbortController();
 
@@ -125,7 +152,7 @@ const timeout = setTimeout(() => {
 }, 100);
 
 try {
-  console.log(await lifx.send(GetColorCommand(), device, controller.signal));
+  console.log(await client.send(GetColorCommand(), device, controller.signal));
 } finally {
   clearTimeout(timeout)
 }
@@ -134,12 +161,20 @@ try {
 #### How to use one socket for broadcast messages and another socket for unicast messages:
 ```javascript
 import dgram from 'node:dgram';
-import { Client, GetServiceCommand } from 'lifxlan';
+import { Client, Devices, GetServiceCommand } from 'lifxlan';
 
 const broadcastSocket = dgram.createSocket('udp4');
 const unicastSocket = dgram.createSocket('udp4');
 
-const lifx = Client({
+const devices = Devices({
+  onRegistered(device) {
+    console.log(device);
+    socket.close();
+  },
+});
+
+const client = Client({
+  devices,
   onSend(message, port, address, broadcast) {
     if (broadcast) {
       broadcastSocket.send(message, port, address);
@@ -155,18 +190,18 @@ const lifx = Client({
 });
 
 broadcastSocket.on('message', (message, remote) => {
-  lifx.onReceived(message, remote.port, remote.address);
+  client.onReceived(message, remote.port, remote.address);
 });
 
 broadcastSocket.once('listening', () => {
   broadcastSocket.setBroadcast(true);
-  lifx.broadcast(GetServiceCommand());
+  client.broadcast(GetServiceCommand());
 });
 
 broadcastSocket.bind(50032);
 
 unicastSocket.on('message', (message, remote) => {
-  lifx.onReceived(message, remote.port, remote.address);
+  client.onReceived(message, remote.port, remote.address);
 });
 
 unicastSocket.bind(50031);
