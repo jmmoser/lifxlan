@@ -14,9 +14,23 @@ import {
 
 /**
  * @param {string} serialNumber
+ */
+function convertSerialNumberToTarget(serialNumber) {
+  if (serialNumber.length !== 12) {
+    throw new Error('Invalid serial number');
+  }
+  const target = new Uint8Array(6);
+  for (let i = 0; i < 6; i++) {
+    target[i] = parseInt(serialNumber.slice(2 * i, 2 * (i + 1)), 16);
+  }
+  return target;
+}
+
+/**
+ * @param {string} serialNumber
  * @param {number} port
  * @param {string} address
- * @param {Uint8Array} target
+ * @param {Uint8Array} [target]
  * @returns {Device}
  */
 function createDevice(serialNumber, port, address, target) {
@@ -24,7 +38,7 @@ function createDevice(serialNumber, port, address, target) {
     serialNumber,
     port,
     address,
-    target,
+    target: target ?? convertSerialNumberToTarget(serialNumber),
     sequence: 0,
   };
 }
@@ -43,12 +57,12 @@ export function Devices(options) {
   const deviceResolvers = /** @type {Map<string, Set<(device: Device) => void>>} */ (new Map());
 
   /**
+   * @param {string} serialNumber
    * @param {number} port
    * @param {string} address
-   * @param {Uint8Array} target
-   * @param {string} serialNumber
+   * @param {Uint8Array} [target]
    */
-  function registerDevice(port, address, target, serialNumber) {
+  function registerDevice(serialNumber, port, address, target) {
     const existingDevice = knownDevices.get(serialNumber);
     if (existingDevice) {
       existingDevice.port = port;
@@ -71,16 +85,12 @@ export function Devices(options) {
      * @param {Uint8Array} [target]
      */
     register(serialNumber, port, address, target) {
-      if (serialNumber.length !== 12) {
-        throw new Error('Invalid serial number');
-      }
-      if (!target) {
-        target = new Uint8Array(6);
-        for (let i = 0; i < 6; i++) {
-          target[i] = parseInt(serialNumber.slice(2 * i, 2 * (i + 1)), 16);
-        }
-      }
-      const device = registerDevice(port, address, target, serialNumber);
+      const device = registerDevice(
+        serialNumber,
+        port,
+        address,
+        target,
+      );
 
       const resolvers = deviceResolvers.get(serialNumber);
       if (resolvers) {
@@ -89,6 +99,7 @@ export function Devices(options) {
           resolver(device);
         });
       }
+
       return device;
     },
     /**

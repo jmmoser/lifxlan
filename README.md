@@ -2,15 +2,6 @@ No dependencies. Batteries not included.
 
 Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://github.com/oven-sh/bun/issues/1630).
 
-
-### How to use
-
-1. Bring your own socket
-2. Create Devices object or implement your own
-3. Create Client
-4. Scan for devices with GetServiceCommand or register devices manually
-5. Send commands to the devices to control them
-
 ### Examples
 
 #### Node.js:
@@ -156,6 +147,36 @@ try {
 } finally {
   clearTimeout(timeout)
 }
+```
+
+#### How to use without device discovery
+```javascript
+import dgram from 'node:dgram';
+import { Client, createDevice, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+
+const socket = dgram.createSocket('udp4');
+
+const client = Client({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+});
+
+socket.on('message', (message, remote) => {
+  client.onReceived(message, remote.port, remote.address);
+});
+
+await new Promise((resolve, reject) => {
+  socket.once('error', reject);
+  socket.once('listening', resolve);
+  socket.bind(50032);
+});
+
+const device = createDevice('d07123456789', 56700, '192.168.1.50');
+
+await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
+
+socket.close();
 ```
 
 #### How to use one socket for broadcast messages and another socket for unicast messages:
