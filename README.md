@@ -21,7 +21,6 @@ const client = Client({
       onRegistered(device) {
         // A device has been discovered
         console.log(device);
-        socket.close();
       },
     }),
   }),
@@ -39,6 +38,10 @@ socket.once('listening', () => {
 });
 
 socket.bind();
+
+setTimeout(() => {
+  socket.close();
+}, 1000);
 ```
 
 #### Deno:
@@ -59,13 +62,16 @@ const client = Client({
     devices: Devices({
       onRegistered(device) {
         console.log(device);
-        socket.close();
       },
     }),
   }),
 });
 
 client.broadcast(GetServiceCommand());
+
+setTimeout(() => {
+  socket.close();
+}, 1000);
 
 for await (const [data, remote] of socket) {
   client.router.onReceived(data, remote.port, remote.hostname);
@@ -79,12 +85,7 @@ import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lif
 
 const socket = dgram.createSocket('udp4');
 
-const devices = Devices({
-  onRegistered(device) {
-    console.log(device);
-    socket.close();
-  },
-});
+const devices = Devices();
 
 const client = Client({
   router: Router({
@@ -220,12 +221,7 @@ import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lif
 
 const socket = dgram.createSocket('udp4');
 
-const devices = Devices({
-  onRegistered(device) {
-    console.log(device);
-    socket.close();
-  },
-});
+const devices = Devices();
 
 const router = Router({
   devices,
