@@ -14,7 +14,7 @@ const socket = dgram.createSocket('udp4');
 const client = Client({
   router: Router({
     onSend(message, port, address) {
-      // A message is ready to be sent out
+      // A message is ready to be sent
       socket.send(message, port, address);
     },
     devices: Devices({
@@ -27,7 +27,7 @@ const client = Client({
 });
 
 socket.on('message', (message, remote) => {
-  // Forward received messages to the client
+  // Forward received messages to the router
   client.router.onReceived(message, remote.port, remote.address);
 });
 
