@@ -6,13 +6,10 @@ import {
 } from './constants.js';
 import {
   encode,
-  decodeHeader,
+  // decodeHeader,
   decodeStateUnhandled,
 } from './encoding.js';
-import {
-  PromiseWithResolvers,
-  convertTargetToSerialNumber,
-} from './utils.js';
+import { PromiseWithResolvers } from './utils.js';
 
 /**
  * @param {string} serialNumber
@@ -23,26 +20,53 @@ function getResponseKey(serialNumber, sequence) {
 }
 
 /**
+ * @type {Set<number>}
+ */
+const sourcesInUse = new Set();
+
+let globalSource = 2;
+function getNextAvailableSource() {
+  let source = 0;
+  for (let i = 0; i < 65533; i++) {
+    if (!sourcesInUse.has(globalSource)) {
+      source = globalSource;
+      break;
+    }
+    globalSource = (globalSource + 1) % 65535;
+    if (globalSource <= 1) {
+      globalSource = 2;
+    }
+  }
+  if (source === 0) {
+    throw new Error('No available source');
+  }
+  return source;
+}
+
+/**
+   * @param {number} [sequence]
+   */
+function incrementSequence(sequence) {
+  /** Only allow up to 254. 255 is used for broadcast messages. */
+  return sequence == null ? 0 : (sequence + 1) % 0xFF;
+}
+
+/**
  * @param {{
- *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
- *   devices?: ReturnType<typeof import('./devices.js').Devices>;
+ *   router: ReturnType<typeof import('./router.js').Router>;
  *   defaultTimeoutMs?: number;
  *   source?: number;
  * }} options
  */
 export function Client(options) {
-  const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
-  const source = options.source ?? Math.floor(Math.random() * 65534) + 2;
+  const source = options.source ?? getNextAvailableSource();
 
-  const { onSend, devices } = options;
-
-  /**
-   * @param {number} [sequence]
-   */
-  function incrementSequence(sequence) {
-    /** Only allow up to 254. 255 is used for broadcast messages. */
-    return sequence == null ? 0 : (sequence + 1) % 0xFF;
+  if (sourcesInUse.has(source)) {
+    throw new Error('Source already in use');
   }
+
+  const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  const { router } = options;
 
   /**
    * @type {Map<string, (type: number, bytes: Uint8Array, ref: { current: number; }) => void>}
@@ -140,7 +164,24 @@ export function Client(options) {
     return promise;
   }
 
-  return {
+  let disposed = false;
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    sourcesInUse.delete(source);
+    router.deregister(source);
+  }
+
+  const client = {
+    get router() {
+      return router;
+    },
+    get source() {
+      return source;
+    },
+    dispose() {
+      dispose();
+    },
     /**
      * Broadcast a command to the local network.
      * @template T
@@ -158,7 +199,7 @@ export function Client(options) {
         command.payload,
       );
 
-      onSend(bytes, PORT, BROADCAST_ADDRESS, true);
+      router.send(bytes, PORT, BROADCAST_ADDRESS, true);
     },
     /**
      * Send a command to a device without expecting a response or acknowledgement.
@@ -178,7 +219,7 @@ export function Client(options) {
         command.payload,
       );
 
-      onSend(bytes, device.port, device.address, false);
+      router.send(bytes, device.port, device.address, false);
 
       device.sequence = incrementSequence(device.sequence);
     },
@@ -206,7 +247,7 @@ export function Client(options) {
 
       device.sequence = incrementSequence(device.sequence);
 
-      onSend(bytes, device.port, device.address, false);
+      router.send(bytes, device.port, device.address, false);
 
       return promise;
     },
@@ -234,42 +275,29 @@ export function Client(options) {
 
       device.sequence = incrementSequence(device.sequence);
 
-      onSend(bytes, device.port, device.address, false);
+      router.send(bytes, device.port, device.address, false);
 
       return promise;
     },
     /**
-     * @param {Uint8Array} message
-     * @param {number} port
-     * @param {string} address
+     * @param {ReturnType<typeof import('./encoding.js').decodeHeader>} header
+     * @param {Uint8Array} payload
+     * @param {string} serialNumber
      */
-    onReceived(message, port, address) {
-      const offsetRef = { current: 0 };
-      const header = decodeHeader(message, offsetRef);
+    onMessage(header, payload, serialNumber) {
+      const responseHandlerEntry = responseHandlerMap.get(
+        getResponseKey(serialNumber, header.sequence),
+      );
 
-      const payload = message.subarray(offsetRef.current);
-
-      if (devices) {
-        const device = devices.register(
-          convertTargetToSerialNumber(header.target),
-          port,
-          address,
-          header.target,
-        );
-
-        const responseHandlerEntry = responseHandlerMap.get(
-          getResponseKey(device.serialNumber, header.sequence),
-        );
-
-        if (responseHandlerEntry) {
-          responseHandlerEntry(header.type, message, offsetRef);
-        }
+      if (responseHandlerEntry) {
+        responseHandlerEntry(header.type, payload, { current: 0 });
       }
-
-      return {
-        header,
-        payload,
-      };
     },
   };
+
+  router.register(source, client);
+
+  sourcesInUse.add(source);
+
+  return client;
 }

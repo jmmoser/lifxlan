@@ -31,8 +31,4 @@ export function rgbToHsb(r: number, g: number, b: number): readonly [number, num
  * @param {number} rssi
  */
 export function getRssiStatus(rssi: number): "none" | "very bad" | "somewhat bad" | "alright" | "good";
-/**
- * @param {Uint8Array} slice
- */
-export function convertTargetToSerialNumber(slice: Uint8Array): string;
 export function NOOP(value: any): void;

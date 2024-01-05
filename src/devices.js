@@ -46,10 +46,11 @@ export function Device(config) {
  * @param {{
  *   onRegistered?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
- * }} options
+ * }} [options]
  */
 export function Devices(options) {
-  const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  const defaultTimeoutMs = options?.defaultTimeoutMs ?? 3000;
+  const onRegistered = options?.onRegistered;
 
   const knownDevices = /** @type {Map<string, Device>} */ (new Map());
 
@@ -72,8 +73,8 @@ export function Devices(options) {
       serialNumber, port, address, target,
     });
     knownDevices.set(serialNumber, device);
-    if (options.onRegistered) {
-      options.onRegistered(device);
+    if (onRegistered) {
+      onRegistered(device);
     }
     return device;
   }

@@ -1,17 +1,44 @@
 /**
  * @param {{
- *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
- *   devices?: ReturnType<typeof import('./devices.js').Devices>;
+ *   router: ReturnType<typeof import('./router.js').Router>;
  *   defaultTimeoutMs?: number;
  *   source?: number;
  * }} options
  */
 export function Client(options: {
-    onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
-    devices?: ReturnType<typeof import('./devices.js').Devices>;
+    router: ReturnType<typeof import('./router.js').Router>;
     defaultTimeoutMs?: number;
     source?: number;
 }): {
+    readonly router: {
+        send(message: any, port: any, address: any, broadcast: any): void; /** Only allow up to 254. 255 is used for broadcast messages. */
+        register(source: number, handler: import("./router.js").MessageHandler): void;
+        deregister(source: any): void;
+        onReceived(message: Uint8Array, port: number, address: string): {
+            header: {
+                bytes: Uint8Array;
+                size: number;
+                protocol: number;
+                addressable: boolean;
+                tagged: boolean;
+                origin: number;
+                source: number;
+                target: Uint8Array;
+                reserved1: Uint8Array;
+                reserved2: Uint8Array;
+                resRequired: boolean;
+                ackRequired: boolean;
+                reserved3: number;
+                reserved4: Uint8Array;
+                sequence: number;
+                reserved5: Uint8Array;
+                type: number;
+            };
+            payload: Uint8Array;
+        };
+    };
+    readonly source: number;
+    dispose(): void;
     /**
      * Broadcast a command to the local network.
      * @template T
@@ -44,30 +71,9 @@ export function Client(options: {
      */
     send<T_3>(command: import("./commands.js").Command<T_3>, device: import('./devices.js').Device, signal?: AbortSignal): Promise<T_3>;
     /**
-     * @param {Uint8Array} message
-     * @param {number} port
-     * @param {string} address
+     * @param {ReturnType<typeof import('./encoding.js').decodeHeader>} header
+     * @param {Uint8Array} payload
+     * @param {string} serialNumber
      */
-    onReceived(message: Uint8Array, port: number, address: string): {
-        header: {
-            bytes: Uint8Array;
-            size: number;
-            protocol: number;
-            addressable: boolean;
-            tagged: boolean;
-            origin: number;
-            source: number;
-            target: Uint8Array;
-            reserved1: Uint8Array;
-            reserved2: Uint8Array;
-            resRequired: boolean;
-            ackRequired: boolean;
-            reserved3: number;
-            reserved4: Uint8Array;
-            sequence: number;
-            reserved5: Uint8Array;
-            type: number;
-        };
-        payload: Uint8Array;
-    };
+    onMessage(header: ReturnType<typeof import('./encoding.js').decodeHeader>, payload: Uint8Array, serialNumber: string): void;
 };

@@ -26,9 +26,9 @@ export type Device = {
  * @param {{
  *   onRegistered?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
- * }} options
+ * }} [options]
  */
-export function Devices(options: {
+export function Devices(options?: {
     onRegistered?: (device: Device) => void;
     defaultTimeoutMs?: number;
 }): {

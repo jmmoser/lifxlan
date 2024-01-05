@@ -85,15 +85,3 @@ export function getRssiStatus(rssi) {
 
   return 'none';
 }
-
-/**
- * @param {Uint8Array} slice
- */
-export function convertTargetToSerialNumber(slice) {
-  let str = '';
-  const { length } = slice;
-  for (let i = 0; i < length; i++) {
-    str += slice[i].toString(16).padStart(2, '0');
-  }
-  return str;
-}

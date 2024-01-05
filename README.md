@@ -7,29 +7,29 @@ Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://
 #### Node.js:
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
-const devices = Devices({
-  onRegistered(device) {
-    // A device has been discovered
-    console.log(device);
-    socket.close();
-  },
-});
-
 const client = Client({
-  devices,
-  onSend(message, port, address) {
-    // The client has a message that can be sent out
-    socket.send(message, port, address);
-  },
+  router: Router({
+    onSend(message, port, address) {
+      // A message is ready to be sent out
+      socket.send(message, port, address);
+    },
+    devices: Devices({
+      onRegistered(device) {
+        // A device has been discovered
+        console.log(device);
+        socket.close();
+      },
+    }),
+  }),
 });
 
 socket.on('message', (message, remote) => {
   // Forward received messages to the client
-  client.onReceived(message, remote.port, remote.address);
+  client.router.onReceived(message, remote.port, remote.address);
 });
 
 socket.once('listening', () => {
@@ -43,7 +43,7 @@ socket.bind(50032);
 
 #### Deno:
 ```javascript
-import { Client, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -51,31 +51,31 @@ const socket = Deno.listenDatagram({
   transport: 'udp',
 });
 
-const devices = Devices({
-  onRegistered(device) {
-    console.log(device);
-    socket.close();
-  },
-});
-
 const client = Client({
-  devices,
-  onSend(message, port, hostname) {
-    socket.send(message, { port, hostname });
-  },
+  router: Router({
+    onSend(message, port, hostname) {
+      socket.send(message, { port, hostname });
+    },
+    devices: Devices({
+      onRegistered(device) {
+        console.log(device);
+        socket.close();
+      },
+    }),
+  }),
 });
 
 client.broadcast(GetServiceCommand());
 
 for await (const [data, remote] of socket) {
-  client.onReceived(data, remote.port, remote.hostname);
+  client.router.onReceived(data, remote.port, remote.hostname);
 }
 ```
 
 #### How to turn a light on:
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Devices, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -87,14 +87,16 @@ const devices = Devices({
 });
 
 const client = Client({
-  devices,
-  onSend(message, port, address) {
-    socket.send(message, port, address);
-  },
+  router: Router({
+    devices,
+    onSend(message, port, address) {
+      socket.send(message, port, address);
+    },
+  }),
 });
 
 socket.on('message', (message, remote) => {
-  client.onReceived(message, remote.port, remote.address);
+  client.router.onReceived(message, remote.port, remote.address);
 });
 
 await new Promise((resolve, reject) => {
@@ -152,18 +154,20 @@ try {
 #### How to use without device discovery
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Device, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { Client, Device, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
 const client = Client({
-  onSend(message, port, address) {
-    socket.send(message, port, address);
-  },
+  router: Router({
+    onSend(message, port, address) {
+      socket.send(message, port, address);
+    },
+  }),
 });
 
 socket.on('message', (message, remote) => {
-  client.onReceived(message, remote.port, remote.address);
+  client.router.onReceived(message, remote.port, remote.address);
 });
 
 await new Promise((resolve, reject) => {
@@ -182,13 +186,39 @@ await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 socket.close();
 ```
 
-#### How to use one socket for broadcast messages and another socket for unicast messages:
+#### How to create a custom command
+```javascript
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+function decodeCustom(bytes, offsetRef) {
+  const val1 = bytes[offsetRef.current++];
+  const val2 = bytes[offsetRef.current++];
+  return {
+    val1,
+    val2,
+  };
+}
+
+function CustomCommand() {
+  return {
+    type: 1234,
+    decode: decodeCustom,
+  };
+}
+
+const res = await client.send(CustomCommand(), device);
+
+console.log(res.val1, res.val2);
+```
+
+#### How to use multiple clients
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
-const broadcastSocket = dgram.createSocket('udp4');
-const unicastSocket = dgram.createSocket('udp4');
+const socket = dgram.createSocket('udp4');
 
 const devices = Devices({
   onRegistered(device) {
@@ -197,24 +227,84 @@ const devices = Devices({
   },
 });
 
-const client = Client({
+const router = Router({
   devices,
-  onSend(message, port, address, broadcast) {
-    if (broadcast) {
-      broadcastSocket.send(message, port, address);
-    } else {
-      unicastSocket.send(message, port, address);
-    }
-  },
-  onDevice(device) {
-    console.log(device);
-    broadcastSocket.close();
-    unicastSocket.close();
+  onSend(message, port, address) {
+    socket.send(message, port, address);
   },
 });
 
+socket.on('message', (message, remote) => {
+  router.onReceived(message, remote.port, remote.address);
+});
+
+const client1 = Client({
+  router,
+});
+
+const client2 = Client({
+  router,
+});
+
+await new Promise((resolve, reject) => {
+  socket.once('error', reject);
+  socket.once('listening', resolve);
+  socket.bind(50032);
+});
+
+socket.setBroadcast(true);
+
+client1.broadcast(GetServiceCommand());
+const scanInterval = setInterval(() => {
+  client1.broadcast(GetServiceCommand());
+}, 1000);
+
+const device = await devices.get('d07123456789');
+
+clearInterval(scanInterval);
+
+await client2.sendOnlyAcknowledge(SetPowerCommand(true), device);
+
+socket.close();
+```
+
+#### How to use a lot of clients
+```javascript
+while (true) {
+  const client = Client({ router });
+
+  console.log(await client.send(GetPowerCommand(), device));
+
+  // When creating a lot of clients, call dispose to avoid running out of source values
+  client.dispose();
+}
+```
+
+#### How to use one socket for broadcast messages and another socket for unicast messages:
+```javascript
+import dgram from 'node:dgram';
+import { Client, Devices, GetServiceCommand } from 'lifxlan';
+
+const broadcastSocket = dgram.createSocket('udp4');
+const unicastSocket = dgram.createSocket('udp4');
+
+const devices = Devices();
+
+const client = Client({
+  router: Router({
+    devices,
+    onSend(message, port, address, broadcast) {
+      if (broadcast) {
+        broadcastSocket.send(message, port, address);
+      } else {
+        unicastSocket.send(message, port, address);
+      }
+    },
+  }),
+});
+
 broadcastSocket.on('message', (message, remote) => {
-  client.onReceived(message, remote.port, remote.address);
+  client.router.onReceived(message, remote.port, remote.address);
 });
 
 broadcastSocket.once('listening', () => {
@@ -225,8 +315,15 @@ broadcastSocket.once('listening', () => {
 broadcastSocket.bind(50032);
 
 unicastSocket.on('message', (message, remote) => {
-  client.onReceived(message, remote.port, remote.address);
+  client.router.onReceived(message, remote.port, remote.address);
 });
 
 unicastSocket.bind(50031);
+
+const device = await devices.get('d07123456789');
+
+await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
+
+broadcastSocket.close();
+unicastSocket.close();
 ```
