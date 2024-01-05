@@ -38,7 +38,7 @@ socket.once('listening', () => {
   client.broadcast(GetServiceCommand());
 });
 
-socket.bind(50032);
+socket.bind();
 ```
 
 #### Deno:
@@ -47,7 +47,7 @@ import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
-  port: 50032,
+  port: 0,
   transport: 'udp',
 });
 
@@ -102,7 +102,7 @@ socket.on('message', (message, remote) => {
 await new Promise((resolve, reject) => {
   socket.once('error', reject);
   socket.once('listening', resolve);
-  socket.bind(50032);
+  socket.bind();
 });
 
 socket.setBroadcast(true);
@@ -173,7 +173,7 @@ socket.on('message', (message, remote) => {
 await new Promise((resolve, reject) => {
   socket.once('error', reject);
   socket.once('listening', resolve);
-  socket.bind(50032);
+  socket.bind();
 });
 
 const device = Device({
@@ -249,7 +249,7 @@ const client2 = Client({
 await new Promise((resolve, reject) => {
   socket.once('error', reject);
   socket.once('listening', resolve);
-  socket.bind(50032);
+  socket.bind();
 });
 
 socket.setBroadcast(true);
@@ -307,20 +307,33 @@ broadcastSocket.on('message', (message, remote) => {
   client.router.onReceived(message, remote.port, remote.address);
 });
 
-broadcastSocket.once('listening', () => {
-  broadcastSocket.setBroadcast(true);
-  client.broadcast(GetServiceCommand());
-});
-
-broadcastSocket.bind(50032);
-
 unicastSocket.on('message', (message, remote) => {
   client.router.onReceived(message, remote.port, remote.address);
 });
 
-unicastSocket.bind(50031);
+await Promise.all([
+  new Promise((resolve, reject) => {
+    broadcastSocket.once('error', reject);
+    broadcastSocket.once('listening', resolve);
+    broadcastSocket.bind();
+  }),
+  new Promise((resolve, reject) => {
+    unicastSocket.once('error', reject);
+    unicastSocket.once('listening', resolve);
+    unicastSocket.bind();
+  }),
+]);
+
+broadcastSocket.setBroadcast(true);
+
+client.broadcast(GetServiceCommand());
+const scanInterval = setInterval(() => {
+  client.broadcast(GetServiceCommand());
+}, 1000);
 
 const device = await devices.get('d07123456789');
+
+clearInterval(scanInterval);
 
 await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 
