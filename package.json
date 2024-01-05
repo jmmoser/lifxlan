@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",
@@ -12,6 +12,10 @@
   "keywords": [
     "lifx",
     "lan"
+  ],
+  "files": [
+    "src/**/*",
+    "types/**/*"
   ],
   "repository": {
     "type": "git",
