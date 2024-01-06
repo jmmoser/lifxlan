@@ -15,9 +15,6 @@ import { TYPE } from './constants.js';
  * }} Command
  */
 
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
- */
 export function GetServiceCommand() {
   return {
     type: TYPE.GetService,
@@ -25,19 +22,6 @@ export function GetServiceCommand() {
   };
 }
 
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateVersion>>}
- */
-export function GetVersionCommand() {
-  return {
-    type: TYPE.GetVersion,
-    decode: Encoding.decodeStateVersion,
-  };
-}
-
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateHostFirmware>>}
- */
 export function GetHostFirmwareCommand() {
   return {
     type: TYPE.GetHostFirmware,
@@ -45,9 +29,27 @@ export function GetHostFirmwareCommand() {
   };
 }
 
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateLabel>>}
- */
+export function GetWifiInfoCommand() {
+  return {
+    type: TYPE.GetWifiInfo,
+    decode: Encoding.decodeStateWifiInfo,
+  };
+}
+
+export function GetWifiFirmwareCommand() {
+  return {
+    type: TYPE.GetWifiFirmware,
+    decode: Encoding.decodeStateWifiFirmware,
+  };
+}
+
+export function GetVersionCommand() {
+  return {
+    type: TYPE.GetVersion,
+    decode: Encoding.decodeStateVersion,
+  };
+}
+
 export function GetLabelCommand() {
   return {
     type: TYPE.GetLabel,
@@ -56,8 +58,16 @@ export function GetLabelCommand() {
 }
 
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateGroup>>}
+ * @param {string} label
  */
+export function SetLabelCommand(label) {
+  return {
+    type: TYPE.GetLabel,
+    payload: Encoding.encodeString(label, 32),
+    decode: Encoding.decodeStateLabel,
+  };
+}
+
 export function GetGroupCommand() {
   return {
     type: TYPE.GetGroup,
@@ -65,9 +75,6 @@ export function GetGroupCommand() {
   };
 }
 
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
- */
 export function GetColorCommand() {
   return {
     type: TYPE.GetColor,
@@ -81,7 +88,6 @@ export function GetColorCommand() {
  * @param {number} brightness
  * @param {number} kelvin
  * @param {number} duration
- * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
  */
 export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
   const payload = new Uint8Array(13);
@@ -98,9 +104,15 @@ export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
   };
 }
 
+export function GetPowerCommand() {
+  return {
+    type: TYPE.GetPower,
+    decode: Encoding.decodeStatePower,
+  };
+}
+
 /**
  * @param {number | boolean} power
- * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
  */
 export function SetPowerCommand(power) {
   const payload = new Uint8Array(2);
@@ -119,19 +131,6 @@ export function SetPowerCommand(power) {
   };
 }
 
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
- */
-export function GetPowerCommand() {
-  return {
-    type: TYPE.GetPower,
-    decode: Encoding.decodeStatePower,
-  };
-}
-
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
- */
 export function GetInfraredCommand() {
   return {
     type: TYPE.GetInfrared,

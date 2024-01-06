@@ -57,6 +57,17 @@ export function encode(
   return bytes;
 }
 
+const textEncoder = new TextEncoder();
+
+export function encodeString(value, length) {
+  const bytes = new Uint8Array(length);
+  textEncoder.encodeInto(value, bytes);
+  if (value.length < length) {
+    bytes[value.length] = 0;
+  }
+  return bytes;
+}
+
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
@@ -222,6 +233,26 @@ export function decodeStateWifiInfo(bytes, offsetRef) {
     reserved6,
     reserved7,
     reserved8,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
+export function decodeStateWifiFirmware(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const build = decodeTimestamp(bytes, offsetRef);
+  const reserved6 = decodeBytes(bytes, offsetRef, 8);
+  const minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const major = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  return {
+    build,
+    reserved6,
+    version: {
+      minor,
+      major,
+    },
   };
 }
 

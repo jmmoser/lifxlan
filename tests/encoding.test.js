@@ -1,8 +1,18 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert';
-import { encode, decodeHeader } from '../src/encoding.js';
+import * as Encoding from '../src/encoding.js';
 
 describe('encoding', () => {
+  test('encode string', () => {
+    const bytes = Encoding.encodeString('abc', 32);
+    assert.deepEqual(bytes, new Uint8Array([
+      0x61, 0x62, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]));
+  });
+
   test('decode', () => {
     const bytes = new Uint8Array([
       0x24, 0x00, 0x00, 0x34, 0x99, 0x9c, 0x8c, 0xc9,
@@ -11,7 +21,7 @@ describe('encoding', () => {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x02, 0x00, 0x00, 0x00,
     ]);
-    const packet = decodeHeader(bytes, { current: 0 });
+    const packet = Encoding.decodeHeader(bytes, { current: 0 });
 
     assert.deepEqual(packet, {
       bytes,
@@ -33,7 +43,7 @@ describe('encoding', () => {
       reserved5: new Uint8Array(2),
     });
 
-    const encodedBytes = encode(
+    const encodedBytes = Encoding.encode(
       packet.tagged,
       packet.source,
       packet.target,
@@ -47,7 +57,7 @@ describe('encoding', () => {
   });
 
   test('encode', () => {
-    const bytes = encode(
+    const bytes = Encoding.encode(
       false,
       1,
       new Uint8Array([1, 2, 3, 4, 5, 6]),
