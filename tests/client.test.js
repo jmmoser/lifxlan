@@ -2,19 +2,17 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert';
 import { Client } from '../src/client.js';
 import { Router } from '../src/router.js';
-import { Devices } from '../src/devices.js';
+import { Device } from '../src/devices.js';
 import { TYPE } from '../src/constants.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPowerCommand } from '../src/commands.js';
 
 describe('client', () => {
   test('send', async () => {
-    const devices = Devices({});
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
-        devices,
-        onSend(messsage, port, address) {
+        onSend(messsage) {
           const packet = decodeHeader(messsage, { current: 0 });
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, 65535, true);
@@ -31,26 +29,26 @@ describe('client', () => {
               TYPE.StatePower,
               payload,
             ),
-            port,
-            address,
           );
         },
       }),
     });
 
-    const device = devices.register('abcdef123456', 1234, '1.2.3.4');
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
 
     const res = await client.send(GetPowerCommand(), device);
 
     assert.equal(res.on, true);
   });
   test('sendOnlyAcknowledgement', async () => {
-    const devices = Devices({});
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
-        devices,
-        onSend(messsage, port, address) {
+        onSend(messsage) {
           const packet = decodeHeader(messsage, { current: 0 });
           assert.equal(packet.source, client.source);
           assert.equal(packet.sequence, 0);
@@ -64,25 +62,25 @@ describe('client', () => {
               packet.sequence,
               TYPE.Acknowledgement,
             ),
-            port,
-            address,
           );
         },
       }),
     });
 
-    const device = devices.register('abcdef123456', 1234, '1.2.3.4');
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
 
     await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
   });
 
   test('sendOnlyAcknowledgement with StateUnhandled response', async () => {
-    const devices = Devices({});
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
-        devices,
-        onSend(messsage, port, address) {
+        onSend(messsage) {
           const packet = decodeHeader(messsage, { current: 0 });
           assert.equal(packet.source, client.source);
           assert.equal(packet.sequence, 0);
@@ -99,14 +97,16 @@ describe('client', () => {
               TYPE.StateUnhandled,
               payload,
             ),
-            port,
-            address,
           );
         },
       }),
     });
 
-    const device = devices.register('abcdef123456', 1234, '1.2.3.4');
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
 
     try {
       await client.sendOnlyAcknowledgement(GetPowerCommand(), device);

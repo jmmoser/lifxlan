@@ -25,7 +25,6 @@ function convertTargetToSerialNumber(slice) {
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
- *   devices?: ReturnType<typeof import('./devices.js').Devices>;
  * }} options
  */
 export function Router(options) {
@@ -33,8 +32,6 @@ export function Router(options) {
    * @type {Map<number, MessageHandler>}
    */
   const handlers = new Map();
-
-  const { devices } = options;
 
   return {
     send(message, port, address, broadcast) {
@@ -52,25 +49,14 @@ export function Router(options) {
     },
     /**
      * @param {Uint8Array} message
-     * @param {number} port
-     * @param {string} address
      */
-    onReceived(message, port, address) {
+    onReceived(message) {
       const offsetRef = { current: 0 };
       const header = decodeHeader(message, offsetRef);
 
       const payload = message.subarray(offsetRef.current);
 
       const serialNumber = convertTargetToSerialNumber(header.target);
-
-      if (devices) {
-        devices.register(
-          serialNumber,
-          port,
-          address,
-          header.target,
-        );
-      }
 
       const handler = handlers.get(header.source);
 
@@ -81,6 +67,7 @@ export function Router(options) {
       return {
         header,
         payload,
+        serialNumber,
       };
     },
   };

@@ -1,12 +1,10 @@
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
- *   devices?: ReturnType<typeof import('./devices.js').Devices>;
  * }} options
  */
 export function Router(options: {
     onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
-    devices?: ReturnType<typeof import('./devices.js').Devices>;
 }): {
     send(message: any, port: any, address: any, broadcast: any): void;
     /**
@@ -17,10 +15,8 @@ export function Router(options: {
     deregister(source: any): void;
     /**
      * @param {Uint8Array} message
-     * @param {number} port
-     * @param {string} address
      */
-    onReceived(message: Uint8Array, port: number, address: string): {
+    onReceived(message: Uint8Array): {
         header: {
             bytes: Uint8Array;
             size: number;
@@ -41,6 +37,7 @@ export function Router(options: {
             type: number;
         };
         payload: Uint8Array;
+        serialNumber: string;
     };
 };
 export type MessageHandler = {

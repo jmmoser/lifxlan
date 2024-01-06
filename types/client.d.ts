@@ -11,10 +11,10 @@ export function Client(options: {
     source?: number;
 }): {
     readonly router: {
-        send(message: any, port: any, address: any, broadcast: any): void; /** Only allow up to 254. 255 is used for broadcast messages. */
+        send(message: any, port: any, address: any, broadcast: any): void;
         register(source: number, handler: import("./router.js").MessageHandler): void;
         deregister(source: any): void;
-        onReceived(message: Uint8Array, port: number, address: string): {
+        onReceived(message: Uint8Array): {
             header: {
                 bytes: Uint8Array;
                 size: number;
@@ -35,6 +35,7 @@ export function Client(options: {
                 type: number;
             };
             payload: Uint8Array;
+            serialNumber: string;
         };
     };
     readonly source: number;

@@ -11,24 +11,32 @@ import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
-const client = Client({
-  router: Router({
-    onSend(message, port, address) {
-      // A message is ready to be sent
-      socket.send(message, port, address);
-    },
-    devices: Devices({
-      onRegistered(device) {
-        // A device has been discovered
-        console.log(device);
-      },
-    }),
-  }),
+// Router handles outgoing messages and forwards responses to clients
+const router = Router({
+  onSend(message, port, address) {
+    // A message is ready to be sent
+    socket.send(message, port, address);
+  },
 });
+
+// Devices keeps track of devices discovered on the network
+const devices = Devices({
+  onAdded(device) {
+    // A device has been discovered
+    console.log(device);
+  },
+}),
 
 socket.on('message', (message, remote) => {
   // Forward received messages to the router
-  client.router.onReceived(message, remote.port, remote.address);
+  const { header, serialNumber } = router.onReceived(message);
+  // Forward the message to devices so it can keep track
+  devices.register(serialNumber, remote.port, remote.address, header.target);
+});
+
+// Client handles communication with devices
+const client = Client({
+  router,
 });
 
 socket.once('listening', () => {
@@ -54,17 +62,20 @@ const socket = Deno.listenDatagram({
   transport: 'udp',
 });
 
+const router = Router({
+  onSend(message, port, hostname) {
+    socket.send(message, { port, hostname });
+  }
+});
+
+const devices = Devices({
+  onAdded(device) {
+    console.log(device);
+  },
+});
+
 const client = Client({
-  router: Router({
-    onSend(message, port, hostname) {
-      socket.send(message, { port, hostname });
-    },
-    devices: Devices({
-      onRegistered(device) {
-        console.log(device);
-      },
-    }),
-  }),
+  router,
 });
 
 client.broadcast(GetServiceCommand());
@@ -73,8 +84,9 @@ setTimeout(() => {
   socket.close();
 }, 1000);
 
-for await (const [data, remote] of socket) {
-  client.router.onReceived(data, remote.port, remote.hostname);
+for await (const [message, remote] of socket) {
+  const { header, serialNumber } = router.onReceived(message);
+  devices.register(serialNumber, remote.port, remote.hostname, header.target);
 }
 ```
 
@@ -85,19 +97,17 @@ import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lif
 
 const socket = dgram.createSocket('udp4');
 
-const devices = Devices();
-
-const client = Client({
-  router: Router({
-    devices,
-    onSend(message, port, address) {
-      socket.send(message, port, address);
-    },
-  }),
+const router = Router({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
 });
 
+const devices = Devices();
+
 socket.on('message', (message, remote) => {
-  client.router.onReceived(message, remote.port, remote.address);
+  const { header, serialNumber } = router.onReceived(message);
+  devices.register(serialNumber, remote.port, remote.hostname, header.target);
 });
 
 await new Promise((resolve, reject) => {
@@ -107,6 +117,10 @@ await new Promise((resolve, reject) => {
 });
 
 socket.setBroadcast(true);
+
+const client = Client({
+  router,
+});
 
 // Start scanning for devices
 client.broadcast(GetServiceCommand());
@@ -159,16 +173,14 @@ import { Client, Device, Router, GetServiceCommand, SetPowerCommand } from 'lifx
 
 const socket = dgram.createSocket('udp4');
 
-const client = Client({
-  router: Router({
-    onSend(message, port, address) {
-      socket.send(message, port, address);
-    },
-  }),
+const router = Router({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
 });
 
 socket.on('message', (message, remote) => {
-  client.router.onReceived(message, remote.port, remote.address);
+  router.onReceived(message);
 });
 
 await new Promise((resolve, reject) => {
@@ -177,9 +189,14 @@ await new Promise((resolve, reject) => {
   socket.bind();
 });
 
+// Create the device directly
 const device = Device({
   serialNumber: 'd07123456789',
   address: '192.168.1.50',
+});
+
+const client = Client({
+  router,
 });
 
 await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
@@ -221,25 +238,17 @@ import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lif
 
 const socket = dgram.createSocket('udp4');
 
-const devices = Devices();
-
 const router = Router({
-  devices,
   onSend(message, port, address) {
     socket.send(message, port, address);
   },
 });
 
+const devices = Devices();
+
 socket.on('message', (message, remote) => {
-  router.onReceived(message, remote.port, remote.address);
-});
-
-const client1 = Client({
-  router,
-});
-
-const client2 = Client({
-  router,
+  const { header, serialNumber } = router.onReceived(message);
+  devices.register(serialNumber, remote.port, remote.hostname, header.target);
 });
 
 await new Promise((resolve, reject) => {
@@ -249,6 +258,14 @@ await new Promise((resolve, reject) => {
 });
 
 socket.setBroadcast(true);
+
+const client1 = Client({
+  router,
+});
+
+const client2 = Client({
+  router,
+});
 
 client1.broadcast(GetServiceCommand());
 const scanInterval = setInterval(() => {
@@ -284,28 +301,29 @@ import { Client, Devices, GetServiceCommand } from 'lifxlan';
 const broadcastSocket = dgram.createSocket('udp4');
 const unicastSocket = dgram.createSocket('udp4');
 
+const router = Router({
+  onSend(message, port, address, broadcast) {
+    if (broadcast) {
+      broadcastSocket.send(message, port, address);
+    } else {
+      unicastSocket.send(message, port, address);
+    }
+  },
+});
+
 const devices = Devices();
 
-const client = Client({
-  router: Router({
-    devices,
-    onSend(message, port, address, broadcast) {
-      if (broadcast) {
-        broadcastSocket.send(message, port, address);
-      } else {
-        unicastSocket.send(message, port, address);
-      }
-    },
-  }),
-});
+/**
+ * @param {Uint8Array} message
+ * @param {{ port: number; address: string; }} remote
+ */
+function onMessage(message, remote) {
+  const { header, serialNumber } = router.onReceived(message);
+  devices.register(serialNumber, remote.port, remote.address, header.target);
+}
 
-broadcastSocket.on('message', (message, remote) => {
-  client.router.onReceived(message, remote.port, remote.address);
-});
-
-unicastSocket.on('message', (message, remote) => {
-  client.router.onReceived(message, remote.port, remote.address);
-});
+broadcastSocket.on('message', onMessage);
+unicastSocket.on('message', onMessage);
 
 await Promise.all([
   new Promise((resolve, reject) => {
@@ -321,6 +339,10 @@ await Promise.all([
 ]);
 
 broadcastSocket.setBroadcast(true);
+
+const client = Client({
+  router,
+});
 
 client.broadcast(GetServiceCommand());
 const scanInterval = setInterval(() => {
