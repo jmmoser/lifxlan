@@ -79,10 +79,14 @@ export function Client(options) {
    * @param {AbortSignal} [signal]
    */
   function registerAckRequest(serialNumber, sequence, signal) {
+    const key = getResponseKey(serialNumber, sequence);
+
+    if (responseHandlerMap.has(key)) {
+      throw new Error('Conflict');
+    }
+
     /** @typedef {typeof PromiseWithResolvers<void>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
-
-    const key = getResponseKey(serialNumber, sequence);
 
     function onAbort(...args) {
       responseHandlerMap.delete(key);
@@ -125,10 +129,14 @@ export function Client(options) {
    * @param {AbortSignal} [signal]
    */
   function registerRequest(serialNumber, sequence, decode, signal) {
+    const key = getResponseKey(serialNumber, sequence);
+
+    if (responseHandlerMap.has(key)) {
+      throw new Error('Conflict');
+    }
+
     /** @typedef {typeof PromiseWithResolvers<T>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
-
-    const key = getResponseKey(serialNumber, sequence);
 
     function onAbort(...args) {
       responseHandlerMap.delete(key);

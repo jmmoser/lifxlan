@@ -44,6 +44,7 @@ describe('client', () => {
 
     assert.equal(res.on, true);
   });
+
   test('sendOnlyAcknowledgement', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
@@ -102,18 +103,64 @@ describe('client', () => {
       }),
     });
 
-    const device = Device({
-      serialNumber: 'abcdef123456',
-      port: 1234,
-      address: '1.2.3.4',
-    });
-
     try {
+      const device = Device({
+        serialNumber: 'abcdef123456',
+        port: 1234,
+        address: '1.2.3.4',
+      });
+
       await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
       assert.fail('should throw');
     } catch (err) {
       assert(err instanceof Error);
       assert.match(err.message, /Unhandled/);
     }
+  });
+
+  test('max number of inflight sendOnlyAcknowledgement requests', async () => {
+    const client = Client({
+      router: Router({
+        onSend() { },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    for (let i = 0; i < 255; i++) {
+      client.sendOnlyAcknowledgement(GetPowerCommand(), device, new AbortController().signal);
+    }
+
+    assert.throws(
+      () => client.sendOnlyAcknowledgement(GetPowerCommand(), device, new AbortController().signal),
+      new Error('Conflict'),
+    );
+  });
+
+  test('max number of inflight send requests', async () => {
+    const client = Client({
+      router: Router({
+        onSend() { },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    for (let i = 0; i < 255; i++) {
+      client.send(GetPowerCommand(), device, new AbortController().signal);
+    }
+
+    assert.throws(
+      () => client.send(GetPowerCommand(), device, new AbortController().signal),
+      new Error('Conflict'),
+    );
   });
 });
