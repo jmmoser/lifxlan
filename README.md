@@ -25,7 +25,7 @@ const devices = Devices({
     // A device has been discovered
     console.log(device);
   },
-}),
+});
 
 socket.on('message', (message, remote) => {
   // Forward received messages to the router
