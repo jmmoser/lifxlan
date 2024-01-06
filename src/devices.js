@@ -106,6 +106,13 @@ export function Devices(options) {
     },
     /**
      * @param {string} serialNumber
+     */
+    remove(serialNumber) {
+      knownDevices.delete(serialNumber);
+      deviceResolvers.delete(serialNumber);
+    },
+    /**
+     * @param {string} serialNumber
      * @param {AbortSignal} [signal]
      */
     get(serialNumber, signal) {
