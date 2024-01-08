@@ -1,5 +1,5 @@
 import * as Encoding from './encoding.js';
-import { TYPE } from './constants.js';
+import { Type } from './constants.js';
 import { NOOP } from './utils.js';
 
 /**
@@ -18,42 +18,62 @@ import { NOOP } from './utils.js';
 
 export function GetServiceCommand() {
   return {
-    type: TYPE.GetService,
+    type: Type.GetService,
     decode: Encoding.decodeStateService,
   };
 }
 
 export function GetHostFirmwareCommand() {
   return {
-    type: TYPE.GetHostFirmware,
+    type: Type.GetHostFirmware,
     decode: Encoding.decodeStateHostFirmware,
   };
 }
 
 export function GetWifiInfoCommand() {
   return {
-    type: TYPE.GetWifiInfo,
+    type: Type.GetWifiInfo,
     decode: Encoding.decodeStateWifiInfo,
   };
 }
 
 export function GetWifiFirmwareCommand() {
   return {
-    type: TYPE.GetWifiFirmware,
+    type: Type.GetWifiFirmware,
     decode: Encoding.decodeStateWifiFirmware,
   };
 }
 
-export function GetVersionCommand() {
+export function GetPowerCommand() {
   return {
-    type: TYPE.GetVersion,
-    decode: Encoding.decodeStateVersion,
+    type: Type.GetPower,
+    decode: Encoding.decodeStatePower,
+  };
+}
+
+/**
+ * @param {number | boolean} power
+ */
+export function SetPowerCommand(power) {
+  const payload = new Uint8Array(2);
+  const view = new DataView(payload.buffer);
+  view.setUint16(
+    0,
+    typeof power === 'number'
+      ? power
+      : power ? 65535 : 0,
+    true,
+  );
+  return {
+    type: Type.SetPower,
+    payload,
+    decode: Encoding.decodeStatePower,
   };
 }
 
 export function GetLabelCommand() {
   return {
-    type: TYPE.GetLabel,
+    type: Type.GetLabel,
     decode: Encoding.decodeStateLabel,
   };
 }
@@ -63,15 +83,22 @@ export function GetLabelCommand() {
  */
 export function SetLabelCommand(label) {
   return {
-    type: TYPE.GetLabel,
+    type: Type.GetLabel,
     payload: Encoding.encodeString(label, 32),
     decode: Encoding.decodeStateLabel,
   };
 }
 
+export function GetVersionCommand() {
+  return {
+    type: Type.GetVersion,
+    decode: Encoding.decodeStateVersion,
+  };
+}
+
 export function GetInfoCommand() {
   return {
-    type: TYPE.GetInfo,
+    type: Type.GetInfo,
     decode: Encoding.decodeStateInfo,
   };
 }
@@ -81,7 +108,7 @@ export function GetInfoCommand() {
  */
 export function SetRebootCommand() {
   return {
-    type: TYPE.SetReboot,
+    type: Type.SetReboot,
     decode: NOOP,
   };
 }
@@ -91,7 +118,7 @@ export function SetRebootCommand() {
  */
 export function GetLocationCommand() {
   return {
-    type: TYPE.GetLocation,
+    type: Type.GetLocation,
     decode: Encoding.decodeStateLocation,
   };
 }
@@ -116,7 +143,7 @@ export function SetLocationCommand(location, label, updatedAt) {
   view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
 
   return {
-    type: TYPE.SetLocation,
+    type: Type.SetLocation,
     payload,
     decode: Encoding.decodeStateLocation,
   };
@@ -124,7 +151,7 @@ export function SetLocationCommand(location, label, updatedAt) {
 
 export function GetGroupCommand() {
   return {
-    type: TYPE.GetGroup,
+    type: Type.GetGroup,
     decode: Encoding.decodeStateGroup,
   };
 }
@@ -148,7 +175,7 @@ export function SetGroupCommand(group, label, updatedAt) {
 
   view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
   return {
-    type: TYPE.SetGroup,
+    type: Type.SetGroup,
     decode: Encoding.decodeStateGroup,
   };
 }
@@ -161,7 +188,7 @@ export function EchoRequestCommand(echoing) {
   const payload = new Uint8Array(64);
   payload.set(echoing);
   return {
-    type: TYPE.EchoRequest,
+    type: Type.EchoRequest,
     payload,
     decode: Encoding.decodeEchoResponse,
   };
@@ -169,7 +196,7 @@ export function EchoRequestCommand(echoing) {
 
 export function GetColorCommand() {
   return {
-    type: TYPE.GetColor,
+    type: Type.GetColor,
     decode: Encoding.decodeLightState,
   };
 }
@@ -190,42 +217,77 @@ export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
   view.setUint16(7, kelvin, true);
   view.setUint32(9, duration, true);
   return {
-    type: TYPE.SetColor,
+    type: Type.SetColor,
     payload,
     decode: Encoding.decodeLightState,
   };
 }
 
-export function GetPowerCommand() {
+/**
+ * @param {boolean} transient
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} period
+ * @param {number} cycles
+ * @param {number} skewRatio
+ * @param {import('./constants.js').Waveform} waveform
+ */
+export function SetWaveformCommand(
+  transient,
+  hue,
+  saturation,
+  brightness,
+  kelvin,
+  period,
+  cycles,
+  skewRatio,
+  waveform,
+) {
+  const payload = new Uint8Array(21);
+  payload[1] = transient ? 1 : 0;
+  const view = new DataView(payload.buffer);
+  view.setUint16(2, hue, true);
+  view.setUint16(4, saturation, true);
+  view.setUint16(6, brightness, true);
+  view.setUint16(8, kelvin, true);
+  view.setUint32(10, period, true);
+  view.setFloat32(14, cycles, true);
+  view.setInt16(18, skewRatio, true);
+  view.setUint8(20, waveform);
   return {
-    type: TYPE.GetPower,
-    decode: Encoding.decodeStatePower,
+    type: Type.SetWaveform,
+    decode: Encoding.decodeLightState,
+  };
+}
+
+export function GetLightPowerCommand() {
+  return {
+    type: Type.GetLightPower,
+    decode: Encoding.decodeStateLightPower,
   };
 }
 
 /**
- * @param {number | boolean} power
+ * @param {number} level
+ * @param {number} duration
  */
-export function SetPowerCommand(power) {
-  const payload = new Uint8Array(2);
+export function SetLightPowerCommand(level, duration) {
+  const payload = new Uint8Array(6);
   const view = new DataView(payload.buffer);
-  view.setUint16(
-    0,
-    typeof power === 'number'
-      ? power
-      : power ? 65535 : 0,
-    true,
-  );
+  view.setUint16(0, level, true);
+  view.setUint32(2, duration, true);
   return {
-    type: TYPE.SetPower,
+    type: Type.SetLightPower,
     payload,
-    decode: Encoding.decodeStatePower,
+    decode: Encoding.decodeStateLightPower,
   };
 }
 
 export function GetInfraredCommand() {
   return {
-    type: TYPE.GetInfrared,
+    type: Type.GetInfrared,
     decode: Encoding.decodeStateInfrared,
   };
 }
@@ -239,7 +301,7 @@ export function SetInfraredCommand(brightness) {
   const view = new DataView(payload.buffer);
   view.setUint16(0, brightness, true);
   return {
-    type: TYPE.SetInfrared,
+    type: Type.SetInfrared,
     payload,
     decode: Encoding.decodeStateInfrared,
   };
@@ -254,7 +316,7 @@ export function GetRPowerCommand(relayIndex) {
   const view = new DataView(payload.buffer);
   view.setUint8(0, relayIndex);
   return {
-    type: TYPE.GetRPower,
+    type: Type.GetRPower,
     payload,
     decode: Encoding.decodeStateRPower,
   };

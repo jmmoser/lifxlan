@@ -1,5 +1,5 @@
 import {
-  TYPE,
+  Type,
   PORT,
   BROADCAST_ADDRESS,
   NO_TARGET,
@@ -101,14 +101,14 @@ export function Client(options) {
     }
 
     responseHandlerMap.set(key, (type, bytes, offsetRef) => {
-      if (type === TYPE.Acknowledgement || type === TYPE.StateUnhandled) {
+      if (type === Type.Acknowledgement || type === Type.StateUnhandled) {
         if (signal) {
           signal.removeEventListener('abort', onAbort);
         } else {
           clearTimeout(timeout);
         }
         responseHandlerMap.delete(key);
-        if (type === TYPE.StateUnhandled) {
+        if (type === Type.StateUnhandled) {
           const requestType = decodeStateUnhandled(bytes, offsetRef);
           reject(new Error(`Unhandled request type: ${requestType}`));
           return;
@@ -151,7 +151,7 @@ export function Client(options) {
     }
 
     responseHandlerMap.set(key, (type, bytes, offsetRef) => {
-      if (type === TYPE.Acknowledgement) {
+      if (type === Type.Acknowledgement) {
         return;
       }
       if (signal) {
@@ -160,7 +160,7 @@ export function Client(options) {
         clearTimeout(timeout);
       }
       responseHandlerMap.delete(key);
-      if (type === TYPE.StateUnhandled) {
+      if (type === Type.StateUnhandled) {
         const requestType = decodeStateUnhandled(bytes, offsetRef);
         reject(new Error(`Unhandled request type: ${requestType}`));
         return;

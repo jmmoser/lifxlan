@@ -1,16 +1,16 @@
 export const PORT: 56700;
 export const BROADCAST_ADDRESS: "255.255.255.255";
 export const PRODUCTS_URL: "https://raw.githubusercontent.com/LIFX/products/master/products.json";
-export type SERVICE_TYPE = number;
-export namespace SERVICE_TYPE {
+export type ServiceType = number;
+export namespace ServiceType {
     let UDP: number;
     let RESERVED2: number;
     let RESERVED3: number;
     let RESERVED4: number;
     let RESERVED5: number;
 }
-export type TYPE = number;
-export namespace TYPE {
+export type Type = number;
+export namespace Type {
     let GetService: number;
     let StateService: number;
     let GetHostFirmware: number;

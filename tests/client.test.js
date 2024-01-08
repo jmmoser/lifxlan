@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { Client } from '../src/client.js';
 import { Router } from '../src/router.js';
 import { Device } from '../src/devices.js';
-import { TYPE } from '../src/constants.js';
+import { Type } from '../src/constants.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPowerCommand } from '../src/commands.js';
 
@@ -26,7 +26,7 @@ describe('client', () => {
               false,
               false,
               packet.sequence,
-              TYPE.StatePower,
+              Type.StatePower,
               payload,
             ),
           );
@@ -61,7 +61,7 @@ describe('client', () => {
               false,
               false,
               packet.sequence,
-              TYPE.Acknowledgement,
+              Type.Acknowledgement,
             ),
           );
         },
@@ -86,7 +86,7 @@ describe('client', () => {
           assert.equal(packet.source, client.source);
           assert.equal(packet.sequence, 0);
           const payload = new Uint8Array(2);
-          new DataView(payload.buffer).setUint16(0, TYPE.StatePower, true);
+          new DataView(payload.buffer).setUint16(0, Type.StatePower, true);
           client.router.onReceived(
             encode(
               packet.tagged,
@@ -95,7 +95,7 @@ describe('client', () => {
               false,
               false,
               packet.sequence,
-              TYPE.StateUnhandled,
+              Type.StateUnhandled,
               payload,
             ),
           );
