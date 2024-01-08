@@ -1,5 +1,6 @@
 import * as Encoding from './encoding.js';
 import { TYPE } from './constants.js';
+import { NOOP } from './utils.js';
 
 /**
  * @template OutputType
@@ -68,10 +69,101 @@ export function SetLabelCommand(label) {
   };
 }
 
+export function GetInfoCommand() {
+  return {
+    type: TYPE.GetInfo,
+    decode: Encoding.decodeStateInfo,
+  };
+}
+
+/**
+ * @returns {Command<void>}
+ */
+export function SetRebootCommand() {
+  return {
+    type: TYPE.SetReboot,
+    decode: NOOP,
+  };
+}
+
+/**
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
+ */
+export function GetLocationCommand() {
+  return {
+    type: TYPE.GetLocation,
+    decode: Encoding.decodeStateLocation,
+  };
+}
+
+/**
+ * @param {Uint8Array | string} location
+ * @param {string} label
+ * @param {Date} updatedAt
+ */
+export function SetLocationCommand(location, label, updatedAt) {
+  const payload = new Uint8Array(56);
+  const view = new DataView(payload.buffer);
+
+  if (typeof location === 'string') {
+    Encoding.encodeUuidTo(payload, 0, location);
+  } else {
+    payload.set(location, 0);
+  }
+
+  Encoding.encodeStringTo(payload, 16, label, 32);
+
+  view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
+
+  return {
+    type: TYPE.SetLocation,
+    payload,
+    decode: Encoding.decodeStateLocation,
+  };
+}
+
 export function GetGroupCommand() {
   return {
     type: TYPE.GetGroup,
     decode: Encoding.decodeStateGroup,
+  };
+}
+
+/**
+ * @param {Uint8Array | string} group
+ * @param {string} label
+ * @param {Date} updatedAt
+ */
+export function SetGroupCommand(group, label, updatedAt) {
+  const payload = new Uint8Array(56);
+  const view = new DataView(payload.buffer);
+
+  if (typeof group === 'string') {
+    Encoding.encodeUuidTo(payload, 0, group);
+  } else {
+    payload.set(group, 0);
+  }
+
+  Encoding.encodeStringTo(payload, 16, label, 32);
+
+  view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
+  return {
+    type: TYPE.SetGroup,
+    decode: Encoding.decodeStateGroup,
+  };
+}
+
+/**
+ * @param {Uint8Array} echoing
+ * @returns {Command<ReturnType<typeof Encoding.decodeEchoResponse>>}
+ */
+export function EchoRequestCommand(echoing) {
+  const payload = new Uint8Array(64);
+  payload.set(echoing);
+  return {
+    type: TYPE.EchoRequest,
+    payload,
+    decode: Encoding.decodeEchoResponse,
   };
 }
 
@@ -165,29 +257,5 @@ export function GetRPowerCommand(relayIndex) {
     type: TYPE.GetRPower,
     payload,
     decode: Encoding.decodeStateRPower,
-  };
-}
-
-/**
- * @param {Uint8Array} echoing
- * @returns {Command<ReturnType<typeof Encoding.decodeEchoResponse>>}
- */
-export function EchoRequestCommand(echoing) {
-  const payload = new Uint8Array(64);
-  payload.set(echoing);
-  return {
-    type: TYPE.EchoRequest,
-    payload,
-    decode: Encoding.decodeEchoResponse,
-  };
-}
-
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
- */
-export function GetLocationCommand() {
-  return {
-    type: TYPE.GetLocation,
-    decode: Encoding.decodeStateLocation,
   };
 }

@@ -6,7 +6,6 @@ import {
 } from './constants.js';
 import {
   encode,
-  // decodeHeader,
   decodeStateUnhandled,
 } from './encoding.js';
 import { PromiseWithResolvers } from './utils.js';

@@ -3,6 +3,14 @@ import assert from 'node:assert';
 import * as Encoding from '../src/encoding.js';
 
 describe('encoding', () => {
+  test('uuid', () => {
+    const bytes = new Uint8Array(16);
+    Encoding.encodeUuidTo(bytes, 0, '4e0352bf-1994-4ff2-b425-1c4455479f33');
+    assert.deepEqual(bytes, new Uint8Array([
+      0x4e, 0x03, 0x52, 0xbf, 0x19, 0x94, 0x4f, 0xf2,
+      0xb4, 0x25, 0x1c, 0x44, 0x55, 0x47, 0x9f, 0x33,
+    ]));
+  });
   test('encode string', () => {
     const bytes = Encoding.encodeString('abc', 32);
     assert.deepEqual(bytes, new Uint8Array([
@@ -12,6 +20,14 @@ describe('encoding', () => {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ]));
   });
+
+  /**
+   * Uint8Array(16) [
+  78,   3,  82, 191, 25, 148,
+  79, 242, 180,  37, 28,  68,
+  85,  71, 159,  51
+]
+   */
 
   test('decode', () => {
     const bytes = new Uint8Array([

@@ -57,14 +57,35 @@ export function encode(
   return bytes;
 }
 
+export function encodeUuidTo(bytes, offset, uuid) {
+  const hex = uuid.replace(/-/g, '');
+  for (let i = 0, j = 0; i < hex.length; i += 2, j++) {
+    bytes[offset + j] = parseInt(hex.slice(i, i + 2), 16);
+  }
+}
+
 const textEncoder = new TextEncoder();
 
-export function encodeString(value, length) {
-  const bytes = new Uint8Array(length);
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} offset
+ * @param {string} value
+ * @param {number} byteLength
+ */
+export function encodeStringTo(bytes, offset, value, byteLength) {
   textEncoder.encodeInto(value, bytes);
-  if (value.length < length) {
-    bytes[value.length] = 0;
+  if (value.length < byteLength) {
+    bytes[offset + value.length] = 0;
   }
+}
+
+/**
+ * @param {string} value
+ * @param {number} byteLength
+ */
+export function encodeString(value, byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  encodeStringTo(bytes, 0, value, byteLength);
   return bytes;
 }
 
@@ -199,6 +220,21 @@ export function decodeStateVersion(bytes, offsetRef) {
  */
 export function decodeStateLabel(bytes, offsetRef) {
   return decodeString(bytes, offsetRef, 32);
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
+export function decodeStateInfo(bytes, offsetRef) {
+  const time = decodeTimestamp(bytes, offsetRef);
+  const uptime = decodeTimestamp(bytes, offsetRef);
+  const downtime = decodeTimestamp(bytes, offsetRef);
+  return {
+    time,
+    uptime,
+    downtime,
+  };
 }
 
 /**
