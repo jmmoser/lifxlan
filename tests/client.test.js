@@ -18,7 +18,7 @@ describe('client', () => {
           new DataView(payload.buffer).setUint16(0, 65535, true);
           assert.equal(packet.source, client.source);
           assert.equal(packet.sequence, 0);
-          client.router.onReceived(
+          client.router.receive(
             encode(
               packet.tagged,
               packet.source,
@@ -53,7 +53,7 @@ describe('client', () => {
           const packet = decodeHeader(messsage, { current: 0 });
           assert.equal(packet.source, client.source);
           assert.equal(packet.sequence, 0);
-          client.router.onReceived(
+          client.router.receive(
             encode(
               packet.tagged,
               packet.source,
@@ -87,7 +87,7 @@ describe('client', () => {
           assert.equal(packet.sequence, 0);
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, Type.StatePower, true);
-          client.router.onReceived(
+          client.router.receive(
             encode(
               packet.tagged,
               packet.source,

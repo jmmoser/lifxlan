@@ -9,6 +9,19 @@
  * @param {Uint8Array} [payload]
  */
 export function encode(tagged: boolean, source: number, target: Uint8Array, resRequired: boolean, ackRequired: boolean, sequence: number, type: number, payload?: Uint8Array): Uint8Array;
+export function encodeUuidTo(bytes: any, offset: any, uuid: any): void;
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} offset
+ * @param {string} value
+ * @param {number} byteLength
+ */
+export function encodeStringTo(bytes: Uint8Array, offset: number, value: string, byteLength: number): void;
+/**
+ * @param {string} value
+ * @param {number} byteLength
+ */
+export function encodeString(value: string, byteLength: number): Uint8Array;
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
@@ -75,6 +88,17 @@ export function decodeStateLabel(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
+export function decodeStateInfo(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    time: Date;
+    uptime: Date;
+    downtime: Date;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
 export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
@@ -93,6 +117,20 @@ export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: {
     reserved6: Uint8Array;
     reserved7: Uint8Array;
     reserved8: Uint8Array;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
+export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    build: Date;
+    reserved6: Uint8Array;
+    version: {
+        minor: number;
+        major: number;
+    };
 };
 /**
  * @param {Uint8Array} bytes

@@ -50,7 +50,7 @@ export function Router(options) {
     /**
      * @param {Uint8Array} message
      */
-    onReceived(message) {
+    receive(message) {
       const offsetRef = { current: 0 };
       const header = decodeHeader(message, offsetRef);
 

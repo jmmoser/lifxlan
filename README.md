@@ -29,7 +29,7 @@ const devices = Devices({
 
 socket.on('message', (message, remote) => {
   // Forward received messages to the router
-  const { header, serialNumber } = router.onReceived(message);
+  const { header, serialNumber } = router.receive(message);
   // Forward the message to devices so it can keep track
   devices.register(serialNumber, remote.port, remote.address, header.target);
 });
@@ -85,7 +85,7 @@ setTimeout(() => {
 }, 1000);
 
 for await (const [message, remote] of socket) {
-  const { header, serialNumber } = router.onReceived(message);
+  const { header, serialNumber } = router.receive(message);
   devices.register(serialNumber, remote.port, remote.hostname, header.target);
 }
 ```
@@ -106,7 +106,7 @@ const router = Router({
 const devices = Devices();
 
 socket.on('message', (message, remote) => {
-  const { header, serialNumber } = router.onReceived(message);
+  const { header, serialNumber } = router.receive(message);
   devices.register(serialNumber, remote.port, remote.hostname, header.target);
 });
 
@@ -180,7 +180,7 @@ const router = Router({
 });
 
 socket.on('message', (message, remote) => {
-  router.onReceived(message);
+  router.receive(message);
 });
 
 await new Promise((resolve, reject) => {
@@ -247,7 +247,7 @@ const router = Router({
 const devices = Devices();
 
 socket.on('message', (message, remote) => {
-  const { header, serialNumber } = router.onReceived(message);
+  const { header, serialNumber } = router.receive(message);
   devices.register(serialNumber, remote.port, remote.hostname, header.target);
 });
 
@@ -318,7 +318,7 @@ const devices = Devices();
  * @param {{ port: number; address: string; }} remote
  */
 function onMessage(message, remote) {
-  const { header, serialNumber } = router.onReceived(message);
+  const { header, serialNumber } = router.receive(message);
   devices.register(serialNumber, remote.port, remote.address, header.target);
 }
 

@@ -10,52 +10,138 @@
  *   decode: Decoder<OutputType>;
  * }} Command
  */
+export function GetServiceCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateService;
+};
+export function GetHostFirmwareCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateHostFirmware;
+};
+export function GetWifiInfoCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateWifiInfo;
+};
+export function GetWifiFirmwareCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateWifiFirmware;
+};
+export function GetPowerCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStatePower;
+};
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateService>>}
+ * @param {number | boolean} power
  */
-export function GetServiceCommand(): Command<ReturnType<typeof Encoding.decodeStateService>>;
+export function SetPowerCommand(power: number | boolean): {
+    type: number;
+    payload: Uint8Array;
+    decode: typeof Encoding.decodeStatePower;
+};
+export function GetLabelCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateLabel;
+};
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateVersion>>}
+ * @param {string} label
  */
-export function GetVersionCommand(): Command<ReturnType<typeof Encoding.decodeStateVersion>>;
+export function SetLabelCommand(label: string): {
+    type: number;
+    payload: Uint8Array;
+    decode: typeof Encoding.decodeStateLabel;
+};
+export function GetVersionCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateVersion;
+};
+export function GetInfoCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateInfo;
+};
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateHostFirmware>>}
+ * @returns {Command<void>}
  */
-export function GetHostFirmwareCommand(): Command<ReturnType<typeof Encoding.decodeStateHostFirmware>>;
+export function SetRebootCommand(): Command<void>;
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateLabel>>}
+ * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
  */
-export function GetLabelCommand(): Command<ReturnType<typeof Encoding.decodeStateLabel>>;
+export function GetLocationCommand(): Command<ReturnType<typeof Encoding.decodeStateLocation>>;
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateGroup>>}
+ * @param {Uint8Array | string} location
+ * @param {string} label
+ * @param {Date} updatedAt
  */
-export function GetGroupCommand(): Command<ReturnType<typeof Encoding.decodeStateGroup>>;
+export function SetLocationCommand(location: Uint8Array | string, label: string, updatedAt: Date): {
+    type: number;
+    payload: Uint8Array;
+    decode: typeof Encoding.decodeStateLocation;
+};
+export function GetGroupCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateGroup;
+};
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
+ * @param {Uint8Array | string} group
+ * @param {string} label
+ * @param {Date} updatedAt
  */
-export function GetColorCommand(): Command<ReturnType<typeof Encoding.decodeLightState>>;
+export function SetGroupCommand(group: Uint8Array | string, label: string, updatedAt: Date): {
+    type: number;
+    decode: typeof Encoding.decodeStateGroup;
+};
+/**
+ * @param {Uint8Array} echoing
+ * @returns {Command<ReturnType<typeof Encoding.decodeEchoResponse>>}
+ */
+export function EchoRequestCommand(echoing: Uint8Array): Command<ReturnType<typeof Encoding.decodeEchoResponse>>;
+export function GetColorCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeLightState;
+};
 /**
  * @param {number} hue
  * @param {number} saturation
  * @param {number} brightness
  * @param {number} kelvin
  * @param {number} duration
- * @returns {Command<ReturnType<typeof Encoding.decodeLightState>>}
  */
-export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Command<ReturnType<typeof Encoding.decodeLightState>>;
+export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): {
+    type: number;
+    payload: Uint8Array;
+    decode: typeof Encoding.decodeLightState;
+};
 /**
- * @param {number | boolean} power
- * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
+ * @param {boolean} transient
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} period
+ * @param {number} cycles
+ * @param {number} skewRatio
+ * @param {import('./constants.js').Waveform} waveform
  */
-export function SetPowerCommand(power: number | boolean): Command<ReturnType<typeof Encoding.decodeStatePower>>;
+export function SetWaveformCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import('./constants.js').Waveform): {
+    type: number;
+    decode: typeof Encoding.decodeLightState;
+};
+export function GetLightPowerCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateLightPower;
+};
 /**
- * @returns {Command<ReturnType<typeof Encoding.decodeStatePower>>}
+ * @param {number} level
+ * @param {number} duration
  */
-export function GetPowerCommand(): Command<ReturnType<typeof Encoding.decodeStatePower>>;
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
- */
-export function GetInfraredCommand(): Command<ReturnType<typeof Encoding.decodeStateInfrared>>;
+export function SetLightPowerCommand(level: number, duration: number): {
+    type: number;
+    payload: Uint8Array;
+    decode: typeof Encoding.decodeStateLightPower;
+};
+export function GetInfraredCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateInfrared;
+};
 /**
  * @param {number} brightness
  * @returns {Command<ReturnType<typeof Encoding.decodeStateInfrared>>}
@@ -66,15 +152,6 @@ export function SetInfraredCommand(brightness: number): Command<ReturnType<typeo
  * @returns {Command<ReturnType<typeof Encoding.decodeStateRPower>>}
  */
 export function GetRPowerCommand(relayIndex: number): Command<ReturnType<typeof Encoding.decodeStateRPower>>;
-/**
- * @param {Uint8Array} echoing
- * @returns {Command<ReturnType<typeof Encoding.decodeEchoResponse>>}
- */
-export function EchoRequestCommand(echoing: Uint8Array): Command<ReturnType<typeof Encoding.decodeEchoResponse>>;
-/**
- * @returns {Command<ReturnType<typeof Encoding.decodeStateLocation>>}
- */
-export function GetLocationCommand(): Command<ReturnType<typeof Encoding.decodeStateLocation>>;
 export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
     current: number;
 }) => OutputType;

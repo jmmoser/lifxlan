@@ -16,7 +16,7 @@ export function Router(options: {
     /**
      * @param {Uint8Array} message
      */
-    onReceived(message: Uint8Array): {
+    receive(message: Uint8Array): {
         header: {
             bytes: Uint8Array;
             size: number;

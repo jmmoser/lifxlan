@@ -14,7 +14,7 @@ export function Client(options: {
         send(message: any, port: any, address: any, broadcast: any): void;
         register(source: number, handler: import("./router.js").MessageHandler): void;
         deregister(source: any): void;
-        onReceived(message: Uint8Array): {
+        receive(message: Uint8Array): {
             header: {
                 bytes: Uint8Array;
                 size: number;
