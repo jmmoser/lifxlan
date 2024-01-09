@@ -1,4 +1,5 @@
-import { describe, test } from 'node:test';
+// eslint-disable-next-line import/no-unresolved
+import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import * as Encoding from '../src/encoding.js';
 
@@ -20,14 +21,6 @@ describe('encoding', () => {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ]));
   });
-
-  /**
-   * Uint8Array(16) [
-  78,   3,  82, 191, 25, 148,
-  79, 242, 180,  37, 28,  68,
-  85,  71, 159,  51
-]
-   */
 
   test('decode', () => {
     const bytes = new Uint8Array([
