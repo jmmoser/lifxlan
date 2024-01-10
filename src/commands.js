@@ -246,8 +246,8 @@ export function SetWaveformCommand(
   waveform,
 ) {
   const payload = new Uint8Array(21);
-  payload[1] = transient ? 1 : 0;
   const view = new DataView(payload.buffer);
+  payload[1] = transient ? 1 : 0;
   view.setUint16(2, hue, true);
   view.setUint16(4, saturation, true);
   view.setUint16(6, brightness, true);
@@ -285,6 +285,58 @@ export function SetLightPowerCommand(level, duration) {
   };
 }
 
+/**
+ * @param {boolean} transient
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} period
+ * @param {number} cycles
+ * @param {number} skewRatio
+ * @param {import('./constants.js').Waveform} waveform
+ * @param {boolean} setHue
+ * @param {boolean} setSaturation
+ * @param {boolean} setBrightness
+ * @param {boolean} setKelvin
+ */
+export function SetWaveformOptionalCommand(
+  transient,
+  hue,
+  saturation,
+  brightness,
+  kelvin,
+  period,
+  cycles,
+  skewRatio,
+  waveform,
+  setHue,
+  setSaturation,
+  setBrightness,
+  setKelvin,
+) {
+  const payload = new Uint8Array(25);
+  const view = new DataView(payload.buffer);
+  payload[1] = transient ? 1 : 0;
+  view.setUint16(2, hue, true);
+  view.setUint16(4, saturation, true);
+  view.setUint16(6, brightness, true);
+  view.setUint16(8, kelvin, true);
+  view.setUint32(10, period, true);
+  view.setFloat32(14, cycles, true);
+  view.setInt16(18, skewRatio, true);
+  view.setUint8(20, waveform);
+  payload[21] = setHue ? 1 : 0;
+  payload[22] = setSaturation ? 1 : 0;
+  payload[23] = setBrightness ? 1 : 0;
+  payload[24] = setKelvin ? 1 : 0;
+  return {
+    type: Type.SetWaveformOptional,
+    payload,
+    decode: Encoding.decodeStateLightPower,
+  };
+}
+
 export function GetInfraredCommand() {
   return {
     type: Type.GetInfrared,
@@ -307,6 +359,58 @@ export function SetInfraredCommand(brightness) {
   };
 }
 
+export function GetHevCycleCommand() {
+  return {
+    type: Type.GetHevCycle,
+    decode: Encoding.decodeStateHevCycle,
+  };
+}
+
+/**
+ * @param {boolean} enable
+ * @param {number} durationSeconds
+ */
+export function SetHevCycleCommand(enable, durationSeconds) {
+  const payload = new Uint8Array(5);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, enable ? 1 : 0);
+  view.setUint32(1, durationSeconds, true);
+  return {
+    type: Type.SetHevCycle,
+    payload,
+    decode: Encoding.decodeStateHevCycle,
+  };
+}
+
+export function GetHevCycleConfigurationCommand() {
+  return {
+    type: Type.GetHevCycleConfiguration,
+    decode: Encoding.decodeStateHevCycleConfiguration,
+  };
+}
+
+/**
+ * @param {boolean} indication
+ * @param {number} durationSeconds
+ */
+export function SetHevCycleConfigurationCommand(indication, durationSeconds) {
+  const payload = new Uint8Array(5);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, indication ? 1 : 0);
+  view.setUint32(1, durationSeconds, true);
+  return {
+    type: Type.SetHevCycleConfiguration,
+    decode: Encoding.decodeStateHevCycleConfiguration,
+  };
+}
+
+export function GetLastHevCycleResultCommand() {
+  return {
+    type: Type.GetLastHevCycleResult,
+    decode: Encoding.decodeStateLastHevCycleResult,
+  };
+}
+
 /**
  * @param {number} relayIndex
  * @returns {Command<ReturnType<typeof Encoding.decodeStateRPower>>}
@@ -317,6 +421,22 @@ export function GetRPowerCommand(relayIndex) {
   view.setUint8(0, relayIndex);
   return {
     type: Type.GetRPower,
+    payload,
+    decode: Encoding.decodeStateRPower,
+  };
+}
+
+/**
+ * @param {number} relayIndex
+ * @param {number} level
+ */
+export function SetRPowerCommand(relayIndex, level) {
+  const payload = new Uint8Array(3);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, relayIndex);
+  view.setUint16(1, level, true);
+  return {
+    type: Type.SetRPower,
     payload,
     decode: Encoding.decodeStateRPower,
   };
