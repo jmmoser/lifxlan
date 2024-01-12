@@ -441,3 +441,10 @@ export function SetRPowerCommand(relayIndex, level) {
     decode: Encoding.decodeStateRPower,
   };
 }
+
+export function GetDeviceChainCommand() {
+  return {
+    type: Type.GetDeviceChain,
+    decode: Encoding.decodeStateDeviceChain,
+  };
+}

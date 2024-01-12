@@ -143,9 +143,7 @@ export function decodeStateService(bytes, offsetRef) {
   const service = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const port = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   return {
-    service: {
-      code: service,
-    },
+    service,
     port,
   };
 }
@@ -158,12 +156,13 @@ export function decodeStateHostFirmware(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
   const build = decodeTimestamp(bytes, offsetRef);
   const reserved = decodeBytes(bytes, offsetRef, 8);
-  const versionMinor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  const versionMajor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const version_minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const version_major = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return {
     build,
     reserved,
-    version: `${versionMajor}.${versionMinor}`,
+    version_minor,
+    version_major,
   };
 }
 
@@ -181,6 +180,7 @@ export function decodeStateWifiInfo(bytes, offsetRef) {
   const rssi = Math.floor(10 * Math.log10(signal) + 0.5);
 
   return {
+    // TODO
     signal: {
       rssi,
       status: getRssiStatus(rssi),
@@ -200,15 +200,13 @@ export function decodeStateWifiFirmware(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const build = decodeTimestamp(bytes, offsetRef);
   const reserved6 = decodeBytes(bytes, offsetRef, 8);
-  const minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  const major = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const version_minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const version_major = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return {
     build,
     reserved6,
-    version: {
-      minor,
-      major,
-    },
+    version_minor,
+    version_major,
   };
 }
 
@@ -269,11 +267,11 @@ export function decodeStateInfo(bytes, offsetRef) {
 export function decodeStateLocation(bytes, offsetRef) {
   const location = decodeBytes(bytes, offsetRef, 16);
   const label = decodeString(bytes, offsetRef, 32);
-  const updatedAt = decodeTimestamp(bytes, offsetRef);
+  const updated_at = decodeTimestamp(bytes, offsetRef);
   return {
     location,
     label,
-    updatedAt,
+    updated_at,
   };
 }
 
@@ -284,11 +282,11 @@ export function decodeStateLocation(bytes, offsetRef) {
 export function decodeStateGroup(bytes, offsetRef) {
   const group = Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
   const label = decodeString(bytes, offsetRef, 32);
-  const updatedAt = decodeBytes(bytes, offsetRef, 8);
+  const updated_at = decodeBytes(bytes, offsetRef, 8);
   return {
     group,
     label,
-    updatedAt,
+    updated_at,
   };
 }
 
@@ -411,6 +409,60 @@ export function decodeStateRPower(bytes, offsetRef) {
   return {
     relayIndex,
     level,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number }} offsetRef
+ */
+export function decodeStateDeviceChain(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const start_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const devices = [];
+  for (let i = 0; i < 16; i++) {
+    const accel_meas_x = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
+    const accel_meas_y = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
+    const accel_meas_z = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
+    const reserved6 = decodeBytes(bytes, offsetRef, 2);
+    const user_x = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
+    const user_y = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
+    const width = view.getUint8(offsetRef.current); offsetRef.current += 1;
+    const height = view.getUint8(offsetRef.current); offsetRef.current += 1;
+    const reserved7 = decodeBytes(bytes, offsetRef, 1);
+    const device_version_vendor = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+    const device_version_product = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+    const reserved8 = decodeBytes(bytes, offsetRef, 4);
+    const firmware_build = decodeTimestamp(bytes, offsetRef);
+    const reversed9 = decodeBytes(bytes, offsetRef, 8);
+    const firmware_version_minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const firmware_version_major = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const reserved10 = decodeBytes(bytes, offsetRef, 4);
+    devices.push({
+      accel_meas_x,
+      accel_meas_y,
+      accel_meas_z,
+      reserved6,
+      user_x,
+      user_y,
+      width,
+      height,
+      reserved7,
+      device_version_vendor,
+      device_version_product,
+      reserved8,
+      firmware_build,
+      reversed9,
+      firmware_version_minor,
+      firmware_version_major,
+      reserved10,
+    });
+  }
+  const tile_devices_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  return {
+    start_index,
+    devices,
+    tile_devices_count,
   };
 }
 

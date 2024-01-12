@@ -1,5 +1,4 @@
-// eslint-disable-next-line import/no-unresolved
-import { describe, test } from 'bun:test';
+import { describe, test } from 'node:test';
 import assert from 'node:assert';
 import { Client } from '../src/client.js';
 import { Router } from '../src/router.js';
