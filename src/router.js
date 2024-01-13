@@ -42,6 +42,9 @@ export function Router(options) {
      * @param {MessageHandler} handler
      */
     register(source, handler) {
+      if (handlers.has(source)) {
+        throw new Error('Source already registered');
+      }
       handlers.set(source, handler);
     },
     deregister(source) {
