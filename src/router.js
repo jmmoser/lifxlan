@@ -38,12 +38,13 @@ export function Router(options) {
   return {
     nextSource() {
       let source = -1;
+      /** 0 and 1 are reserved so number of sources to check is 0xFFFF - 2 */
       for (let i = 0; i < 65533; i++) {
         if (!handlers.has(sourceCounter)) {
           source = sourceCounter;
           break;
         }
-        sourceCounter = (sourceCounter + 1) % 65535;
+        sourceCounter = (sourceCounter + 1) % 0xFFFF;
         if (sourceCounter <= 1) {
           sourceCounter = 2;
         }
@@ -58,6 +59,9 @@ export function Router(options) {
      * @param {MessageHandler} handler
      */
     register(handler, source) {
+      if (source <= 1 || source >= 0xFFFF) {
+        throw new Error('Invalid source');
+      }
       if (handlers.has(source)) {
         throw new Error('Source already registered');
       }
