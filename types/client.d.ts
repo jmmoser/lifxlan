@@ -11,9 +11,10 @@ export function Client(options: {
     source?: number;
 }): {
     readonly router: {
-        send(message: any, port: any, address: any, broadcast: any): void;
-        register(source: number, handler: import("./router.js").MessageHandler): void;
-        deregister(source: any): void;
+        nextSource(): number;
+        register(handler: import("./router.js").MessageHandler, source: number): void;
+        deregister(source: number, handler: import("./router.js").MessageHandler): void;
+        send(message: Uint8Array, port: number, address: string, broadcast: boolean): void;
         receive(message: Uint8Array): {
             header: {
                 bytes: Uint8Array;
@@ -34,6 +35,13 @@ export function Client(options: {
                 reserved5: Uint8Array;
                 type: number;
             };
+            /**
+             * @template T
+             * @param {string} serialNumber
+             * @param {number} sequence
+             * @param {import('./commands.js').Decoder<T>} decode
+             * @param {AbortSignal} [signal]
+             */
             payload: Uint8Array;
             serialNumber: string;
         };

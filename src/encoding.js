@@ -91,7 +91,7 @@ export function encodeString(value, byteLength) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  * @param {number} byteLength
  */
 function decodeBytes(bytes, offsetRef, byteLength) {
@@ -102,7 +102,7 @@ function decodeBytes(bytes, offsetRef, byteLength) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 function decodeMacAddress(bytes, offsetRef) {
   const slice = bytes.subarray(offsetRef.current, offsetRef.current + 6);
@@ -114,7 +114,7 @@ const textDecoder = new TextDecoder();
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  * @param {number} maxLength
  */
 function decodeString(bytes, offsetRef, maxLength) {
@@ -127,6 +127,10 @@ function decodeString(bytes, offsetRef, maxLength) {
   return value;
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
 function decodeTimestamp(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
   const time = new Date(Number(view.getBigUint64(offsetRef.current, true) / 1000000n));
@@ -136,7 +140,7 @@ function decodeTimestamp(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateService(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -150,7 +154,7 @@ export function decodeStateService(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateHostFirmware(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -168,7 +172,7 @@ export function decodeStateHostFirmware(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateWifiInfo(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -194,7 +198,7 @@ export function decodeStateWifiInfo(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateWifiFirmware(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -212,20 +216,17 @@ export function decodeStateWifiFirmware(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStatePower(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
   const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  return {
-    power,
-    on: power !== 0,
-  };
+  return power;
 }
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLabel(bytes, offsetRef) {
   return decodeString(bytes, offsetRef, 32);
@@ -233,7 +234,7 @@ export function decodeStateLabel(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateVersion(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -247,7 +248,7 @@ export function decodeStateVersion(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateInfo(bytes, offsetRef) {
   const time = decodeTimestamp(bytes, offsetRef);
@@ -262,7 +263,7 @@ export function decodeStateInfo(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLocation(bytes, offsetRef) {
   const location = decodeBytes(bytes, offsetRef, 16);
@@ -277,7 +278,7 @@ export function decodeStateLocation(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateGroup(bytes, offsetRef) {
   const group = Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -292,7 +293,7 @@ export function decodeStateGroup(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeEchoResponse(bytes, offsetRef) {
   const payload = decodeBytes(bytes, offsetRef, 64);
@@ -301,7 +302,7 @@ export function decodeEchoResponse(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateUnhandled(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -311,7 +312,7 @@ export function decodeStateUnhandled(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeLightState(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -341,7 +342,7 @@ export function decodeLightState(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLightPower(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -351,7 +352,7 @@ export function decodeStateLightPower(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateInfrared(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -361,7 +362,7 @@ export function decodeStateInfrared(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateHevCycle(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -377,7 +378,7 @@ export function decodeStateHevCycle(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateHevCycleConfiguration(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -391,7 +392,7 @@ export function decodeStateHevCycleConfiguration(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLastHevCycleResult(bytes, offsetRef) {
   const result = bytes[offsetRef.current]; offsetRef.current += 1;
@@ -400,7 +401,7 @@ export function decodeStateLastHevCycleResult(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateRPower(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -414,7 +415,7 @@ export function decodeStateRPower(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateDeviceChain(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
@@ -510,7 +511,7 @@ export function decodeState64(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeHeader(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);

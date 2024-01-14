@@ -19,30 +19,6 @@ function getResponseKey(serialNumber, sequence) {
 }
 
 /**
- * @type {Set<number>}
- */
-const sourcesInUse = new Set();
-
-let globalSource = 2;
-function getNextAvailableSource() {
-  let source = 0;
-  for (let i = 0; i < 65533; i++) {
-    if (!sourcesInUse.has(globalSource)) {
-      source = globalSource;
-      break;
-    }
-    globalSource = (globalSource + 1) % 65535;
-    if (globalSource <= 1) {
-      globalSource = 2;
-    }
-  }
-  if (source === 0) {
-    throw new Error('No available source');
-  }
-  return source;
-}
-
-/**
    * @param {number} [sequence]
    */
 function incrementSequence(sequence) {
@@ -58,11 +34,7 @@ function incrementSequence(sequence) {
  * }} options
  */
 export function Client(options) {
-  const source = options.source ?? getNextAvailableSource();
-
-  if (sourcesInUse.has(source)) {
-    throw new Error('Source already in use');
-  }
+  const source = options.source ?? options.router.nextSource();
 
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const { router } = options;
@@ -172,12 +144,6 @@ export function Client(options) {
   }
 
   let disposed = false;
-  function dispose() {
-    if (disposed) return;
-    disposed = true;
-    sourcesInUse.delete(source);
-    router.deregister(source);
-  }
 
   const client = {
     get router() {
@@ -187,7 +153,9 @@ export function Client(options) {
       return source;
     },
     dispose() {
-      dispose();
+      if (disposed) return;
+      disposed = true;
+      router.deregister(source, client);
     },
     /**
      * Broadcast a command to the local network.
@@ -302,9 +270,7 @@ export function Client(options) {
     },
   };
 
-  router.register(source, client);
-
-  sourcesInUse.add(source);
+  router.register(client, source);
 
   return client;
 }

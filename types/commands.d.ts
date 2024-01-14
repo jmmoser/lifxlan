@@ -214,6 +214,10 @@ export function GetDeviceChainCommand(): {
     type: number;
     decode: typeof Encoding.decodeStateDeviceChain;
 };
+export function Get64Command(): {
+    type: number;
+    decode: typeof Encoding.decodeState64;
+};
 export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
     current: number;
 }) => OutputType;

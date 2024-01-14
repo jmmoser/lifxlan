@@ -6,13 +6,24 @@
 export function Router(options: {
     onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
 }): {
-    send(message: any, port: any, address: any, broadcast: any): void;
+    nextSource(): number;
     /**
      * @param {number} source
      * @param {MessageHandler} handler
      */
-    register(source: number, handler: MessageHandler): void;
-    deregister(source: any): void;
+    register(handler: MessageHandler, source: number): void;
+    /**
+     * @param {number} source
+     * @param {MessageHandler} handler
+     */
+    deregister(source: number, handler: MessageHandler): void;
+    /**
+     * @param {Uint8Array} message
+     * @param {number} port
+     * @param {string} address
+     * @param {boolean} broadcast
+     */
+    send(message: Uint8Array, port: number, address: string, broadcast: boolean): void;
     /**
      * @param {Uint8Array} message
      */

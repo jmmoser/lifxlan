@@ -42,7 +42,7 @@ describe('client', () => {
 
     const res = await client.send(GetPowerCommand(), device);
 
-    assert.equal(res.on, true);
+    assert.equal(res, 0xFFFF);
   });
 
   test('sendOnlyAcknowledgement', async () => {

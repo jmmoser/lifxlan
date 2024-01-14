@@ -24,7 +24,7 @@ export function encodeStringTo(bytes: Uint8Array, offset: number, value: string,
 export function encodeString(value: string, byteLength: number): Uint8Array;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateService(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -34,7 +34,7 @@ export function decodeStateService(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -46,7 +46,7 @@ export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -62,7 +62,7 @@ export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -74,24 +74,21 @@ export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStatePower(bytes: Uint8Array, offsetRef: {
     current: number;
-}): {
-    power: number;
-    on: boolean;
-};
+}): number;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLabel(bytes: Uint8Array, offsetRef: {
     current: number;
 }): string;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateVersion(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -101,7 +98,7 @@ export function decodeStateVersion(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateInfo(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -112,7 +109,7 @@ export function decodeStateInfo(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLocation(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -123,7 +120,7 @@ export function decodeStateLocation(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateGroup(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -134,21 +131,21 @@ export function decodeStateGroup(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeEchoResponse(bytes: Uint8Array, offsetRef: {
     current: number;
 }): Uint8Array;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeLightState(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -167,21 +164,21 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateInfrared(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -192,7 +189,7 @@ export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -202,14 +199,14 @@ export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateLastHevCycleResult(bytes: Uint8Array, offsetRef: {
     current: number;
 }): number;
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateRPower(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -219,7 +216,7 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: {
     current: number;
@@ -248,7 +245,26 @@ export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: {
 };
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number }} offsetRef
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeState64(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    tile_index: number;
+    reserved6: Uint8Array;
+    x: number;
+    y: number;
+    width: number;
+    colors: {
+        hue: number;
+        saturation: number;
+        brightness: number;
+        kelvin: number;
+    }[];
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeHeader(bytes: Uint8Array, offsetRef: {
     current: number;
