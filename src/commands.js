@@ -448,3 +448,10 @@ export function GetDeviceChainCommand() {
     decode: Encoding.decodeStateDeviceChain,
   };
 }
+
+export function Get64Command() {
+  return {
+    type: Type.Get64,
+    decode: Encoding.decodeState64,
+  };
+}

@@ -468,6 +468,48 @@ export function decodeStateDeviceChain(bytes, offsetRef) {
 
 /**
  * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeState64(bytes, offsetRef) {
+  const tile_index = bytes[offsetRef.current]; offsetRef.current += 1;
+  const reserved6 = decodeBytes(bytes, offsetRef, 1);
+  const x = bytes[offsetRef.current]; offsetRef.current += 1;
+  const y = bytes[offsetRef.current]; offsetRef.current += 1;
+  const width = bytes[offsetRef.current]; offsetRef.current += 1;
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  /**
+   * @type {{
+   *   hue: number;
+   *   saturation: number;
+   *   brightness: number;
+   *   kelvin: number;
+   * }[]}
+   */
+  const colors = [];
+  for (let i = 0; i < 64; i++) {
+    const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    colors.push({
+      hue,
+      saturation,
+      brightness,
+      kelvin,
+    });
+  }
+  return {
+    tile_index,
+    reserved6,
+    x,
+    y,
+    width,
+    colors,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
  * @param {{ current: number }} offsetRef
  */
 export function decodeHeader(bytes, offsetRef) {

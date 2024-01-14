@@ -35,9 +35,7 @@ socket.on('message', (message, remote) => {
 });
 
 // Client handles communication with devices
-const client = Client({
-  router,
-});
+const client = Client({ router });
 
 socket.once('listening', () => {
   socket.setBroadcast(true);
@@ -74,9 +72,7 @@ const devices = Devices({
   },
 });
 
-const client = Client({
-  router,
-});
+const client = Client({ router });
 
 client.broadcast(GetServiceCommand());
 
@@ -118,9 +114,7 @@ await new Promise((resolve, reject) => {
 
 socket.setBroadcast(true);
 
-const client = Client({
-  router,
-});
+const client = Client({ router });
 
 // Start scanning for devices
 client.broadcast(GetServiceCommand());
@@ -195,9 +189,7 @@ const device = Device({
   address: '192.168.1.50',
 });
 
-const client = Client({
-  router,
-});
+const client = Client({ router });
 
 await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 
@@ -259,13 +251,9 @@ await new Promise((resolve, reject) => {
 
 socket.setBroadcast(true);
 
-const client1 = Client({
-  router,
-});
+const client1 = Client({ router });
 
-const client2 = Client({
-  router,
-});
+const client2 = Client({ router });
 
 client1.broadcast(GetServiceCommand());
 const scanInterval = setInterval(() => {
@@ -340,9 +328,7 @@ await Promise.all([
 
 broadcastSocket.setBroadcast(true);
 
-const client = Client({
-  router,
-});
+const client = Client({ router });
 
 client.broadcast(GetServiceCommand());
 const scanInterval = setInterval(() => {
