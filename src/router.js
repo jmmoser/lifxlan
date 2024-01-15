@@ -24,7 +24,7 @@ function convertTargetToSerialNumber(slice) {
 
 /**
  * @param {{
- *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
+ *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
  * }} options
  */
 export function Router(options) {
@@ -81,10 +81,10 @@ export function Router(options) {
      * @param {Uint8Array} message
      * @param {number} port
      * @param {string} address
-     * @param {boolean} broadcast
+     * @param {string} [serialNumber]
      */
-    send(message, port, address, broadcast) {
-      options.onSend(message, port, address, broadcast);
+    send(message, port, address, serialNumber) {
+      options.onSend(message, port, address, serialNumber);
     },
     /**
      * @param {Uint8Array} message

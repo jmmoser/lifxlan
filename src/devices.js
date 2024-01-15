@@ -45,12 +45,14 @@ export function Device(config) {
 /**
  * @param {{
  *   onAdded?: (device: Device) => void;
+ *   onChanged?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
  * }} [options]
  */
 export function Devices(options) {
   const defaultTimeoutMs = options?.defaultTimeoutMs ?? 3000;
   const onAdded = options?.onAdded;
+  const onChanged = options?.onChanged;
 
   const knownDevices = /** @type {Map<string, Device>} */ (new Map());
 
@@ -65,8 +67,13 @@ export function Devices(options) {
   function registerDevice(serialNumber, port, address, target) {
     const existingDevice = knownDevices.get(serialNumber);
     if (existingDevice) {
-      existingDevice.port = port;
-      existingDevice.address = address;
+      if (port !== existingDevice.port || address !== existingDevice.address) {
+        existingDevice.port = port;
+        existingDevice.address = address;
+        if (onChanged) {
+          onChanged(existingDevice);
+        }
+      }
       return existingDevice;
     }
     const device = Device({

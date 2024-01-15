@@ -1,10 +1,10 @@
 /**
  * @param {{
- *   onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
+ *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
  * }} options
  */
 export function Router(options: {
-    onSend: (message: Uint8Array, port: number, address: string, broadcast: boolean) => void;
+    onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
 }): {
     nextSource(): number;
     /**
@@ -21,9 +21,9 @@ export function Router(options: {
      * @param {Uint8Array} message
      * @param {number} port
      * @param {string} address
-     * @param {boolean} broadcast
+     * @param {string} [serialNumber]
      */
-    send(message: Uint8Array, port: number, address: string, broadcast: boolean): void;
+    send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
     /**
      * @param {Uint8Array} message
      */

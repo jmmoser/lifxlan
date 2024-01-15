@@ -174,7 +174,7 @@ export function Client(options) {
         command.payload,
       );
 
-      router.send(bytes, PORT, BROADCAST_ADDRESS, true);
+      router.send(bytes, PORT, BROADCAST_ADDRESS);
     },
     /**
      * Send a command to a device without expecting a response or acknowledgement.
@@ -194,7 +194,7 @@ export function Client(options) {
         command.payload,
       );
 
-      router.send(bytes, device.port, device.address, false);
+      router.send(bytes, device.port, device.address, device.serialNumber);
 
       device.sequence = incrementSequence(device.sequence);
     },
@@ -222,7 +222,7 @@ export function Client(options) {
 
       device.sequence = incrementSequence(device.sequence);
 
-      router.send(bytes, device.port, device.address, false);
+      router.send(bytes, device.port, device.address, device.serialNumber);
 
       return promise;
     },
@@ -250,7 +250,7 @@ export function Client(options) {
 
       device.sequence = incrementSequence(device.sequence);
 
-      router.send(bytes, device.port, device.address, false);
+      router.send(bytes, device.port, device.address, device.serialNumber);
 
       return promise;
     },

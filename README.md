@@ -290,8 +290,8 @@ const broadcastSocket = dgram.createSocket('udp4');
 const unicastSocket = dgram.createSocket('udp4');
 
 const router = Router({
-  onSend(message, port, address, broadcast) {
-    if (broadcast) {
+  onSend(message, port, address, serialNumber) {
+    if (!serialNumber) {
       broadcastSocket.send(message, port, address);
     } else {
       unicastSocket.send(message, port, address);
