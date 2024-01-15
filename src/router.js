@@ -25,13 +25,14 @@ function convertTargetToSerialNumber(slice) {
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+ *   handlers?: Map<number, MessageHandler>;
  * }} options
  */
 export function Router(options) {
   /**
    * @type {Map<number, MessageHandler>}
    */
-  const handlers = new Map();
+  const handlers = options.handlers ?? new Map();
 
   let sourceCounter = 2;
 

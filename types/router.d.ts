@@ -1,10 +1,12 @@
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+ *   handlers?: Map<number, MessageHandler>;
  * }} options
  */
 export function Router(options: {
     onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+    handlers?: Map<number, MessageHandler>;
 }): {
     nextSource(): number;
     /**
