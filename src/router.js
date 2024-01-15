@@ -44,7 +44,7 @@ export function Router(options) {
           source = sourceCounter;
           break;
         }
-        sourceCounter = (sourceCounter + 1) % 0xFFFF;
+        sourceCounter = (sourceCounter + 1) % 0x10000;
         if (sourceCounter <= 1) {
           sourceCounter = 2;
         }
