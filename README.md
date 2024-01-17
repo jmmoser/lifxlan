@@ -346,7 +346,7 @@ unicastSocket.close();
 ```
 
 #### How to use one socket per device
-```
+```javascript
 import dgram from 'node:dgram';
 import { Client, Device, Router, Devices, GetServiceCommand, SetColorCommand } from '../src/index.js';
 
