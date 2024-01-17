@@ -419,7 +419,7 @@ const client = Client({ router });
 client.broadcast(GetServiceCommand());
 setInterval(() => {
   client.broadcast(GetServiceCommand());
-}, 250);
+}, 5000);
 
 const PARTY_COLORS = /** @type {const} */ ([
   [48241, 65535, 65535, 3500],
