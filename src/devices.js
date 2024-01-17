@@ -87,6 +87,9 @@ export function Devices(options) {
   }
 
   return {
+    get registered() {
+      return knownDevices;
+    },
     /**
      * @param {string} serialNumber
      * @param {number} port
