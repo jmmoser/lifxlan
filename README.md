@@ -432,12 +432,77 @@ const PARTY_COLORS = /** @type {const} */ ([
 while (true) {
   const deviceCount = devices.registered.size;
 
-  const waitTime = Math.min(2000 / deviceCount, 100);
+  if (deviceCount > 0) {
+    const waitTime = Math.min(2000 / deviceCount, 100);
 
-  for (const device of devices.registered.values()) {
-    const [hue, saturation, brightness, kelvin] = PARTY_COLORS[Math.random() * PARTY_COLORS.length | 0];
-    client.unicast(SetColorCommand(hue, saturation, brightness, kelvin, 2000), device);
-    await new Promise((resolve) => setTimeout(resolve, waitTime));
+    for (const device of devices.registered.values()) {
+      const [hue, saturation, brightness, kelvin] = PARTY_COLORS[Math.random() * PARTY_COLORS.length | 0];
+      client.unicast(SetColorCommand(hue, saturation, brightness, kelvin, 2000), device);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+```
+
+#### Same as the previous example but with only one socket
+```javascript
+import dgram from 'node:dgram';
+import { Client, Router, Devices, GetServiceCommand, SetColorCommand } from '../src/index.js';
+
+const socket = dgram.createSocket('udp4');
+
+socket.on('message', (message, remote) => {
+  const { header, serialNumber } = router.receive(message);
+  devices.register(serialNumber, remote.port, remote.address, header.target);
+});
+
+await new Promise((resolve, reject) => {
+  socket.once('error', reject);
+  socket.once('listening', resolve);
+  socket.bind();
+});
+
+socket.setBroadcast(true);
+
+const router = Router({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+});
+
+const devices = Devices();
+
+const client = Client({ router });
+
+client.broadcast(GetServiceCommand());
+setInterval(() => {
+  client.broadcast(GetServiceCommand());
+}, 250);
+
+const PARTY_COLORS = /** @type {const} */ ([
+  [48241, 65535, 65535, 3500],
+  [43690, 49151, 65535, 3500],
+  [54612, 65535, 65535, 3500],
+  [43690, 65535, 65535, 3500],
+  [38956, 55704, 65535, 3500],
+]);
+
+while (true) {
+  const deviceCount = devices.registered.size;
+
+  if (deviceCount > 0) {
+    const waitTime = Math.min(2000 / deviceCount, 100);
+    console.log(deviceCount);
+
+    for (const device of devices.registered.values()) {
+      const [hue, saturation, brightness, kelvin] = PARTY_COLORS[Math.random() * PARTY_COLORS.length | 0];
+      client.unicast(SetColorCommand(hue, saturation, brightness, kelvin, 2000), device);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 ```
