@@ -85,3 +85,10 @@ export function getRssiStatus(rssi) {
 
   return 'none';
 }
+
+/**
+ * @param {number} signal
+ */
+export function convertSignalToRssi(signal) {
+  return Math.floor(10 * Math.log10(signal) + 0.5);
+}

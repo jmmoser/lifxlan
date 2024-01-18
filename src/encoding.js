@@ -1,5 +1,3 @@
-import { getRssiStatus } from './utils.js';
-
 /**
  * @param {boolean} tagged
  * @param {number} source
@@ -181,15 +179,8 @@ export function decodeStateWifiInfo(bytes, offsetRef) {
   const reserved7 = decodeBytes(bytes, offsetRef, 4);
   const reserved8 = decodeBytes(bytes, offsetRef, 2);
 
-  const rssi = Math.floor(10 * Math.log10(signal) + 0.5);
-
   return {
-    // TODO
-    signal: {
-      rssi,
-      status: getRssiStatus(rssi),
-      raw: signal,
-    },
+    signal,
     reserved6,
     reserved7,
     reserved8,
@@ -330,10 +321,7 @@ export function decodeLightState(bytes, offsetRef) {
     saturation,
     brightness,
     kelvin,
-    power: {
-      level: power,
-      on: power !== 0,
-    },
+    power,
     label,
     reserved2,
     reserved8,
@@ -366,13 +354,13 @@ export function decodeStateInfrared(bytes, offsetRef) {
  */
 export function decodeStateHevCycle(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
-  const durationSeconds = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
-  const remainingSeconds = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
-  const lastPower = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const duration_s = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const remaining_s = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const last_power = !!view.getUint8(offsetRef.current); offsetRef.current += 1;
   return {
-    durationSeconds,
-    remainingSeconds,
-    lastPower,
+    duration_s,
+    remaining_s,
+    last_power,
   };
 }
 
@@ -383,10 +371,10 @@ export function decodeStateHevCycle(bytes, offsetRef) {
 export function decodeStateHevCycleConfiguration(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
   const indication = view.getUint8(offsetRef.current); offsetRef.current += 1;
-  const durationSeconds = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const duration_s = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   return {
     indication,
-    durationSeconds,
+    duration_s,
   };
 }
 
@@ -405,10 +393,10 @@ export function decodeStateLastHevCycleResult(bytes, offsetRef) {
  */
 export function decodeStateRPower(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
-  const relayIndex = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const relay_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const level = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return {
-    relayIndex,
+    relay_index,
     level,
   };
 }
@@ -538,8 +526,8 @@ export function decodeHeader(bytes, offsetRef) {
 
   const responseBin = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
-  const resRequired = (responseBin & 0b1) > 0;
-  const ackRequired = (responseBin & 0b10) > 0;
+  const res_required = (responseBin & 0b1) > 0;
+  const ack_required = (responseBin & 0b10) > 0;
   const reserved3 = (responseBin & 0b11111100) >> 2;
 
   const sequence = view.getUint8(offsetRef.current); offsetRef.current += 1;
@@ -563,8 +551,8 @@ export function decodeHeader(bytes, offsetRef) {
     target,
     reserved1,
     reserved2,
-    resRequired,
-    ackRequired,
+    res_required,
+    ack_required,
     reserved3,
     reserved4,
     sequence,

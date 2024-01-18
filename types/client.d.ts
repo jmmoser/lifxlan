@@ -27,8 +27,8 @@ export function Client(options: {
                 target: Uint8Array;
                 reserved1: Uint8Array;
                 reserved2: Uint8Array;
-                resRequired: boolean;
-                ackRequired: boolean;
+                res_required: boolean;
+                ack_required: boolean;
                 reserved3: number;
                 reserved4: Uint8Array;
                 sequence: number;

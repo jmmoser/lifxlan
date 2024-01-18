@@ -51,11 +51,7 @@ export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: {
 export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    signal: {
-        rssi: number;
-        status: string;
-        raw: number;
-    };
+    signal: number;
     reserved6: Uint8Array;
     reserved7: Uint8Array;
     reserved8: Uint8Array;
@@ -154,10 +150,7 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: {
     saturation: number;
     brightness: number;
     kelvin: number;
-    power: {
-        level: number;
-        on: boolean;
-    };
+    power: number;
     label: string;
     reserved2: Uint8Array;
     reserved8: Uint8Array;
@@ -183,9 +176,9 @@ export function decodeStateInfrared(bytes: Uint8Array, offsetRef: {
 export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    durationSeconds: number;
-    remainingSeconds: number;
-    lastPower: number;
+    duration_s: number;
+    remaining_s: number;
+    last_power: boolean;
 };
 /**
  * @param {Uint8Array} bytes
@@ -195,7 +188,7 @@ export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     indication: number;
-    durationSeconds: number;
+    duration_s: number;
 };
 /**
  * @param {Uint8Array} bytes
@@ -211,7 +204,7 @@ export function decodeStateLastHevCycleResult(bytes: Uint8Array, offsetRef: {
 export function decodeStateRPower(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    relayIndex: number;
+    relay_index: number;
     level: number;
 };
 /**
@@ -279,8 +272,8 @@ export function decodeHeader(bytes: Uint8Array, offsetRef: {
     target: Uint8Array;
     reserved1: Uint8Array;
     reserved2: Uint8Array;
-    resRequired: boolean;
-    ackRequired: boolean;
+    res_required: boolean;
+    ack_required: boolean;
     reserved3: number;
     reserved4: Uint8Array;
     sequence: number;

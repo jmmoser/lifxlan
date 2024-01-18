@@ -34,6 +34,7 @@ export function Devices(options?: {
     onChanged?: (device: Device) => void;
     defaultTimeoutMs?: number;
 }): {
+    readonly registered: Map<string, Device>;
     /**
      * @param {string} serialNumber
      * @param {number} port

@@ -31,4 +31,8 @@ export function rgbToHsb(r: number, g: number, b: number): readonly [number, num
  * @param {number} rssi
  */
 export function getRssiStatus(rssi: number): "none" | "very bad" | "somewhat bad" | "alright" | "good";
+/**
+ * @param {number} signal
+ */
+export function convertSignalToRssi(signal: number): number;
 export function NOOP(value: any): void;
