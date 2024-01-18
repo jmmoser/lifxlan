@@ -4,7 +4,7 @@ Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://
 
 ### Examples
 
-#### Node.js:
+#### Node.js
 ```javascript
 import dgram from 'node:dgram';
 import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
@@ -50,7 +50,7 @@ setTimeout(() => {
 }, 1000);
 ```
 
-#### Deno:
+#### Deno
 ```javascript
 import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
@@ -86,7 +86,7 @@ for await (const [message, remote] of socket) {
 }
 ```
 
-#### How to turn a light on:
+#### How to turn a light on
 ```javascript
 import dgram from 'node:dgram';
 import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
@@ -132,7 +132,7 @@ await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 socket.close();
 ```
 
-#### How to retry:
+#### How to retry
 ```javascript
 for (let i = 0; i < 3; i++) {
   try {
@@ -145,7 +145,7 @@ for (let i = 0; i < 3; i++) {
 }
 ```
 
-#### How to specify a custom timeout:
+#### How to specify a custom timeout
 ```javascript
 const controller = new AbortController();
 
@@ -281,7 +281,7 @@ while (true) {
 }
 ```
 
-#### How to use one socket for broadcast messages and another socket for unicast messages:
+#### How to use one socket for broadcast messages and another socket for unicast messages
 ```javascript
 import dgram from 'node:dgram';
 import { Client, Devices, GetServiceCommand } from 'lifxlan';
