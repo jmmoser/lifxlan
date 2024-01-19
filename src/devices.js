@@ -46,6 +46,7 @@ export function Device(config) {
  * @param {{
  *   onAdded?: (device: Device) => void;
  *   onChanged?: (device: Device) => void;
+ *   onRemoved?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
  * }} [options]
  */
@@ -53,6 +54,7 @@ export function Devices(options) {
   const defaultTimeoutMs = options?.defaultTimeoutMs ?? 3000;
   const onAdded = options?.onAdded;
   const onChanged = options?.onChanged;
+  const onRemoved = options?.onRemoved;
 
   const knownDevices = /** @type {Map<string, Device>} */ (new Map());
 
@@ -118,8 +120,12 @@ export function Devices(options) {
      * @param {string} serialNumber
      */
     remove(serialNumber) {
+      const device = knownDevices.get(serialNumber);
       knownDevices.delete(serialNumber);
       deviceResolvers.delete(serialNumber);
+      if (device && onRemoved) {
+        onRemoved(device);
+      }
     },
     /**
      * @param {string} serialNumber

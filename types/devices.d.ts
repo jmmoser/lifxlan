@@ -26,12 +26,14 @@ export type Device = {
  * @param {{
  *   onAdded?: (device: Device) => void;
  *   onChanged?: (device: Device) => void;
+ *   onRemoved?: (device: Device) => void;
  *   defaultTimeoutMs?: number;
  * }} [options]
  */
 export function Devices(options?: {
     onAdded?: (device: Device) => void;
     onChanged?: (device: Device) => void;
+    onRemoved?: (device: Device) => void;
     defaultTimeoutMs?: number;
 }): {
     readonly registered: Map<string, Device>;

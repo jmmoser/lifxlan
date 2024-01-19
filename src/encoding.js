@@ -55,6 +55,11 @@ export function encode(
   return bytes;
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} offset
+ * @param {string} uuid
+ */
 export function encodeUuidTo(bytes, offset, uuid) {
   const hex = uuid.replace(/-/g, '');
   for (let i = 0, j = 0; i < hex.length; i += 2, j++) {
@@ -96,6 +101,14 @@ function decodeBytes(bytes, offsetRef, byteLength) {
   const subarray = bytes.subarray(offsetRef.current, offsetRef.current + byteLength);
   offsetRef.current += byteLength;
   return subarray;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+function decodeUuid(bytes, offsetRef) {
+  return Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -272,9 +285,11 @@ export function decodeStateLocation(bytes, offsetRef) {
  * @param {{ current: number; }} offsetRef
  */
 export function decodeStateGroup(bytes, offsetRef) {
-  const group = Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const group = decodeUuid(bytes, offsetRef);
   const label = decodeString(bytes, offsetRef, 32);
-  const updated_at = decodeBytes(bytes, offsetRef, 8);
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const updated_at = view.getBigUint64(offsetRef.current, true); offsetRef.current += 8;
+
   return {
     group,
     label,

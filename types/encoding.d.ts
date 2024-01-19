@@ -9,7 +9,12 @@
  * @param {Uint8Array} [payload]
  */
 export function encode(tagged: boolean, source: number, target: Uint8Array, resRequired: boolean, ackRequired: boolean, sequence: number, type: number, payload?: Uint8Array): Uint8Array;
-export function encodeUuidTo(bytes: any, offset: any, uuid: any): void;
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} offset
+ * @param {string} uuid
+ */
+export function encodeUuidTo(bytes: Uint8Array, offset: number, uuid: string): void;
 /**
  * @param {Uint8Array} bytes
  * @param {number} offset
@@ -123,7 +128,7 @@ export function decodeStateGroup(bytes: Uint8Array, offsetRef: {
 }): {
     group: any;
     label: string;
-    updated_at: Uint8Array;
+    updated_at: any;
 };
 /**
  * @param {Uint8Array} bytes

@@ -348,7 +348,7 @@ unicastSocket.close();
 #### How to use one socket per device
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Device, Router, Devices, GetServiceCommand, SetColorCommand } from '../src/index.js';
+import { Client, Device, Router, Devices, GetServiceCommand, SetColorCommand } from 'lifxlan';
 
 /**
  * @param {Uint8Array} message
@@ -449,7 +449,7 @@ while (true) {
 #### Same as the previous example but with only one socket
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Router, Devices, GetServiceCommand, SetColorCommand } from '../src/index.js';
+import { Client, Router, Devices, GetServiceCommand, SetColorCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -505,4 +505,59 @@ while (true) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
+```
+
+#### How to discover and organize devices into groups
+```javascript
+import dgram from 'node:dgram';
+import { Client, Router, Devices, Groups, GetServiceCommand, GetGroupCommand } from 'lifxlan';
+
+const socket = dgram.createSocket('udp4');
+
+await new Promise((resolve, reject) => {
+  socket.once('error', reject);
+  socket.once('listening', resolve);
+  socket.bind();
+});
+
+socket.setBroadcast(true);
+
+const router = Router({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+});
+
+const client = Client({ router });
+
+const groups = Groups({
+  onAdded(group) {
+    console.log('Group added', group);
+  },
+  onChanged(group) {
+    console.log('Group changed', group);
+  },
+});
+
+const devices = Devices({
+  async onAdded(device) {
+    const group = await client.send(GetGroupCommand(), device);
+    groups.register(device, group);
+  },
+});
+
+socket.on('message', (message, remote) => {
+  const { header, serialNumber } = router.receive(message);
+  devices.register(serialNumber, remote.port, remote.address, header.target);
+});
+
+client.broadcast(GetServiceCommand());
+const scanInterval = setInterval(() => {
+  client.broadcast(GetServiceCommand());
+}, 250);
+
+setTimeout(() => {
+  clearInterval(scanInterval);
+  socket.close();
+}, 2000);
 ```
