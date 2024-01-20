@@ -561,3 +561,22 @@ setTimeout(() => {
   socket.close();
 }, 2000);
 ```
+
+#### How to send a command to all devices discovered in a group
+```javascript
+await Promise.all(group.devices.map((device) => client.send(GetLabelCommand(), device, signal)));
+```
+
+#### How to keep group devices sorted when the devices are discovered or removed
+```javascript
+const group = Groups({
+  onChanged(group) {
+    group.devices.sort((deviceA, deviceB) => {
+      if (deviceA.serialNumber < deviceB.serialNumber) {
+        return -1;
+      }
+      return 1;
+    });
+  }
+});
+```
