@@ -2,7 +2,7 @@
  * @typedef {{
  *   label: string;
  *   uuid: string;
- *   devices: Set<import('./devices').Device>;
+ *   devices: import('./devices').Device[];
  * }} Group
  */
 
@@ -36,6 +36,19 @@ export function Groups(options) {
     }
   }
 
+  /**
+   * @param {Group} group
+   * @param {import('./devices').Device} device
+   */
+  function deviceIndexOf(group, device) {
+    for (let i = 0; i < group.devices.length; i += 1) {
+      if (group.devices[i] === device) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   return {
     /**
      * @param {import('./devices').Device} device
@@ -43,16 +56,18 @@ export function Groups(options) {
      */
     register(device, group) {
       const existingGroup = knownGroups.get(group.group);
-      if (existingGroup && !existingGroup.devices.has(device)) {
-        existingGroup.devices.add(device);
-        if (onChanged) {
-          onChanged(existingGroup);
+      if (existingGroup) {
+        if (deviceIndexOf(existingGroup, device) < 0) {
+          existingGroup.devices.push(device);
+          if (onChanged) {
+            onChanged(existingGroup);
+          }
         }
       } else {
         const newGroup = /** @type {Group} */ ({
           label: group.label,
           uuid: group.group,
-          devices: new Set([device]),
+          devices: [device],
         });
         knownGroups.set(group.group, newGroup);
         if (onAdded) {
@@ -71,9 +86,11 @@ export function Groups(options) {
      */
     removeDevice(device) {
       knownGroups.forEach((group) => {
-        if (group.devices.has(device)) {
-          group.devices.delete(device);
-          if (group.devices.size === 0) {
+        const index = deviceIndexOf(group, device);
+        if (index > -1) {
+          group.devices[index] = group.devices[group.devices.length - 1];
+          group.devices.pop();
+          if (group.devices.length === 0) {
             removeGroup(group.uuid);
           } else if (onChanged) {
             onChanged(group);
@@ -85,4 +102,15 @@ export function Groups(options) {
       return knownGroups;
     },
   };
+}
+
+/**
+ * @template T
+ * @param {Group} group
+ * @param {ReturnType<typeof import('./client').Client>} client
+ * @param {import('./commands').Command<T>} command
+ * @param {AbortSignal} [signal]
+ */
+export function SendGroup(group, client, command, signal) {
+  return Promise.all(group.devices.map((device) => client.send(command, device, signal)));
 }
