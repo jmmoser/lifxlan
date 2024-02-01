@@ -19,8 +19,8 @@ function getResponseKey(serialNumber, sequence) {
 }
 
 /**
-   * @param {number} [sequence]
-   */
+ * @param {number} [sequence]
+ */
 function incrementSequence(sequence) {
   /** Only allow up to 254. 255 is used for broadcast messages. */
   return sequence == null ? 0 : (sequence + 1) % 0xFF;
