@@ -183,13 +183,13 @@ await new Promise((resolve, reject) => {
   socket.bind();
 });
 
+const client = Client({ router });
+
 // Create the device directly
 const device = Device({
   serialNumber: 'd07123456789',
   address: '192.168.1.50',
 });
-
-const client = Client({ router });
 
 await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
 
