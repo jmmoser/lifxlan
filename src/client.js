@@ -59,11 +59,12 @@ export function Client(options) {
     /** @typedef {typeof PromiseWithResolvers<void>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
-    function onAbort(...args) {
+    function onAbort(/** @type {any} */ ...args) {
       responseHandlerMap.delete(key);
       reject(...args);
     }
 
+    /** @type {number} */
     let timeout;
 
     if (signal) {
@@ -109,11 +110,12 @@ export function Client(options) {
     /** @typedef {typeof PromiseWithResolvers<T>} Resolvers */
     const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
-    function onAbort(...args) {
+    function onAbort(/** @type {any} */ ...args) {
       responseHandlerMap.delete(key);
       reject(...args);
     }
 
+    /** @type {number} */
     let timeout;
 
     if (signal) {

@@ -20,7 +20,8 @@ function convertSerialNumberToTarget(serialNumber) {
   }
   const target = new Uint8Array(6);
   for (let i = 0; i < 6; i++) {
-    target[i] = parseInt(serialNumber.slice(2 * i, 2 * (i + 1)), 16);
+    const offset = 2 * i;
+    target[i] = parseInt(serialNumber.slice(offset, offset + 2), 16);
   }
   return target;
 }
@@ -140,7 +141,7 @@ export function Devices(options) {
       /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers */
       const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
-      function onAbort(...args) {
+      function onAbort(/** @type {any} */ ...args) {
         const resolvers = deviceResolvers.get(serialNumber);
         if (resolvers) {
           if (resolvers.size > 1) {
@@ -152,6 +153,7 @@ export function Devices(options) {
         reject(...args);
       }
 
+      /** @type {any} */
       let timeout;
 
       if (signal) {

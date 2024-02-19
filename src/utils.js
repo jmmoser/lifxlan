@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-export const NOOP = (value) => {};
+export const NOOP = (/** @type {any} */ value) => {};
 
 /**
  * @template T
@@ -30,8 +30,8 @@ export function hsbToRgb(h, s, b) {
   h *= 360 / 65535;
   s /= 65535;
   b /= 65535;
-  const k = (n) => (n + h / 60) % 6;
-  const f = (n) => b * (1 - s * Math.max(0, Math.min(k(n), 4 - k(n), 1)));
+  const k = (/** @type {number} */ n) => (n + h / 60) % 6;
+  const f = (/** @type {number} */ n) => b * (1 - s * Math.max(0, Math.min(k(n), 4 - k(n), 1)));
   return /** @type {const} */ ([
     Math.round(255 * f(5)),
     Math.round(255 * f(3)),
