@@ -7,7 +7,7 @@
   "main": "./src/index.js",
   "type": "module",
   "scripts": {
-    "test": "node --test --experimental-test-coverage",
+    "test": "node --test --experimental-test-coverage './tests/client.test.js' './tests/encoding.test.js'",
     "types": "rm -rf ./types && npx -p typescript tsc src/index.js --declaration --allowJs --emitDeclarationOnly --outDir types"
   },
   "keywords": [
