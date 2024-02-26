@@ -22,6 +22,11 @@ function convertTargetToSerialNumber(slice) {
   return str;
 }
 
+const MAX_SOURCE = 0xFFFFFFFF;
+
+/** 0 and 1 are reserved */
+const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
+
 /**
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
@@ -39,8 +44,7 @@ export function Router(options) {
   return {
     nextSource() {
       let source = -1;
-      /** 0 and 1 are reserved so number of sources to check is 0xFFFF - 2 */
-      for (let i = 0; i < 65533; i++) {
+      for (let i = 0; i < MAX_SOURCE_VALUES; i++) {
         if (!handlers.has(sourceCounter)) {
           source = sourceCounter;
           break;
@@ -60,7 +64,7 @@ export function Router(options) {
      * @param {MessageHandler} handler
      */
     register(handler, source) {
-      if (source <= 1 || source >= 0xFFFF) {
+      if (source <= 1 || source > MAX_SOURCE) {
         throw new Error('Invalid source');
       }
       if (handlers.has(source)) {
