@@ -111,16 +111,6 @@ function decodeUuid(bytes, offsetRef) {
   return Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * @param {Uint8Array} bytes
- * @param {{ current: number; }} offsetRef
- */
-function decodeMacAddress(bytes, offsetRef) {
-  const slice = bytes.subarray(offsetRef.current, offsetRef.current + 6);
-  offsetRef.current += 6;
-  return slice;
-}
-
 const textDecoder = new TextDecoder();
 
 /**
@@ -531,8 +521,7 @@ export function decodeHeader(bytes, offsetRef) {
   const source = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
 
   /** Frame Address */
-
-  const target = decodeMacAddress(bytes, offsetRef);
+  const target = decodeBytes(bytes, offsetRef, 6);
 
   // last 2 bytes of target are reserved
   const reserved1 = decodeBytes(bytes, offsetRef, 2);
