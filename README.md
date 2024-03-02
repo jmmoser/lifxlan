@@ -569,7 +569,7 @@ await Promise.all(group.devices.map((device) => client.send(GetLabelCommand(), d
 
 #### How to keep group devices sorted when the devices are discovered or removed
 ```javascript
-const group = Groups({
+const groups = Groups({
   onChanged(group) {
     group.devices.sort((deviceA, deviceB) => {
       if (deviceA.serialNumber < deviceB.serialNumber) {
