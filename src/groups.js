@@ -40,7 +40,7 @@ export function Groups(options) {
    * @param {Group} group
    * @param {import('./devices').Device} device
    */
-  function deviceIndexOf(group, device) {
+  function indexOfDevice(group, device) {
     for (let i = 0; i < group.devices.length; i += 1) {
       if (group.devices[i] === device) {
         return i;
@@ -57,7 +57,7 @@ export function Groups(options) {
     register(device, group) {
       const existingGroup = knownGroups.get(group.group);
       if (existingGroup) {
-        if (deviceIndexOf(existingGroup, device) < 0) {
+        if (indexOfDevice(existingGroup, device) < 0) {
           existingGroup.devices.push(device);
           if (onChanged) {
             onChanged(existingGroup);
@@ -86,8 +86,8 @@ export function Groups(options) {
      */
     removeDevice(device) {
       knownGroups.forEach((group) => {
-        const index = deviceIndexOf(group, device);
-        if (index > -1) {
+        const index = indexOfDevice(group, device);
+        if (index >= 0) {
           group.devices[index] = group.devices[group.devices.length - 1];
           group.devices.pop();
           if (group.devices.length === 0) {
