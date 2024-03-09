@@ -32,14 +32,6 @@ export function Groups(options?: {
     removeDevice(device: import('./devices').Device): void;
     readonly registered: Map<string, Group>;
 };
-/**
- * @template T
- * @param {Group} group
- * @param {ReturnType<typeof import('./client').Client>} client
- * @param {import('./commands').Command<T>} command
- * @param {AbortSignal} [signal]
- */
-export function SendGroup<T>(group: Group, client: ReturnType<typeof import('./client').Client>, command: import("./commands").Command<T>, signal?: AbortSignal): any;
 export type Group = {
     label: string;
     uuid: string;

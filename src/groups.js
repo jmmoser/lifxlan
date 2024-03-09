@@ -24,14 +24,14 @@ export function Groups(options) {
   const knownGroups = new Map();
 
   /**
-   * @param {string} group
+   * @param {string} uuid
    */
-  function removeGroup(group) {
-    const existing = knownGroups.get(group);
-    if (existing) {
-      knownGroups.delete(group);
+  function removeGroup(uuid) {
+    const group = knownGroups.get(uuid);
+    if (group) {
+      knownGroups.delete(uuid);
       if (onRemoved) {
-        onRemoved(existing);
+        onRemoved(group);
       }
     }
   }
@@ -102,15 +102,4 @@ export function Groups(options) {
       return knownGroups;
     },
   };
-}
-
-/**
- * @template T
- * @param {Group} group
- * @param {ReturnType<typeof import('./client').Client>} client
- * @param {import('./commands').Command<T>} command
- * @param {AbortSignal} [signal]
- */
-export function SendGroup(group, client, command, signal) {
-  return Promise.all(group.devices.map((device) => client.send(command, device, signal)));
 }
