@@ -13,7 +13,7 @@ export function Router(options: {
      * @param {number} source
      * @param {MessageHandler} handler
      */
-    register(handler: MessageHandler, source: number): void;
+    register(source: number, handler: MessageHandler): void;
     /**
      * @param {number} source
      * @param {MessageHandler} handler

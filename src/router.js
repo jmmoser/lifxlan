@@ -63,7 +63,7 @@ export function Router(options) {
      * @param {number} source
      * @param {MessageHandler} handler
      */
-    register(handler, source) {
+    register(source, handler) {
       if (source <= 1 || source > MAX_SOURCE) {
         throw new Error('Invalid source');
       }

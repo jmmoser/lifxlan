@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.47",
+  "version": "0.0.48",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",
@@ -28,6 +28,6 @@
     "eslint": "^8.56.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.29.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
   }
 }

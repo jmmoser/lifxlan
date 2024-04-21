@@ -12,7 +12,7 @@ export function Client(options: {
 }): {
     readonly router: {
         nextSource(): number; /** @typedef {typeof PromiseWithResolvers<void>} Resolvers */
-        register(handler: import("./router.js").MessageHandler, source: number): void;
+        register(source: number, handler: import("./router.js").MessageHandler): void;
         deregister(source: number, handler: import("./router.js").MessageHandler): void;
         send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
         receive(message: Uint8Array): {
