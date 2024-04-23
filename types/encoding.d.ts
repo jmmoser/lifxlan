@@ -285,3 +285,11 @@ export function decodeHeader(bytes: Uint8Array, offsetRef: {
     reserved5: Uint8Array;
     type: number;
 };
+export function getHeaderFlags(view: DataView, offset?: number): number;
+export function getHeaderTagged(view: DataView, offset?: number): boolean;
+export function getHeaderSource(view: DataView, offset?: number): number;
+export function getHeaderTarget(bytes: Uint8Array, offset?: number): Uint8Array;
+export function getHeaderSerialNumber(bytes: Uint8Array, offset?: number): string;
+export function getHeaderType(view: DataView, offset?: number): number;
+export function getHeaderSequence(view: DataView, offset?: number): number;
+export function getPayload(bytes: Uint8Array, offset?: number): Uint8Array;

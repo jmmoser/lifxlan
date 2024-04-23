@@ -1,3 +1,5 @@
+import { convertTargetToSerialNumber } from './utils.js';
+
 /**
  * @param {boolean} tagged
  * @param {number} source
@@ -501,6 +503,56 @@ export function decodeState64(bytes, offsetRef) {
     colors,
   };
 }
+
+/**
+ * @param {DataView} view
+ * @param {number} [offset]
+ */
+export const getHeaderFlags = (view, offset = 0) => view.getUint16(offset + 2, true) & 0xFFF;
+
+/**
+ * @param {DataView} view
+ * @param {number} [offset]
+ */
+export const getHeaderTagged = (view, offset = 0) => !!((getHeaderFlags(view, offset) >> 12) & 0b1);
+
+/**
+ * @param {DataView} view
+ * @param {number} [offset]
+ */
+export const getHeaderSource = (view, offset = 0) => view.getUint32(offset + 4, true);
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} [offset]
+ */
+export const getHeaderTarget = (bytes, offset = 0) => bytes.subarray(offset + 8, offset + 14);
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} [offset]
+ */
+export const getHeaderSerialNumber = (bytes, offset = 0) => convertTargetToSerialNumber(
+  getHeaderTarget(bytes, offset),
+);
+
+/**
+ * @param {DataView} view
+ * @param {number} [offset]
+ */
+export const getHeaderType = (view, offset = 0) => view.getUint16(offset + 32, true);
+
+/**
+ * @param {DataView} view
+ * @param {number} [offset]
+ */
+export const getHeaderSequence = (view, offset = 0) => view.getUint8(offset + 23);
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} [offset]
+ */
+export const getPayload = (bytes, offset = 0) => bytes.subarray(offset + 36);
 
 /**
  * @param {Uint8Array} bytes

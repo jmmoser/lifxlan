@@ -4,11 +4,15 @@ import {
   BROADCAST_ADDRESS,
   NO_TARGET,
 } from './constants.js';
+
 import {
   encode,
   decodeStateUnhandled,
 } from './encoding.js';
-import { PromiseWithResolvers } from './utils.js';
+
+import {
+  PromiseWithResolvers,
+} from './utils.js';
 
 /**
  * @param {string} serialNumber

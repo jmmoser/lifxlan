@@ -1,4 +1,5 @@
 import { decodeHeader } from './encoding.js';
+import { convertTargetToSerialNumber } from './utils.js';
 
 /**
  * @typedef {{
@@ -10,24 +11,26 @@ import { decodeHeader } from './encoding.js';
  * }} MessageHandler
  */
 
-/**
- * @param {Uint8Array} slice
- */
-function convertTargetToSerialNumber(slice) {
-  let str = '';
-  const { length } = slice;
-  for (let i = 0; i < length; i++) {
-    str += slice[i].toString(16).padStart(2, '0');
-  }
-  return str;
-}
-
 const MAX_SOURCE = 0xFFFFFFFF;
 
 /** 0 and 1 are reserved */
 const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 
 /**
+ * Since a client is a source of messages and there may be multiple
+ * clients sending messages at the same time, the router receives
+ * response messages and routes them to the client (a MessageHandler)
+ * that sent the request message.
+ *
+ * It has the added benefit of allowing callers to send messages
+ * messages. With the previous benefit, the router helps associate
+ * received messages with previously sent messages.
+ *
+ * It also decodes the header and converts the target to a serial
+ * number string. This helps avoid calling the relatively expensive
+ * convertTargetToSerialNumber utility function multiple times for
+ * each response message.
+ *
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
  *   handlers?: Map<number, MessageHandler>;

@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.49",
+  "version": "0.0.50",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",

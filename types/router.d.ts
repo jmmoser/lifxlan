@@ -1,4 +1,18 @@
 /**
+ * Since a client is a source of messages and there may be multiple
+ * clients sending messages at the same time, the router receives
+ * response messages and routes them to the client (a MessageHandler)
+ * that sent the request message.
+ *
+ * It has the added benefit of allowing callers to send messages
+ * messages. With the previous benefit, the router helps associate
+ * received messages with previously sent messages.
+ *
+ * It also decodes the header and converts the target to a serial
+ * number string. This helps avoid calling the relatively expensive
+ * convertTargetToSerialNumber utility function multiple times for
+ * each response message.
+ *
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
  *   handlers?: Map<number, MessageHandler>;

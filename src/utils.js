@@ -92,3 +92,15 @@ export function getRssiStatus(rssi) {
 export function convertSignalToRssi(signal) {
   return Math.floor(10 * Math.log10(signal) + 0.5);
 }
+
+/**
+ * @param {Uint8Array} slice
+ */
+export function convertTargetToSerialNumber(slice) {
+  let str = '';
+  const { length } = slice;
+  for (let i = 0; i < length; i++) {
+    str += slice[i].toString(16).padStart(2, '0');
+  }
+  return str;
+}
