@@ -100,7 +100,13 @@ export function convertTargetToSerialNumber(slice) {
   let str = '';
   const { length } = slice;
   for (let i = 0; i < length; i++) {
-    str += slice[i].toString(16).padStart(2, '0');
+    const chunk = slice[i].toString(16);
+    if (chunk.length < 2) {
+      // eslint-disable-next-line prefer-template
+      str += '0' + chunk;
+    } else {
+      str += chunk;
+    }
   }
   return str;
 }
