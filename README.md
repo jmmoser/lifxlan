@@ -1,10 +1,10 @@
 No dependencies. Bring your own socket.
 
-Works with Node.js and Deno. Eagerly awaiting [datagram support in Bun](https://github.com/oven-sh/bun/issues/1630).
+Works with Node.js, Bun, and Deno.
 
 ### Examples
 
-#### Node.js
+#### Node.js / Bun
 ```javascript
 import dgram from 'node:dgram';
 import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
