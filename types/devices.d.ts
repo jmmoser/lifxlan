@@ -42,8 +42,9 @@ export function Devices(options?: {
      * @param {number} port
      * @param {string} address
      * @param {Uint8Array} [target]
+     * @returns {Device}
      */
-    register(serialNumber: string, port: number, address: string, target?: Uint8Array): any;
+    register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
     /**
      * @param {string} serialNumber
      */
@@ -51,6 +52,7 @@ export function Devices(options?: {
     /**
      * @param {string} serialNumber
      * @param {AbortSignal} [signal]
+     * @returns {Promise<Device>}
      */
-    get(serialNumber: string, signal?: AbortSignal): any;
+    get(serialNumber: string, signal?: AbortSignal): Promise<Device>;
 };

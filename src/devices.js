@@ -98,6 +98,7 @@ export function Devices(options) {
      * @param {number} port
      * @param {string} address
      * @param {Uint8Array} [target]
+     * @returns {Device}
      */
     register(serialNumber, port, address, target) {
       const device = registerDevice(
@@ -131,11 +132,12 @@ export function Devices(options) {
     /**
      * @param {string} serialNumber
      * @param {AbortSignal} [signal]
+     * @returns {Promise<Device>}
      */
     get(serialNumber, signal) {
       const knownDevice = knownDevices.get(serialNumber);
       if (knownDevice) {
-        return knownDevice;
+        return Promise.resolve(knownDevice);
       }
 
       /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers */
