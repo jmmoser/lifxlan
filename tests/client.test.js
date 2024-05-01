@@ -13,19 +13,19 @@ describe('client', () => {
       defaultTimeoutMs: 0,
       router: Router({
         onSend(messsage) {
-          const packet = decodeHeader(messsage, { current: 0 });
+          const header = decodeHeader(messsage);
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, 65535, true);
-          assert.equal(packet.source, client.source);
-          assert.equal(packet.sequence, 0);
+          assert.equal(header.source, client.source);
+          assert.equal(header.sequence, 0);
           client.router.receive(
             encode(
-              packet.tagged,
-              packet.source,
-              packet.target,
+              header.tagged,
+              header.source,
+              header.target,
               false,
               false,
-              packet.sequence,
+              header.sequence,
               Type.StatePower,
               payload,
             ),
@@ -50,17 +50,17 @@ describe('client', () => {
       defaultTimeoutMs: 0,
       router: Router({
         onSend(messsage) {
-          const packet = decodeHeader(messsage, { current: 0 });
-          assert.equal(packet.source, client.source);
-          assert.equal(packet.sequence, 0);
+          const header = decodeHeader(messsage);
+          assert.equal(header.source, client.source);
+          assert.equal(header.sequence, 0);
           client.router.receive(
             encode(
-              packet.tagged,
-              packet.source,
-              packet.target,
+              header.tagged,
+              header.source,
+              header.target,
               false,
               false,
-              packet.sequence,
+              header.sequence,
               Type.Acknowledgement,
             ),
           );
@@ -82,19 +82,19 @@ describe('client', () => {
       defaultTimeoutMs: 0,
       router: Router({
         onSend(messsage) {
-          const packet = decodeHeader(messsage, { current: 0 });
-          assert.equal(packet.source, client.source);
-          assert.equal(packet.sequence, 0);
+          const header = decodeHeader(messsage);
+          assert.equal(header.source, client.source);
+          assert.equal(header.sequence, 0);
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, Type.StatePower, true);
           client.router.receive(
             encode(
-              packet.tagged,
-              packet.source,
-              packet.target,
+              header.tagged,
+              header.source,
+              header.target,
               false,
               false,
-              packet.sequence,
+              header.sequence,
               Type.StateUnhandled,
               payload,
             ),

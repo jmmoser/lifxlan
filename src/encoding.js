@@ -1,5 +1,3 @@
-import { convertTargetToSerialNumber } from './utils.js';
-
 /**
  * @param {boolean} tagged
  * @param {number} source
@@ -513,7 +511,13 @@ export function decodeState64(bytes, offsetRef) {
  * @param {DataView} view
  * @param {number} [offset]
  */
-export const getHeaderFlags = (view, offset = 0) => view.getUint16(offset + 2, true) & 0xFFF;
+export const getHeaderSize = (view, offset = 0) => view.getUint16(offset, true);
+
+/**
+ * @param {DataView} view
+ * @param {number} [offset]
+ */
+export const getHeaderFlags = (view, offset = 0) => view.getUint16(offset + 2, true);
 
 /**
  * @param {DataView} view
@@ -534,12 +538,20 @@ export const getHeaderSource = (view, offset = 0) => view.getUint32(offset + 4, 
 export const getHeaderTarget = (bytes, offset = 0) => bytes.subarray(offset + 8, offset + 14);
 
 /**
- * @param {Uint8Array} bytes
+ * @param {DataView} view
  * @param {number} [offset]
  */
-export const getHeaderSerialNumber = (bytes, offset = 0) => convertTargetToSerialNumber(
-  getHeaderTarget(bytes, offset),
-);
+export const getHeaderResponseFlags = (view, offset = 0) => view.getUint8(offset + 22);
+
+/**
+ * @param {number} responseFlags
+ */
+export const getHeaderResponseRequired = (responseFlags) => (responseFlags & 0b1) > 0;
+
+/**
+ * @param {number} responseFlags
+ */
+export const getHeaderAcknowledgeRequired = (responseFlags) => (responseFlags & 0b10) > 0;
 
 /**
  * @param {DataView} view
@@ -561,45 +573,41 @@ export const getPayload = (bytes, offset = 0) => bytes.subarray(offset + 36);
 
 /**
  * @param {Uint8Array} bytes
- * @param {{ current: number; }} offsetRef
+ * @param {number} [offset]
  */
-export function decodeHeader(bytes, offsetRef) {
+export function decodeHeader(bytes, offset = 0) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
 
   /** Frame Header */
-
-  const size = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-  const flags = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const size = getHeaderSize(view, offset);
+  const flags = getHeaderFlags(view, offset);
   const protocol = flags & 0xFFF;
   const addressable = !!((flags >> 12) & 0b1);
   const tagged = !!((flags >> 13) & 0b1);
   const origin = (flags >> 14) & 0b11;
 
-  const source = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const source = getHeaderSource(view, offset);
 
   /** Frame Address */
-  const target = decodeBytes(bytes, offsetRef, 6);
+  const target = getHeaderTarget(bytes, offset);
 
   // last 2 bytes of target are reserved
-  const reserved1 = decodeBytes(bytes, offsetRef, 2);
+  const reserved1 = bytes.subarray(offset + 14, offset + 16);
+  const reserved2 = bytes.subarray(offset + 16, offset + 22);
 
-  const reserved2 = decodeBytes(bytes, offsetRef, 6);
+  const responseFlags = getHeaderResponseFlags(view, offset);
+  const res_required = getHeaderResponseRequired(responseFlags);
+  const ack_required = getHeaderAcknowledgeRequired(responseFlags);
+  const reserved3 = (responseFlags & 0b11111100) >> 2;
 
-  const responseBin = view.getUint8(offsetRef.current); offsetRef.current += 1;
-
-  const res_required = (responseBin & 0b1) > 0;
-  const ack_required = (responseBin & 0b10) > 0;
-  const reserved3 = (responseBin & 0b11111100) >> 2;
-
-  const sequence = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const sequence = getHeaderSequence(view, offset);
 
   /** Protocol Header */
+  const reserved4 = bytes.subarray(offset + 24, offset + 32);
 
-  const reserved4 = decodeBytes(bytes, offsetRef, 8);
+  const type = getHeaderType(view, offset);
 
-  const type = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
-
-  const reserved5 = decodeBytes(bytes, offsetRef, 2);
+  const reserved5 = bytes.subarray(offset + 34, offset + 36);
 
   return {
     bytes: bytes.subarray(0, 36),

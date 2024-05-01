@@ -1,4 +1,4 @@
-import { decodeHeader } from './encoding.js';
+import { decodeHeader, getPayload } from './encoding.js';
 import { convertTargetToSerialNumber } from './utils.js';
 
 /**
@@ -98,10 +98,8 @@ export function Router(options) {
      * @param {Uint8Array} message
      */
     receive(message) {
-      const offsetRef = { current: 0 };
-      const header = decodeHeader(message, offsetRef);
-
-      const payload = message.subarray(offsetRef.current);
+      const header = decodeHeader(message);
+      const payload = getPayload(message);
 
       const serialNumber = convertTargetToSerialNumber(header.target);
 

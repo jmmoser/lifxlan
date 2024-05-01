@@ -29,9 +29,9 @@ describe('encoding', () => {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x02, 0x00, 0x00, 0x00,
     ]);
-    const packet = Encoding.decodeHeader(bytes, { current: 0 });
+    const header = Encoding.decodeHeader(bytes);
 
-    assert.deepEqual(packet, {
+    assert.deepEqual(header, {
       bytes,
       size: bytes.length,
       type: 2,
@@ -52,14 +52,14 @@ describe('encoding', () => {
     });
 
     const encodedBytes = Encoding.encode(
-      packet.tagged,
-      packet.source,
-      packet.target,
-      packet.res_required,
-      packet.ack_required,
-      packet.sequence,
-      packet.type,
-      packet.payload,
+      header.tagged,
+      header.source,
+      header.target,
+      header.res_required,
+      header.ack_required,
+      header.sequence,
+      header.type,
+      header.payload,
     );
     assert.deepEqual(encodedBytes, bytes);
   });
