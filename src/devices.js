@@ -120,14 +120,15 @@ export function Devices(options) {
     },
     /**
      * @param {string} serialNumber
+     * @returns {boolean}
      */
     remove(serialNumber) {
       const device = knownDevices.get(serialNumber);
-      knownDevices.delete(serialNumber);
-      deviceResolvers.delete(serialNumber);
+      const removed = knownDevices.delete(serialNumber);
       if (device && onRemoved) {
         onRemoved(device);
       }
+      return removed;
     },
     /**
      * @param {string} serialNumber

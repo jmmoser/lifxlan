@@ -47,8 +47,9 @@ export function Devices(options?: {
     register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
     /**
      * @param {string} serialNumber
+     * @returns {boolean}
      */
-    remove(serialNumber: string): void;
+    remove(serialNumber: string): boolean;
     /**
      * @param {string} serialNumber
      * @param {AbortSignal} [signal]
