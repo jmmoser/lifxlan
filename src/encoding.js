@@ -275,6 +275,11 @@ export function decodeStateLocation(bytes, offsetRef) {
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
+ * @returns {{
+ *   group: string;
+ *   label: string;
+ *   updated_at: bigint;
+ * }}
  */
 export function decodeStateGroup(bytes, offsetRef) {
   const group = decodeUuid(bytes, offsetRef);

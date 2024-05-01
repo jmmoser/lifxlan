@@ -122,13 +122,18 @@ export function decodeStateLocation(bytes: Uint8Array, offsetRef: {
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
+ * @returns {{
+ *   group: string;
+ *   label: string;
+ *   updated_at: bigint;
+ * }}
  */
 export function decodeStateGroup(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    group: any;
+    group: string;
     label: string;
-    updated_at: any;
+    updated_at: bigint;
 };
 /**
  * @param {Uint8Array} bytes
