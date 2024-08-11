@@ -18,6 +18,7 @@
         "no-bitwise": "off",
         "no-param-reassign": "off",
         "no-nested-ternary": "off",
-        "no-restricted-syntax": "off"
+        "no-restricted-syntax": "off",
+        "max-len": "off"
     }
 }

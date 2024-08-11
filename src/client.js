@@ -31,6 +31,72 @@ function incrementSequence(sequence) {
 }
 
 /**
+ * @template T
+ * @template {boolean} ACK
+ * @param {ACK} isAckOnly
+ * @param {string} serialNumber
+ * @param {number} sequence
+ * @param {import('./commands.js').Decoder<T> | undefined} decode
+ * @param {number} defaultTimeoutMs
+ * @param {Map<string, (type: number, bytes: Uint8Array, ref: { current: number; }) => void>} responseHandlerMap
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<ACK extends true ? void : T>}
+ */
+function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeoutMs, responseHandlerMap, signal) {
+  const key = getResponseKey(serialNumber, sequence);
+
+  if (responseHandlerMap.has(key)) {
+    throw new Error('Conflict');
+  }
+
+  const { resolve, reject, promise } = PromiseWithResolvers();
+
+  function onAbort(/** @type {any} */ ...args) {
+    responseHandlerMap.delete(key);
+    reject(...args);
+  }
+
+  /** @type {any} */
+  let timeout;
+
+  if (signal) {
+    signal.addEventListener('abort', onAbort, { once: true });
+  } else {
+    timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
+  }
+
+  function cleanupOnResponse() {
+    if (signal) {
+      signal.removeEventListener('abort', onAbort);
+    } else {
+      clearTimeout(timeout);
+    }
+    responseHandlerMap.delete(key);
+  }
+
+  responseHandlerMap.set(key, (type, bytes, offsetRef) => {
+    if (type === Type.Acknowledgement) {
+      if (isAckOnly) {
+        cleanupOnResponse();
+        resolve(undefined);
+      }
+      return;
+    }
+    cleanupOnResponse();
+    if (type === Type.StateUnhandled) {
+      const requestType = decodeStateUnhandled(bytes, offsetRef);
+      reject(new Error(`Unhandled request type: ${requestType}`));
+      return;
+    }
+    if (!isAckOnly && decode) {
+      resolve(/** @type {T} */(decode(bytes, offsetRef)));
+    }
+  });
+
+  return promise;
+}
+
+/**
  * @param {{
  *   router: ReturnType<typeof import('./router.js').Router>;
  *   defaultTimeoutMs?: number;
@@ -47,107 +113,6 @@ export function Client(options) {
    * @type {Map<string, (type: number, bytes: Uint8Array, ref: { current: number; }) => void>}
    */
   const responseHandlerMap = new Map();
-
-  /**
-   * @param {string} serialNumber
-   * @param {number} sequence
-   * @param {AbortSignal} [signal]
-   */
-  function registerAckRequest(serialNumber, sequence, signal) {
-    const key = getResponseKey(serialNumber, sequence);
-
-    if (responseHandlerMap.has(key)) {
-      throw new Error('Conflict');
-    }
-
-    /** @typedef {typeof PromiseWithResolvers<void>} Resolvers */
-    const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
-
-    function onAbort(/** @type {any} */ ...args) {
-      responseHandlerMap.delete(key);
-      reject(...args);
-    }
-
-    /** @type {number} */
-    let timeout;
-
-    if (signal) {
-      signal.addEventListener('abort', onAbort, { once: true });
-    } else {
-      timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
-    }
-
-    responseHandlerMap.set(key, (type, bytes, offsetRef) => {
-      if (type === Type.Acknowledgement || type === Type.StateUnhandled) {
-        if (signal) {
-          signal.removeEventListener('abort', onAbort);
-        } else {
-          clearTimeout(timeout);
-        }
-        responseHandlerMap.delete(key);
-        if (type === Type.StateUnhandled) {
-          const requestType = decodeStateUnhandled(bytes, offsetRef);
-          reject(new Error(`Unhandled request type: ${requestType}`));
-          return;
-        }
-        resolve();
-      }
-    });
-
-    return promise;
-  }
-
-  /**
-   * @template T
-   * @param {string} serialNumber
-   * @param {number} sequence
-   * @param {import('./commands.js').Decoder<T>} decode
-   * @param {AbortSignal} [signal]
-   */
-  function registerRequest(serialNumber, sequence, decode, signal) {
-    const key = getResponseKey(serialNumber, sequence);
-
-    if (responseHandlerMap.has(key)) {
-      throw new Error('Conflict');
-    }
-
-    /** @typedef {typeof PromiseWithResolvers<T>} Resolvers */
-    const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
-
-    function onAbort(/** @type {any} */ ...args) {
-      responseHandlerMap.delete(key);
-      reject(...args);
-    }
-
-    /** @type {number} */
-    let timeout;
-
-    if (signal) {
-      signal.addEventListener('abort', onAbort, { once: true });
-    } else {
-      timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
-    }
-
-    responseHandlerMap.set(key, (type, bytes, offsetRef) => {
-      if (type === Type.Acknowledgement) {
-        return;
-      }
-      if (signal) {
-        signal.removeEventListener('abort', onAbort);
-      } else {
-        clearTimeout(timeout);
-      }
-      responseHandlerMap.delete(key);
-      if (type === Type.StateUnhandled) {
-        const requestType = decodeStateUnhandled(bytes, offsetRef);
-        reject(new Error(`Unhandled request type: ${requestType}`));
-        return;
-      }
-      resolve(decode(bytes, offsetRef));
-    });
-
-    return promise;
-  }
 
   let disposed = false;
 
@@ -224,7 +189,7 @@ export function Client(options) {
         command.payload,
       );
 
-      const promise = registerAckRequest(device.serialNumber, device.sequence, signal);
+      const promise = registerHandler(true, device.serialNumber, device.sequence, undefined, defaultTimeoutMs, responseHandlerMap, signal);
 
       device.sequence = incrementSequence(device.sequence);
 
@@ -252,7 +217,7 @@ export function Client(options) {
         command.payload,
       );
 
-      const promise = registerRequest(device.serialNumber, device.sequence, command.decode, signal);
+      const promise = registerHandler(false, device.serialNumber, device.sequence, command.decode, defaultTimeoutMs, responseHandlerMap, signal);
 
       device.sequence = incrementSequence(device.sequence);
 
