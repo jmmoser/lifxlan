@@ -121,7 +121,7 @@ export function SetColorCommand(hue: number, saturation: number, brightness: num
  * @param {number} skewRatio
  * @param {import('./constants.js').Waveform} waveform
  */
-export function SetWaveformCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import('./constants.js').Waveform): {
+export function SetWaveformCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform): {
     type: number;
     decode: typeof Encoding.decodeLightState;
 };
@@ -153,7 +153,7 @@ export function SetLightPowerCommand(level: number, duration: number): {
  * @param {boolean} setBrightness
  * @param {boolean} setKelvin
  */
-export function SetWaveformOptionalCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import('./constants.js').Waveform, setHue: boolean, setSaturation: boolean, setBrightness: boolean, setKelvin: boolean): {
+export function SetWaveformOptionalCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform, setHue: boolean, setSaturation: boolean, setBrightness: boolean, setKelvin: boolean): {
     type: number;
     payload: Uint8Array;
     decode: typeof Encoding.decodeStateLightPower;

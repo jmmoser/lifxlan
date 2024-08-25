@@ -6,14 +6,14 @@
  * }} options
  */
 export function Client(options: {
-    router: ReturnType<typeof import('./router.js').Router>;
+    router: ReturnType<typeof import("./router.js").Router>;
     defaultTimeoutMs?: number;
     source?: number;
 }): {
     readonly router: {
         nextSource(): number;
-        register(source: number, handler: import("./router.js").MessageHandler): void;
-        deregister(source: number, handler: import("./router.js").MessageHandler): void;
+        register(source: number, handler: MessageHandler): void;
+        deregister(source: number, handler: MessageHandler): void;
         send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
         receive(message: Uint8Array): {
             header: {
@@ -53,7 +53,7 @@ export function Client(options: {
      * @param {import('./commands.js').Command<T>} command
      * @param {import('./devices.js').Device} device
      */
-    unicast<T_1>(command: import("./commands.js").Command<T_1>, device: import('./devices.js').Device): void;
+    unicast<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device): void;
     /**
      * Send a command to a device and only require an acknowledgement.
      * @template T
@@ -62,7 +62,7 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<void>}
      */
-    sendOnlyAcknowledgement<T_2>(command: import("./commands.js").Command<T_2>, device: import('./devices.js').Device, signal?: AbortSignal): Promise<void>;
+    sendOnlyAcknowledgement<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal): Promise<void>;
     /**
      * Send a command to a device and require a response.
      * @template T
@@ -71,11 +71,11 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
-    send<T_3>(command: import("./commands.js").Command<T_3>, device: import('./devices.js').Device, signal?: AbortSignal): Promise<T_3>;
+    send<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal): Promise<T>;
     /**
      * @param {ReturnType<typeof import('./encoding.js').decodeHeader>} header
      * @param {Uint8Array} payload
      * @param {string} serialNumber
      */
-    onMessage(header: ReturnType<typeof import('./encoding.js').decodeHeader>, payload: Uint8Array, serialNumber: string): void;
+    onMessage(header: ReturnType<typeof import("./encoding.js").decodeHeader>, payload: Uint8Array, serialNumber: string): void;
 };

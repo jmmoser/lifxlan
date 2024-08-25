@@ -21,7 +21,7 @@ export function Groups(options?: {
      * @param {import('./devices').Device} device
      * @param {ReturnType<typeof import('./encoding').decodeStateGroup>} group
      */
-    register(device: import('./devices').Device, group: ReturnType<typeof import('./encoding').decodeStateGroup>): void;
+    register(device: import("./devices").Device, group: ReturnType<typeof import("./encoding").decodeStateGroup>): void;
     /**
      * @param {string} uuid
      */
@@ -29,11 +29,11 @@ export function Groups(options?: {
     /**
      * @param {import('./devices').Device} device
      */
-    removeDevice(device: import('./devices').Device): void;
+    removeDevice(device: import("./devices").Device): void;
     readonly registered: Map<string, Group>;
 };
 export type Group = {
     label: string;
     uuid: string;
-    devices: import('./devices').Device[];
+    devices: import("./devices").Device[];
 };
