@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.52",
+  "version": "0.0.53",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",
@@ -25,9 +25,9 @@
   "author": "Justin Moser",
   "license": "MIT",
   "devDependencies": {
-    "eslint": "^8.56.0",
-    "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-plugin-import": "^2.29.1",
-    "typescript": "^5.4.5"
+    "@eslint/js": "^9.9.1",
+    "eslint": "^9.9.1",
+    "globals": "^15.9.0",
+    "typescript": "^5.5.4"
   }
 }
