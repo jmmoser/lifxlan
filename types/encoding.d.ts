@@ -152,6 +152,29 @@ export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: {
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
+ * @returns
+ */
+export function decodeSetColor(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    reserved: Uint8Array;
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+    duration: number;
+};
+/**
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} duration
+ */
+export function encodeSetColor(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Uint8Array;
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
  */
 export function decodeLightState(bytes: Uint8Array, offsetRef: {
     current: number;

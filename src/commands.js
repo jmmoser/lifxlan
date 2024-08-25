@@ -209,16 +209,9 @@ export function GetColorCommand() {
  * @param {number} duration
  */
 export function SetColorCommand(hue, saturation, brightness, kelvin, duration) {
-  const payload = new Uint8Array(13);
-  const view = new DataView(payload.buffer);
-  view.setUint16(1, hue, true);
-  view.setUint16(3, saturation, true);
-  view.setUint16(5, brightness, true);
-  view.setUint16(7, kelvin, true);
-  view.setUint32(9, duration, true);
   return {
     type: Type.SetColor,
-    payload,
+    payload: Encoding.encodeSetColor(hue, saturation, brightness, kelvin, duration),
     decode: Encoding.decodeLightState,
   };
 }

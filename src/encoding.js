@@ -315,6 +315,46 @@ export function decodeStateUnhandled(bytes, offsetRef) {
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
  */
+export function decodeSetColor(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const reserved = decodeBytes(bytes, offsetRef, 1);
+  const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const duration = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  return {
+    reserved,
+    hue,
+    saturation,
+    brightness,
+    kelvin,
+    duration,
+  };
+}
+
+/**
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} duration
+ */
+export function encodeSetColor(hue, saturation, brightness, kelvin, duration) {
+  const payload = new Uint8Array(13);
+  const view = new DataView(payload.buffer);
+  view.setUint16(1, hue, true);
+  view.setUint16(3, saturation, true);
+  view.setUint16(5, brightness, true);
+  view.setUint16(7, kelvin, true);
+  view.setUint32(9, duration, true);
+  return payload;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
 export function decodeLightState(bytes, offsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
   const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
