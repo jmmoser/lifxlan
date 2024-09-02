@@ -130,10 +130,10 @@ export function GetLightPowerCommand(): {
     decode: typeof Encoding.decodeStateLightPower;
 };
 /**
- * @param {number} level
+ * @param {number | boolean} level
  * @param {number} duration
  */
-export function SetLightPowerCommand(level: number, duration: number): {
+export function SetLightPowerCommand(level: number | boolean, duration: number): {
     type: number;
     payload: Uint8Array;
     decode: typeof Encoding.decodeStateLightPower;

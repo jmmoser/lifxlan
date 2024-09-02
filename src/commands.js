@@ -263,13 +263,16 @@ export function GetLightPowerCommand() {
 }
 
 /**
- * @param {number} level
+ * @param {number | boolean} level
  * @param {number} duration
  */
 export function SetLightPowerCommand(level, duration) {
   const payload = new Uint8Array(6);
   const view = new DataView(payload.buffer);
-  view.setUint16(0, level, true);
+  const value = typeof level === 'number'
+    ? level
+    : level ? 65535 : 0;
+  view.setUint16(0, value, true);
   view.setUint32(2, duration, true);
   return {
     type: Type.SetLightPower,
