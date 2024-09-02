@@ -152,7 +152,6 @@ export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: {
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
- * @returns
  */
 export function decodeSetColor(bytes: Uint8Array, offsetRef: {
     current: number;
