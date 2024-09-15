@@ -176,6 +176,7 @@ export function SetGroupCommand(group, label, updatedAt) {
   view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
   return {
     type: Type.SetGroup,
+    payload,
     decode: Encoding.decodeStateGroup,
   };
 }
@@ -251,6 +252,7 @@ export function SetWaveformCommand(
   view.setUint8(20, waveform);
   return {
     type: Type.SetWaveform,
+    payload,
     decode: Encoding.decodeLightState,
   };
 }
@@ -396,6 +398,7 @@ export function SetHevCycleConfigurationCommand(indication, durationSeconds) {
   view.setUint32(1, durationSeconds, true);
   return {
     type: Type.SetHevCycleConfiguration,
+    payload,
     decode: Encoding.decodeStateHevCycleConfiguration,
   };
 }
