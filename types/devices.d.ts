@@ -35,7 +35,7 @@ export function Devices(options?: {
     onChanged?: (device: Device) => void;
     onRemoved?: (device: Device) => void;
     defaultTimeoutMs?: number;
-}): {
+} | undefined): {
     readonly registered: Map<string, Device>;
     /**
      * @param {string} serialNumber
@@ -44,7 +44,7 @@ export function Devices(options?: {
      * @param {Uint8Array} [target]
      * @returns {Device}
      */
-    register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
+    register(serialNumber: string, port: number, address: string, target?: Uint8Array | undefined): Device;
     /**
      * @param {string} serialNumber
      * @returns {boolean}
@@ -55,5 +55,5 @@ export function Devices(options?: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<Device>}
      */
-    get(serialNumber: string, signal?: AbortSignal): Promise<Device>;
+    get(serialNumber: string, signal?: AbortSignal | undefined): Promise<Device>;
 };

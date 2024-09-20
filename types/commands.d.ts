@@ -87,6 +87,7 @@ export function GetGroupCommand(): {
  */
 export function SetGroupCommand(group: Uint8Array | string, label: string, updatedAt: Date): {
     type: number;
+    payload: Uint8Array;
     decode: typeof Encoding.decodeStateGroup;
 };
 /**
@@ -123,6 +124,7 @@ export function SetColorCommand(hue: number, saturation: number, brightness: num
  */
 export function SetWaveformCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform): {
     type: number;
+    payload: Uint8Array;
     decode: typeof Encoding.decodeLightState;
 };
 export function GetLightPowerCommand(): {
@@ -190,6 +192,7 @@ export function GetHevCycleConfigurationCommand(): {
  */
 export function SetHevCycleConfigurationCommand(indication: boolean, durationSeconds: number): {
     type: number;
+    payload: Uint8Array;
     decode: typeof Encoding.decodeStateHevCycleConfiguration;
 };
 export function GetLastHevCycleResultCommand(): {

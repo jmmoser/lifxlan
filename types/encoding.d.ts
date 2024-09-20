@@ -8,7 +8,7 @@
  * @param {number} type
  * @param {Uint8Array} [payload]
  */
-export function encode(tagged: boolean, source: number, target: Uint8Array, resRequired: boolean, ackRequired: boolean, sequence: number, type: number, payload?: Uint8Array): Uint8Array;
+export function encode(tagged: boolean, source: number, target: Uint8Array, resRequired: boolean, ackRequired: boolean, sequence: number, type: number, payload?: Uint8Array | undefined): Uint8Array;
 /**
  * @param {Uint8Array} bytes
  * @param {number} offset
@@ -291,7 +291,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {number} [offset]
  */
-export function decodeHeader(bytes: Uint8Array, offset?: number): {
+export function decodeHeader(bytes: Uint8Array, offset?: number | undefined): {
     bytes: Uint8Array;
     size: number;
     protocol: number;
@@ -310,14 +310,14 @@ export function decodeHeader(bytes: Uint8Array, offset?: number): {
     reserved5: Uint8Array;
     type: number;
 };
-export function getHeaderSize(view: DataView, offset?: number): number;
-export function getHeaderFlags(view: DataView, offset?: number): number;
-export function getHeaderTagged(view: DataView, offset?: number): boolean;
-export function getHeaderSource(view: DataView, offset?: number): number;
-export function getHeaderTarget(bytes: Uint8Array, offset?: number): Uint8Array;
-export function getHeaderResponseFlags(view: DataView, offset?: number): number;
+export function getHeaderSize(view: DataView, offset?: number | undefined): number;
+export function getHeaderFlags(view: DataView, offset?: number | undefined): number;
+export function getHeaderTagged(view: DataView, offset?: number | undefined): boolean;
+export function getHeaderSource(view: DataView, offset?: number | undefined): number;
+export function getHeaderTarget(bytes: Uint8Array, offset?: number | undefined): Uint8Array;
+export function getHeaderResponseFlags(view: DataView, offset?: number | undefined): number;
 export function getHeaderResponseRequired(responseFlags: number): boolean;
 export function getHeaderAcknowledgeRequired(responseFlags: number): boolean;
-export function getHeaderType(view: DataView, offset?: number): number;
-export function getHeaderSequence(view: DataView, offset?: number): number;
-export function getPayload(bytes: Uint8Array, offset?: number): Uint8Array;
+export function getHeaderType(view: DataView, offset?: number | undefined): number;
+export function getHeaderSequence(view: DataView, offset?: number | undefined): number;
+export function getPayload(bytes: Uint8Array, offset?: number | undefined): Uint8Array;

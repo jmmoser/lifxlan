@@ -14,7 +14,7 @@ export function Client(options: {
         nextSource(): number;
         register(source: number, handler: MessageHandler): void;
         deregister(source: number, handler: MessageHandler): void;
-        send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+        send(message: Uint8Array, port: number, address: string, serialNumber?: string | undefined): void;
         receive(message: Uint8Array): {
             header: {
                 bytes: Uint8Array;
@@ -62,7 +62,7 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<void>}
      */
-    sendOnlyAcknowledgement<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal): Promise<void>;
+    sendOnlyAcknowledgement<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal | undefined): Promise<void>;
     /**
      * Send a command to a device and require a response.
      * @template T
@@ -71,7 +71,7 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
-    send<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal): Promise<T>;
+    send<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal | undefined): Promise<T>;
     /**
      * @param {ReturnType<typeof import('./encoding.js').decodeHeader>} header
      * @param {Uint8Array} payload

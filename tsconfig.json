@@ -10,8 +10,10 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": true,
-    "noEmit": true,
-    "strict": true
+    "strict": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./types"
   },
   "include": [
     "src/**/*.js"

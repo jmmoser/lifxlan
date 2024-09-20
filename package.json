@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.61",
+  "version": "0.0.62",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",
@@ -8,8 +8,8 @@
   "type": "module",
   "unpkg": "./dist/lifxlan.min.js",
   "scripts": {
-    "test": "node --test --experimental-test-coverage './tests/client.test.js' './tests/encoding.test.js'",
-    "types": "rm -rf ./types && npx -p typescript tsc src/index.js --declaration --allowJs --emitDeclarationOnly --outDir types",
+    "test": "node --test --experimental-test-coverage",
+    "types": "rm -rf ./types && tsc",
     "build": "bun build ./src/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]"
   },
   "keywords": [

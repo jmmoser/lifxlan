@@ -39,7 +39,7 @@ export function Router(options: {
      * @param {string} address
      * @param {string} [serialNumber]
      */
-    send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+    send(message: Uint8Array, port: number, address: string, serialNumber?: string | undefined): void;
     /**
      * @param {Uint8Array} message
      */
