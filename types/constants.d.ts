@@ -1,7 +1,7 @@
 export const PORT: 56700;
 export const BROADCAST_ADDRESS: "255.255.255.255";
 export const PRODUCTS_URL: "https://raw.githubusercontent.com/LIFX/products/master/products.json";
-export const NO_TARGET: Uint8Array;
+export const NO_TARGET: Uint8Array<ArrayBuffer>;
 export type ServiceType = number;
 export namespace ServiceType {
     let UDP: number;

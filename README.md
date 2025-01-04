@@ -4,7 +4,7 @@ Works with Node.js, Bun, and Deno.
 
 ### Examples
 
-#### Node.js / Bun
+#### Node.js / Bun (udp broadcast is not supported in Bun yet https://github.com/oven-sh/bun/issues/10381)
 ```javascript
 import dgram from 'node:dgram';
 import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
@@ -38,6 +38,7 @@ socket.on('message', (message, remote) => {
 const client = Client({ router });
 
 socket.once('listening', () => {
+  // Broadcast is not supported in Bun yet https://github.com/oven-sh/bun/issues/10381
   socket.setBroadcast(true);
   // Discover devices on the network
   client.broadcast(GetServiceCommand());

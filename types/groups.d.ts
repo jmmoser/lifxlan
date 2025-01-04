@@ -16,7 +16,7 @@ export function Groups(options?: {
     onAdded?: (group: Group) => void;
     onChanged?: (group: Group) => void;
     onRemoved?: (group: Group) => void;
-} | undefined): {
+}): {
     /**
      * @param {import('./devices').Device} device
      * @param {ReturnType<typeof import('./encoding').decodeStateGroup>} group

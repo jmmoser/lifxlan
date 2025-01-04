@@ -8,7 +8,7 @@
  * @param {number} type
  * @param {Uint8Array} [payload]
  */
-export function encode(tagged: boolean, source: number, target: Uint8Array, resRequired: boolean, ackRequired: boolean, sequence: number, type: number, payload?: Uint8Array | undefined): Uint8Array;
+export function encode(tagged: boolean, source: number, target: Uint8Array, resRequired: boolean, ackRequired: boolean, sequence: number, type: number, payload?: Uint8Array): Uint8Array<ArrayBuffer>;
 /**
  * @param {Uint8Array} bytes
  * @param {number} offset
@@ -26,7 +26,7 @@ export function encodeStringTo(bytes: Uint8Array, offset: number, value: string,
  * @param {string} value
  * @param {number} byteLength
  */
-export function encodeString(value: string, byteLength: number): Uint8Array;
+export function encodeString(value: string, byteLength: number): Uint8Array<ArrayBuffer>;
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
@@ -45,7 +45,7 @@ export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     build: Date;
-    reserved: Uint8Array;
+    reserved: Uint8Array<ArrayBufferLike>;
     version_minor: number;
     version_major: number;
 };
@@ -57,9 +57,9 @@ export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     signal: number;
-    reserved6: Uint8Array;
-    reserved7: Uint8Array;
-    reserved8: Uint8Array;
+    reserved6: Uint8Array<ArrayBufferLike>;
+    reserved7: Uint8Array<ArrayBufferLike>;
+    reserved8: Uint8Array<ArrayBufferLike>;
 };
 /**
  * @param {Uint8Array} bytes
@@ -69,7 +69,7 @@ export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     build: Date;
-    reserved6: Uint8Array;
+    reserved6: Uint8Array<ArrayBufferLike>;
     version_minor: number;
     version_major: number;
 };
@@ -115,7 +115,7 @@ export function decodeStateInfo(bytes: Uint8Array, offsetRef: {
 export function decodeStateLocation(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    location: Uint8Array;
+    location: Uint8Array<ArrayBufferLike>;
     label: string;
     updated_at: Date;
 };
@@ -141,7 +141,7 @@ export function decodeStateGroup(bytes: Uint8Array, offsetRef: {
  */
 export function decodeEchoResponse(bytes: Uint8Array, offsetRef: {
     current: number;
-}): Uint8Array;
+}): Uint8Array<ArrayBufferLike>;
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
@@ -156,7 +156,7 @@ export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: {
 export function decodeSetColor(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
-    reserved: Uint8Array;
+    reserved: Uint8Array<ArrayBufferLike>;
     hue: number;
     saturation: number;
     brightness: number;
@@ -170,7 +170,7 @@ export function decodeSetColor(bytes: Uint8Array, offsetRef: {
  * @param {number} kelvin
  * @param {number} duration
  */
-export function encodeSetColor(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Uint8Array;
+export function encodeSetColor(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Uint8Array<ArrayBuffer>;
 /**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
@@ -184,8 +184,8 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: {
     kelvin: number;
     power: number;
     label: string;
-    reserved2: Uint8Array;
-    reserved8: Uint8Array;
+    reserved2: Uint8Array<ArrayBufferLike>;
+    reserved8: Uint8Array<ArrayBufferLike>;
 };
 /**
  * @param {Uint8Array} bytes
@@ -251,20 +251,20 @@ export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: {
         accel_meas_x: number;
         accel_meas_y: number;
         accel_meas_z: number;
-        reserved6: Uint8Array;
+        reserved6: Uint8Array<ArrayBufferLike>;
         user_x: number;
         user_y: number;
         width: number;
         height: number;
-        reserved7: Uint8Array;
+        reserved7: Uint8Array<ArrayBufferLike>;
         device_version_vendor: number;
         device_version_product: number;
-        reserved8: Uint8Array;
+        reserved8: Uint8Array<ArrayBufferLike>;
         firmware_build: Date;
-        reversed9: Uint8Array;
+        reversed9: Uint8Array<ArrayBufferLike>;
         firmware_version_minor: number;
         firmware_version_major: number;
-        reserved10: Uint8Array;
+        reserved10: Uint8Array<ArrayBufferLike>;
     }[];
     tile_devices_count: number;
 };
@@ -276,7 +276,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: {
     current: number;
 }): {
     tile_index: number;
-    reserved6: Uint8Array;
+    reserved6: Uint8Array<ArrayBufferLike>;
     x: number;
     y: number;
     width: number;
@@ -291,33 +291,33 @@ export function decodeState64(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {number} [offset]
  */
-export function decodeHeader(bytes: Uint8Array, offset?: number | undefined): {
-    bytes: Uint8Array;
+export function decodeHeader(bytes: Uint8Array, offset?: number): {
+    bytes: Uint8Array<ArrayBufferLike>;
     size: number;
     protocol: number;
     addressable: boolean;
     tagged: boolean;
     origin: number;
     source: number;
-    target: Uint8Array;
-    reserved1: Uint8Array;
-    reserved2: Uint8Array;
+    target: Uint8Array<ArrayBufferLike>;
+    reserved1: Uint8Array<ArrayBufferLike>;
+    reserved2: Uint8Array<ArrayBufferLike>;
     res_required: boolean;
     ack_required: boolean;
     reserved3: number;
-    reserved4: Uint8Array;
+    reserved4: Uint8Array<ArrayBufferLike>;
     sequence: number;
-    reserved5: Uint8Array;
+    reserved5: Uint8Array<ArrayBufferLike>;
     type: number;
 };
-export function getHeaderSize(view: DataView, offset?: number | undefined): number;
-export function getHeaderFlags(view: DataView, offset?: number | undefined): number;
-export function getHeaderTagged(view: DataView, offset?: number | undefined): boolean;
-export function getHeaderSource(view: DataView, offset?: number | undefined): number;
-export function getHeaderTarget(bytes: Uint8Array, offset?: number | undefined): Uint8Array;
-export function getHeaderResponseFlags(view: DataView, offset?: number | undefined): number;
+export function getHeaderSize(view: DataView, offset?: number): number;
+export function getHeaderFlags(view: DataView, offset?: number): number;
+export function getHeaderTagged(view: DataView, offset?: number): boolean;
+export function getHeaderSource(view: DataView, offset?: number): number;
+export function getHeaderTarget(bytes: Uint8Array, offset?: number): Uint8Array<ArrayBufferLike>;
+export function getHeaderResponseFlags(view: DataView, offset?: number): number;
 export function getHeaderResponseRequired(responseFlags: number): boolean;
 export function getHeaderAcknowledgeRequired(responseFlags: number): boolean;
-export function getHeaderType(view: DataView, offset?: number | undefined): number;
-export function getHeaderSequence(view: DataView, offset?: number | undefined): number;
-export function getPayload(bytes: Uint8Array, offset?: number | undefined): Uint8Array;
+export function getHeaderType(view: DataView, offset?: number): number;
+export function getHeaderSequence(view: DataView, offset?: number): number;
+export function getPayload(bytes: Uint8Array, offset?: number): Uint8Array<ArrayBufferLike>;

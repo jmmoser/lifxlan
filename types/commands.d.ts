@@ -35,7 +35,7 @@ export function GetPowerCommand(): {
  */
 export function SetPowerCommand(power: number | boolean): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStatePower;
 };
 export function GetLabelCommand(): {
@@ -47,7 +47,7 @@ export function GetLabelCommand(): {
  */
 export function SetLabelCommand(label: string): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateLabel;
 };
 export function GetVersionCommand(): {
@@ -73,7 +73,7 @@ export function GetLocationCommand(): Command<ReturnType<typeof Encoding.decodeS
  */
 export function SetLocationCommand(location: Uint8Array | string, label: string, updatedAt: Date): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateLocation;
 };
 export function GetGroupCommand(): {
@@ -87,7 +87,7 @@ export function GetGroupCommand(): {
  */
 export function SetGroupCommand(group: Uint8Array | string, label: string, updatedAt: Date): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateGroup;
 };
 /**
@@ -108,7 +108,7 @@ export function GetColorCommand(): {
  */
 export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeLightState;
 };
 /**
@@ -124,7 +124,7 @@ export function SetColorCommand(hue: number, saturation: number, brightness: num
  */
 export function SetWaveformCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeLightState;
 };
 export function GetLightPowerCommand(): {
@@ -137,7 +137,7 @@ export function GetLightPowerCommand(): {
  */
 export function SetLightPowerCommand(level: number | boolean, duration: number): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateLightPower;
 };
 /**
@@ -157,7 +157,7 @@ export function SetLightPowerCommand(level: number | boolean, duration: number):
  */
 export function SetWaveformOptionalCommand(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform, setHue: boolean, setSaturation: boolean, setBrightness: boolean, setKelvin: boolean): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateLightPower;
 };
 export function GetInfraredCommand(): {
@@ -179,7 +179,7 @@ export function GetHevCycleCommand(): {
  */
 export function SetHevCycleCommand(enable: boolean, durationSeconds: number): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateHevCycle;
 };
 export function GetHevCycleConfigurationCommand(): {
@@ -192,7 +192,7 @@ export function GetHevCycleConfigurationCommand(): {
  */
 export function SetHevCycleConfigurationCommand(indication: boolean, durationSeconds: number): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateHevCycleConfiguration;
 };
 export function GetLastHevCycleResultCommand(): {
@@ -210,7 +210,7 @@ export function GetRPowerCommand(relayIndex: number): Command<ReturnType<typeof 
  */
 export function SetRPowerCommand(relayIndex: number, level: number): {
     type: number;
-    payload: Uint8Array;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeStateRPower;
 };
 export function GetDeviceChainCommand(): {

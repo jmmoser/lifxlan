@@ -14,28 +14,28 @@ export function Client(options: {
         nextSource(): number;
         register(source: number, handler: MessageHandler): void;
         deregister(source: number, handler: MessageHandler): void;
-        send(message: Uint8Array, port: number, address: string, serialNumber?: string | undefined): void;
+        send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
         receive(message: Uint8Array): {
             header: {
-                bytes: Uint8Array;
+                bytes: Uint8Array<ArrayBufferLike>;
                 size: number;
                 protocol: number;
                 addressable: boolean;
                 tagged: boolean;
                 origin: number;
                 source: number;
-                target: Uint8Array;
-                reserved1: Uint8Array;
-                reserved2: Uint8Array;
+                target: Uint8Array<ArrayBufferLike>;
+                reserved1: Uint8Array<ArrayBufferLike>;
+                reserved2: Uint8Array<ArrayBufferLike>;
                 res_required: boolean;
                 ack_required: boolean;
                 reserved3: number;
-                reserved4: Uint8Array;
+                reserved4: Uint8Array<ArrayBufferLike>;
                 sequence: number;
-                reserved5: Uint8Array;
+                reserved5: Uint8Array<ArrayBufferLike>;
                 type: number;
             };
-            payload: Uint8Array;
+            payload: Uint8Array<ArrayBufferLike>;
             serialNumber: string;
         };
     };
@@ -62,7 +62,7 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<void>}
      */
-    sendOnlyAcknowledgement<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal | undefined): Promise<void>;
+    sendOnlyAcknowledgement<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal): Promise<void>;
     /**
      * Send a command to a device and require a response.
      * @template T
@@ -71,7 +71,7 @@ export function Client(options: {
      * @param {AbortSignal} [signal]
      * @returns {Promise<T>}
      */
-    send<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal | undefined): Promise<T>;
+    send<T>(command: import("./commands.js").Command<T>, device: import("./devices.js").Device, signal?: AbortSignal): Promise<T>;
     /**
      * @param {ReturnType<typeof import('./encoding.js').decodeHeader>} header
      * @param {Uint8Array} payload

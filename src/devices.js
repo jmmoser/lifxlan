@@ -1,4 +1,4 @@
-import { PORT } from './constants.js';
+import { NO_TARGET, PORT } from './constants.js';
 import { PromiseWithResolvers } from './utils.js';
 
 /**
@@ -28,17 +28,16 @@ function convertSerialNumberToTarget(serialNumber) {
 
 /**
  * @param {{
- *   serialNumber: string;
  *   address: string;
+ *   serialNumber?: string;
  *   port?: number;
  *   target?: Uint8Array;
  *   sequence?: number;
  * }} config
- * @returns {Device}
  */
 export function Device(config) {
   config.port ??= PORT;
-  config.target ??= convertSerialNumberToTarget(config.serialNumber);
+  config.target ??= config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET;
   config.sequence = 0;
   return /** @type {Device} */ (config);
 }

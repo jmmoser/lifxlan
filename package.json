@@ -28,9 +28,9 @@
   "author": "Justin Moser",
   "license": "MIT",
   "devDependencies": {
-    "@eslint/js": "^9.11.1",
-    "eslint": "^9.11.1",
-    "globals": "^15.9.0",
-    "typescript": "^5.6.2"
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2"
   }
 }

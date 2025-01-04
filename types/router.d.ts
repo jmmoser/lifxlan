@@ -39,31 +39,31 @@ export function Router(options: {
      * @param {string} address
      * @param {string} [serialNumber]
      */
-    send(message: Uint8Array, port: number, address: string, serialNumber?: string | undefined): void;
+    send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
     /**
      * @param {Uint8Array} message
      */
     receive(message: Uint8Array): {
         header: {
-            bytes: Uint8Array;
+            bytes: Uint8Array<ArrayBufferLike>;
             size: number;
             protocol: number;
             addressable: boolean;
             tagged: boolean;
             origin: number;
             source: number;
-            target: Uint8Array;
-            reserved1: Uint8Array;
-            reserved2: Uint8Array;
+            target: Uint8Array<ArrayBufferLike>;
+            reserved1: Uint8Array<ArrayBufferLike>;
+            reserved2: Uint8Array<ArrayBufferLike>;
             res_required: boolean;
             ack_required: boolean;
             reserved3: number;
-            reserved4: Uint8Array;
+            reserved4: Uint8Array<ArrayBufferLike>;
             sequence: number;
-            reserved5: Uint8Array;
+            reserved5: Uint8Array<ArrayBufferLike>;
             type: number;
         };
-        payload: Uint8Array;
+        payload: Uint8Array<ArrayBufferLike>;
         serialNumber: string;
     };
 };
