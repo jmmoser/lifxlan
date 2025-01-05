@@ -50,7 +50,6 @@ describe('devices', () => {
     const devices = Devices();
 
     const devicePromise = devices.get(sharedDevice.serialNumber);
-
     expect(Bun.peek(devicePromise)).toEqual(devicePromise);
 
     devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
@@ -60,6 +59,24 @@ describe('devices', () => {
 
     const existingDevicePromise = devices.get(sharedDevice.serialNumber);
     expect(Bun.peek(existingDevicePromise)).toEqual(device);
+  });
+
+  test('get device with abort signal', async () => {
+    const devices = Devices();
+
+    const devicePromise = devices.get(sharedDevice.serialNumber, new AbortController().signal);
+    expect(Bun.peek(devicePromise)).toEqual(devicePromise);
+
+    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+
+    const device = await devicePromise;
+    expect(device).toEqual(sharedDevice);
+  });
+
+  test('get device aborts', async () => {
+    const devices = Devices();
+
+    expect(devices.get(sharedDevice.serialNumber, AbortSignal.timeout(0))).rejects.toEqual(new Error('Abort'));
   });
 
   test('remove device calls onRemoved', () => {

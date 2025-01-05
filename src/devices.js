@@ -128,7 +128,10 @@ export function Devices(options) {
       /** @typedef {typeof PromiseWithResolvers<Device>} Resolvers */
       const { resolve, reject, promise } = /** @type {Resolvers} */ (PromiseWithResolvers)();
 
-      function onAbort(/** @type {any} */ ...args) {
+      /**
+       * @param {any} errOrEvent
+       */
+      function onAbort(errOrEvent) {
         const resolvers = deviceResolvers.get(serialNumber);
         if (resolvers) {
           if (resolvers.size > 1) {
@@ -137,7 +140,7 @@ export function Devices(options) {
             deviceResolvers.delete(serialNumber);
           }
         }
-        reject(...args);
+        reject(errOrEvent instanceof Error ? errOrEvent : new Error('Abort'));
       }
 
       /** @type {any} */

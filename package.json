@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.64",
+  "version": "0.0.65",
   "description": "LIFX LAN protocol in JavaScript",
   "types": "./types/index.d.ts",
   "module": "./src/index.js",
@@ -8,6 +8,7 @@
   "type": "module",
   "unpkg": "./dist/lifxlan.min.js",
   "scripts": {
+    "test": "bun test --coverage",
     "node:test": "node --test --experimental-test-coverage",
     "types": "rm -rf ./types && tsc",
     "build": "bun build ./src/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]",
