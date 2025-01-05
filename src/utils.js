@@ -113,11 +113,25 @@ export function convertTargetToSerialNumber(slice) {
   for (let i = 0; i < length; i++) {
     const chunk = slice[i].toString(16);
     if (chunk.length < 2) {
-      // eslint-disable-next-line prefer-template
       str += '0' + chunk;
     } else {
       str += chunk;
     }
   }
   return str;
+}
+
+/**
+ * @param {string} serialNumber
+ */
+export function convertSerialNumberToTarget(serialNumber) {
+  if (serialNumber.length !== 12) {
+    throw new Error('Invalid serial number');
+  }
+  const target = new Uint8Array(6);
+  for (let i = 0; i < 6; i++) {
+    const offset = 2 * i;
+    target[i] = parseInt(serialNumber.slice(offset, offset + 2), 16);
+  }
+  return target;
 }

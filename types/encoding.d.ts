@@ -28,6 +28,12 @@ export function encodeStringTo(bytes: Uint8Array, offset: number, value: string,
  */
 export function encodeString(value: string, byteLength: number): Uint8Array<ArrayBuffer>;
 /**
+ * @param {DataView} view
+ * @param {number} offset
+ * @param {Date} date
+ */
+export function encodeTimestampTo(view: DataView, offset: number, date: Date): void;
+/**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
  */

@@ -129,6 +129,15 @@ function decodeString(bytes, offsetRef, maxLength) {
 }
 
 /**
+ * @param {DataView} view
+ * @param {number} offset
+ * @param {Date} date
+ */
+export function encodeTimestampTo(view, offset, date) {
+  view.setBigUint64(offset, BigInt(date.getTime()) * 1000000n, true);
+}
+
+/**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
  */

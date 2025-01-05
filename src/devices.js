@@ -1,5 +1,5 @@
 import { NO_TARGET, PORT } from './constants.js';
-import { PromiseWithResolvers } from './utils.js';
+import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils.js';
 
 /**
  * @typedef {{
@@ -10,21 +10,6 @@ import { PromiseWithResolvers } from './utils.js';
  *   sequence: number;
  * }} Device
  */
-
-/**
- * @param {string} serialNumber
- */
-function convertSerialNumberToTarget(serialNumber) {
-  if (serialNumber.length !== 12) {
-    throw new Error('Invalid serial number');
-  }
-  const target = new Uint8Array(6);
-  for (let i = 0; i < 6; i++) {
-    const offset = 2 * i;
-    target[i] = parseInt(serialNumber.slice(offset, offset + 2), 16);
-  }
-  return target;
-}
 
 /**
  * @param {{

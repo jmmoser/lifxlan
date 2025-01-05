@@ -139,8 +139,7 @@ export function SetLocationCommand(location, label, updatedAt) {
   }
 
   Encoding.encodeStringTo(payload, 16, label, 32);
-
-  view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
+  Encoding.encodeTimestampTo(view, 48, updatedAt);
 
   return {
     type: Type.SetLocation,
@@ -172,8 +171,8 @@ export function SetGroupCommand(group, label, updatedAt) {
   }
 
   Encoding.encodeStringTo(payload, 16, label, 32);
+  Encoding.encodeTimestampTo(view, 48, updatedAt);
 
-  view.setBigInt64(48, BigInt(updatedAt.getTime()) * 1000000n, true);
   return {
     type: Type.SetGroup,
     payload,
