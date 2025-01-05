@@ -314,18 +314,15 @@ function onMessage(message, remote) {
 broadcastSocket.on('message', onMessage);
 unicastSocket.on('message', onMessage);
 
-await Promise.all([
-  new Promise((resolve, reject) => {
-    broadcastSocket.once('error', reject);
-    broadcastSocket.once('listening', resolve);
-    broadcastSocket.bind();
-  }),
-  new Promise((resolve, reject) => {
-    unicastSocket.once('error', reject);
-    unicastSocket.once('listening', resolve);
-    unicastSocket.bind();
-  }),
-]);
+await Promise.all(
+  [broadcastSocket, unicastSocket].map((socket) => (
+    new Promise((resolve, reject) => {
+      socket.once('error', reject);
+      socket.once('listening', resolve);
+      socket.bind();
+    })),
+  ),
+);
 
 broadcastSocket.setBroadcast(true);
 
