@@ -1,4 +1,13 @@
 /**
+ * @typedef {{
+ *   address: string;
+ *   port: number;
+ *   target: Uint8Array;
+ *   serialNumber: string;
+ *   sequence: number;
+ * }} Device
+ */
+/**
  * @param {{
  *   address: string;
  *   serialNumber?: string;

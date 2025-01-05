@@ -38,4 +38,8 @@ export function convertSignalToRssi(signal: number): number;
  * @param {Uint8Array} slice
  */
 export function convertTargetToSerialNumber(slice: Uint8Array): string;
+/**
+ * @param {string} serialNumber
+ */
+export function convertSerialNumberToTarget(serialNumber: string): Uint8Array<ArrayBuffer>;
 export function NOOP(value: any): void;
