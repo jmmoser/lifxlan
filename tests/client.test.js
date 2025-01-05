@@ -5,9 +5,15 @@ import { Router } from '../src/router.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPowerCommand } from '../src/commands.js';
+import { GetPowerCommand, GetServiceCommand } from '../src/commands.js';
 
 describe('client', () => {
+  const sharedDevice = Device({
+    serialNumber: 'abcdef123456',
+    port: 1234,
+    address: '1.2.3.4',
+  });
+
   test('send', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
@@ -52,7 +58,6 @@ describe('client', () => {
         onSend(messsage) {
           const header = decodeHeader(messsage);
           assert.equal(header.source, client.source);
-          assert.equal(header.sequence, 0);
           client.router.receive(
             encode(
               header.tagged,
@@ -68,13 +73,9 @@ describe('client', () => {
       }),
     });
 
-    const device = Device({
-      serialNumber: 'abcdef123456',
-      port: 1234,
-      address: '1.2.3.4',
-    });
+    await client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice);
 
-    await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
+    await client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice, new AbortController().signal);
   });
 
   test('sendOnlyAcknowledgement with StateUnhandled response', async () => {
@@ -84,7 +85,6 @@ describe('client', () => {
         onSend(messsage) {
           const header = decodeHeader(messsage);
           assert.equal(header.source, client.source);
-          assert.equal(header.sequence, 0);
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, Type.StatePower, true);
           client.router.receive(
@@ -103,19 +103,64 @@ describe('client', () => {
       }),
     });
 
-    try {
-      const device = Device({
-        serialNumber: 'abcdef123456',
-        port: 1234,
-        address: '1.2.3.4',
-      });
+    await assert.rejects(() => client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice), new Error(`Unhandled request type: ${Type.StatePower}`));
+  });
 
-      await client.sendOnlyAcknowledgement(GetPowerCommand(), device);
-      assert.fail('should throw');
-    } catch (err) {
-      assert(err instanceof Error);
-      assert.match(err.message, /Unhandled/);
-    }
+  test('broadcast', () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    client.broadcast(GetServiceCommand());
+  });
+
+  test('unicast', () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    client.unicast(GetServiceCommand(), sharedDevice);
+  });
+
+  test('abort send', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const signal = AbortSignal.timeout(0);
+
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, signal), new Error('Abort'));
+  });
+
+  test('timeout send', async () => {
+    const client = Client({
+      defaultTimeoutMs: 1,
+      router: Router({
+        onSend() { },
+      }),
+    });
+
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice), new Error('Timeout'));
+  });
+
+  test('dispose', () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    client.dispose();
   });
 
   test('max number of inflight sendOnlyAcknowledgement requests', async () => {

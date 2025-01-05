@@ -51,9 +51,12 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
 
   const { resolve, reject, promise } = PromiseWithResolvers();
 
-  function onAbort(/** @type {any} */ ...args) {
+  /**
+   * @param {any} errOrEvent
+   */
+  function onAbort(errOrEvent) {
     responseHandlerMap.delete(key);
-    reject(...args);
+    reject(errOrEvent instanceof Error ? errOrEvent : new Error('Abort'));
   }
 
   /** @type {any} */
@@ -61,7 +64,7 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
 
   if (signal) {
     signal.addEventListener('abort', onAbort, { once: true });
-  } else {
+  } else if (defaultTimeoutMs > 0) {
     timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
   }
 
