@@ -13,7 +13,8 @@
     "strict": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outDir": "./types"
+    "outDir": "./types",
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*.js"
