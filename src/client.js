@@ -104,6 +104,7 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
  *   router: ReturnType<typeof import('./router.js').Router>;
  *   defaultTimeoutMs?: number;
  *   source?: number;
+ *   onMessage?: import('./router.js').MessageHandler;
  * }} options
  */
 export function Client(options) {
@@ -129,7 +130,7 @@ export function Client(options) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      router.deregister(source, client);
+      router.deregister(source, client.onMessage);
     },
     /**
      * Broadcast a command to the local network.
@@ -234,6 +235,10 @@ export function Client(options) {
      * @param {string} serialNumber
      */
     onMessage(header, payload, serialNumber) {
+      if (options.onMessage) {
+        options.onMessage(header, payload, serialNumber);
+      }
+
       const responseHandlerEntry = responseHandlerMap.get(
         getResponseKey(serialNumber, header.sequence),
       );
@@ -244,7 +249,7 @@ export function Client(options) {
     },
   };
 
-  router.register(source, client);
+  router.register(source, client.onMessage);
 
   return client;
 }

@@ -578,3 +578,34 @@ const groups = Groups({
   }
 });
 ```
+
+#### How to run a callback for every message received by a router
+```javascript
+import { Router } from 'lifxlan';
+
+const router = Router({
+  onMessage(header, payload, serialNumber) {
+    // Called for every message received by the router
+  },
+});
+```
+
+#### How to run a callback for every message received by a client
+```javascript
+import { Client, Router } from 'lifxlan';
+
+const router = Router({
+  onSend(message, port, address) {
+    // Send the message over the socket
+  },
+});
+
+const client = Client({
+  router,
+  onMessage(header, payload, serialNumber) {
+    // Called for every message received by the client
+  },
+});
+
+// ...
+```

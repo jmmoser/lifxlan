@@ -15,11 +15,13 @@
  *
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+ *   onMessage?: MessageHandler,
  *   handlers?: Map<number, MessageHandler>;
  * }} options
  */
 export function Router(options: {
     onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+    onMessage?: MessageHandler;
     handlers?: Map<number, MessageHandler>;
 }): {
     nextSource(): number;
@@ -67,7 +69,5 @@ export function Router(options: {
         serialNumber: string;
     };
 };
-export type MessageHandler = {
-    onMessage: (header: ReturnType<typeof decodeHeader>, payload: Uint8Array, serialNumber: string) => void;
-};
+export type MessageHandler = (header: ReturnType<typeof decodeHeader>, payload: Uint8Array, serialNumber: string) => void;
 import { decodeHeader } from './encoding.js';

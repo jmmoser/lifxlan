@@ -2,13 +2,11 @@ import { decodeHeader, getPayload } from './encoding.js';
 import { convertTargetToSerialNumber } from './utils.js';
 
 /**
- * @typedef {{
- *   onMessage: (
+ * @typedef {(
  *     header: ReturnType<typeof decodeHeader>,
  *     payload: Uint8Array,
  *     serialNumber: string,
- *   ) => void;
- * }} MessageHandler
+ *   ) => void} MessageHandler
  */
 
 const MAX_SOURCE = 0xFFFFFFFF;
@@ -33,6 +31,7 @@ const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
  *
  * @param {{
  *   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+ *   onMessage?: MessageHandler,
  *   handlers?: Map<number, MessageHandler>;
  * }} options
  */
@@ -106,7 +105,11 @@ export function Router(options) {
       const handler = handlers.get(header.source);
 
       if (handler) {
-        handler.onMessage(header, payload, serialNumber);
+        handler(header, payload, serialNumber);
+      }
+
+      if (options.onMessage) {
+        options.onMessage(header, payload, serialNumber);
       }
 
       return {

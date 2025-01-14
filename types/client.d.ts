@@ -3,12 +3,14 @@
  *   router: ReturnType<typeof import('./router.js').Router>;
  *   defaultTimeoutMs?: number;
  *   source?: number;
+ *   onMessage?: import('./router.js').MessageHandler;
  * }} options
  */
 export function Client(options: {
     router: ReturnType<typeof import("./router.js").Router>;
     defaultTimeoutMs?: number;
     source?: number;
+    onMessage?: import("./router.js").MessageHandler;
 }): {
     readonly router: {
         nextSource(): number;
