@@ -104,7 +104,7 @@ const devices = Devices();
 
 socket.on('message', (message, remote) => {
   const { header, serialNumber } = router.receive(message);
-  devices.register(serialNumber, remote.port, remote.hostname, header.target);
+  devices.register(serialNumber, remote.port, remote.address, header.target);
 });
 
 await new Promise((resolve, reject) => {
@@ -241,7 +241,7 @@ const devices = Devices();
 
 socket.on('message', (message, remote) => {
   const { header, serialNumber } = router.receive(message);
-  devices.register(serialNumber, remote.port, remote.hostname, header.target);
+  devices.register(serialNumber, remote.port, remote.address, header.target);
 });
 
 await new Promise((resolve, reject) => {
@@ -606,6 +606,4 @@ const client = Client({
     // Called for every message received by the client
   },
 });
-
-// ...
 ```
