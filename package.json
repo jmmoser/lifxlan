@@ -30,9 +30,9 @@
   "author": "Justin Moser",
   "license": "MIT",
   "devDependencies": {
-    "@types/bun": "^1.1.14",
-    "@types/node": "^22.10.5",
-    "oxlint": "^0.15.5",
-    "typescript": "^5.7.2"
+    "@types/bun": "^1.2.2",
+    "@types/node": "^22.13.0",
+    "oxlint": "^0.15.9",
+    "typescript": "^5.7.3"
   }
 }
