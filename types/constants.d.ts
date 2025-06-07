@@ -58,6 +58,13 @@ export namespace TileEffectType {
     export let FLAME: number;
     let RESERVED2_2: number;
     export { RESERVED2_2 as RESERVED2 };
+    export let SKY: number;
+}
+export type TileEffectSkyType = number;
+export namespace TileEffectSkyType {
+    let SUNRISE: number;
+    let SUNSET: number;
+    let CLOUDS: number;
 }
 export type Waveform = number;
 export namespace Waveform {
@@ -132,6 +139,7 @@ export namespace Type {
     let StateRPower: number;
     let GetDeviceChain: number;
     let StateDeviceChain: number;
+    let SetUserPosition: number;
     let Get64: number;
     let State64: number;
     let Set64: number;

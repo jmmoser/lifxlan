@@ -79,6 +79,17 @@ export const TileEffectType = {
   MORPH: 2,
   FLAME: 3,
   RESERVED2: 4,
+  SKY: 5,
+};
+
+/**
+ * @readonly
+ * @enum {number}
+ */
+export const TileEffectSkyType = {
+  SUNRISE: 0,
+  SUNSET: 1,
+  CLOUDS: 2,
 };
 
 /**
@@ -169,6 +180,7 @@ export const Type = {
   /** Tile */
   GetDeviceChain: 701,
   StateDeviceChain: 702,
+  SetUserPosition: 703,
   Get64: 707,
   State64: 711,
   Set64: 715,

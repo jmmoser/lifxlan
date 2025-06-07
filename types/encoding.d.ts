@@ -297,6 +297,110 @@ export function decodeState64(bytes: Uint8Array, offsetRef: {
  * @param {Uint8Array} bytes
  * @param {number} [offset]
  */
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateZone(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    zones_count: number;
+    zone_index: number;
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    zones_count: number;
+    zone_index: number;
+    colors: {
+        hue: number;
+        saturation: number;
+        brightness: number;
+        kelvin: number;
+    }[];
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    instanceid: number;
+    type: number;
+    reserved6: Uint8Array<ArrayBufferLike>;
+    speed: number;
+    duration: bigint;
+    reserved7: Uint8Array<ArrayBufferLike>;
+    reserved8: Uint8Array<ArrayBufferLike>;
+    parameters: Uint8Array<ArrayBufferLike>;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    zones_count: number;
+    zone_index: number;
+    colors_count: number;
+    colors: {
+        hue: number;
+        saturation: number;
+        brightness: number;
+        kelvin: number;
+    }[];
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    reserved0: number;
+    instanceid: number;
+    type: number;
+    speed: number;
+    duration: bigint;
+    reserved1: Uint8Array<ArrayBufferLike>;
+    reserved2: Uint8Array<ArrayBufferLike>;
+    skyType: number;
+    reserved3: Uint8Array<ArrayBufferLike>;
+    cloudSaturationMin: number;
+    reserved4: Uint8Array<ArrayBufferLike>;
+    cloudSaturationMax: number;
+    reserved5: Uint8Array<ArrayBufferLike>;
+    palette_count: number;
+    palette: {
+        hue: number;
+        saturation: number;
+        brightness: number;
+        kelvin: number;
+    }[];
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: {
+    current: number;
+}): {
+    lux: number;
+};
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} [offset]
+ */
 export function decodeHeader(bytes: Uint8Array, offset?: number): {
     bytes: Uint8Array<ArrayBufferLike>;
     size: number;

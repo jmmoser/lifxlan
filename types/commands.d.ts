@@ -217,9 +217,136 @@ export function GetDeviceChainCommand(): {
     type: number;
     decode: typeof Encoding.decodeStateDeviceChain;
 };
-export function Get64Command(): {
+/**
+ * @param {number} tileIndex
+ * @param {number} length
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ */
+export function Get64Command(tileIndex: number, length: number, x: number, y: number, width: number): {
     type: number;
+    payload: Uint8Array<ArrayBuffer>;
     decode: typeof Encoding.decodeState64;
+};
+/**
+ * @param {number} startIndex
+ * @param {number} endIndex
+ */
+export function GetColorZonesCommand(startIndex: number, endIndex: number): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: typeof Encoding.decodeStateMultiZone;
+};
+/**
+ * @param {number} startIndex
+ * @param {number} endIndex
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} duration
+ * @param {import('./constants.js').MultiZoneApplicationRequest} apply
+ */
+export function SetColorZonesCommand(startIndex: number, endIndex: number, hue: number, saturation: number, brightness: number, kelvin: number, duration: number, apply: import("./constants.js").MultiZoneApplicationRequest): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: typeof Encoding.decodeStateMultiZone;
+};
+export function GetMultiZoneEffectCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateMultiZoneEffect;
+};
+/**
+ * @param {number} instanceid
+ * @param {import('./constants.js').MultiZoneEffectType} effectType
+ * @param {number} speed
+ * @param {bigint} duration
+ * @param {Uint8Array} parameters
+ */
+export function SetMultiZoneEffectCommand(instanceid: number, effectType: import("./constants.js").MultiZoneEffectType, speed: number, duration: bigint, parameters: Uint8Array): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: typeof Encoding.decodeStateMultiZoneEffect;
+};
+export function GetExtendedColorZonesCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeStateExtendedColorZones;
+};
+/**
+ * @param {number} duration
+ * @param {import('./constants.js').MultiZoneExtendedApplicationRequest} apply
+ * @param {number} zoneIndex
+ * @param {number} colorsCount
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} colors
+ */
+export function SetExtendedColorZonesCommand(duration: number, apply: import("./constants.js").MultiZoneExtendedApplicationRequest, zoneIndex: number, colorsCount: number, colors: {
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+}[]): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: typeof Encoding.decodeStateExtendedColorZones;
+};
+/**
+ * @param {number} tileIndex
+ * @param {number} userX
+ * @param {number} userY
+ */
+export function SetUserPositionCommand(tileIndex: number, userX: number, userY: number): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: (value: any) => void;
+};
+/**
+ * @param {number} tileIndex
+ * @param {number} length
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} duration
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} colors
+ */
+export function Set64Command(tileIndex: number, length: number, x: number, y: number, width: number, duration: number, colors: {
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+}[]): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: (value: any) => void;
+};
+export function GetTileEffectCommand(): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: typeof Encoding.decodeStateTileEffect;
+};
+/**
+ * @param {number} instanceid
+ * @param {import('./constants.js').TileEffectType} effectType
+ * @param {number} speed
+ * @param {bigint} duration
+ * @param {import('./constants.js').TileEffectSkyType} skyType
+ * @param {number} cloudSaturationMin
+ * @param {number} paletteCount
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} palette
+ */
+export function SetTileEffectCommand(instanceid: number, effectType: import("./constants.js").TileEffectType, speed: number, duration: bigint, skyType: import("./constants.js").TileEffectSkyType, cloudSaturationMin: number, paletteCount: number, palette: {
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+}[]): {
+    type: number;
+    payload: Uint8Array<ArrayBuffer>;
+    decode: typeof Encoding.decodeStateTileEffect;
+};
+export function SensorGetAmbientLightCommand(): {
+    type: number;
+    decode: typeof Encoding.decodeSensorStateAmbientLight;
 };
 export type Decoder<OutputType> = (bytes: Uint8Array, offsetRef: {
     current: number;

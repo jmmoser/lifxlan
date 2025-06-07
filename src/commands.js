@@ -83,7 +83,7 @@ export function GetLabelCommand() {
  */
 export function SetLabelCommand(label) {
   return {
-    type: Type.GetLabel,
+    type: Type.SetLabel,
     payload: Encoding.encodeString(label, 32),
     decode: Encoding.decodeStateLabel,
   };
@@ -447,9 +447,263 @@ export function GetDeviceChainCommand() {
   };
 }
 
-export function Get64Command() {
+/**
+ * @param {number} tileIndex
+ * @param {number} length
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ */
+export function Get64Command(tileIndex, length, x, y, width) {
+  const payload = new Uint8Array(6);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, tileIndex);
+  view.setUint8(1, length);
+  view.setUint8(2, 0); // reserved
+  view.setUint8(3, x);
+  view.setUint8(4, y);
+  view.setUint8(5, width);
   return {
     type: Type.Get64,
+    payload,
     decode: Encoding.decodeState64,
+  };
+}
+
+/**
+ * @param {number} startIndex
+ * @param {number} endIndex
+ */
+export function GetColorZonesCommand(startIndex, endIndex) {
+  const payload = new Uint8Array(2);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, startIndex);
+  view.setUint8(1, endIndex);
+  return {
+    type: Type.GetColorZones,
+    payload,
+    decode: Encoding.decodeStateMultiZone,
+  };
+}
+
+/**
+ * @param {number} startIndex
+ * @param {number} endIndex
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} duration
+ * @param {import('./constants.js').MultiZoneApplicationRequest} apply
+ */
+export function SetColorZonesCommand(startIndex, endIndex, hue, saturation, brightness, kelvin, duration, apply) {
+  const payload = new Uint8Array(15);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, startIndex);
+  view.setUint8(1, endIndex);
+  view.setUint16(2, hue, true);
+  view.setUint16(4, saturation, true);
+  view.setUint16(6, brightness, true);
+  view.setUint16(8, kelvin, true);
+  view.setUint32(10, duration, true);
+  view.setUint8(14, apply);
+  return {
+    type: Type.SetColorZones,
+    payload,
+    decode: Encoding.decodeStateMultiZone,
+  };
+}
+
+export function GetMultiZoneEffectCommand() {
+  return {
+    type: Type.GetMultiZoneEffect,
+    decode: Encoding.decodeStateMultiZoneEffect,
+  };
+}
+
+/**
+ * @param {number} instanceid
+ * @param {import('./constants.js').MultiZoneEffectType} effectType
+ * @param {number} speed
+ * @param {bigint} duration
+ * @param {Uint8Array} parameters
+ */
+export function SetMultiZoneEffectCommand(instanceid, effectType, speed, duration, parameters) {
+  const payload = new Uint8Array(59);
+  const view = new DataView(payload.buffer);
+  view.setUint32(0, instanceid, true);
+  view.setUint8(4, effectType);
+  view.setUint8(5, 0); // reserved
+  view.setUint8(6, 0); // reserved
+  view.setUint32(7, speed, true);
+  view.setBigUint64(11, duration, true);
+  view.setUint32(19, 0); // reserved
+  view.setUint32(23, 0); // reserved
+  payload.set(parameters.slice(0, 32), 27);
+  return {
+    type: Type.SetMultiZoneEffect,
+    payload,
+    decode: Encoding.decodeStateMultiZoneEffect,
+  };
+}
+
+export function GetExtendedColorZonesCommand() {
+  return {
+    type: Type.GetExtendedColorZones,
+    decode: Encoding.decodeStateExtendedColorZones,
+  };
+}
+
+/**
+ * @param {number} duration
+ * @param {import('./constants.js').MultiZoneExtendedApplicationRequest} apply
+ * @param {number} zoneIndex
+ * @param {number} colorsCount
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} colors
+ */
+export function SetExtendedColorZonesCommand(duration, apply, zoneIndex, colorsCount, colors) {
+  const payload = new Uint8Array(664);
+  const view = new DataView(payload.buffer);
+  view.setUint32(0, duration, true);
+  view.setUint8(4, apply);
+  view.setUint16(5, zoneIndex, true);
+  view.setUint8(7, colorsCount);
+  
+  for (let i = 0; i < 82; i++) {
+    const color = colors[i] || { hue: 0, saturation: 0, brightness: 0, kelvin: 0 };
+    const offset = 8 + (i * 8);
+    view.setUint16(offset, color.hue, true);
+    view.setUint16(offset + 2, color.saturation, true);
+    view.setUint16(offset + 4, color.brightness, true);
+    view.setUint16(offset + 6, color.kelvin, true);
+  }
+  
+  return {
+    type: Type.SetExtendedColorZones,
+    payload,
+    decode: Encoding.decodeStateExtendedColorZones,
+  };
+}
+
+/**
+ * @param {number} tileIndex
+ * @param {number} userX
+ * @param {number} userY
+ */
+export function SetUserPositionCommand(tileIndex, userX, userY) {
+  const payload = new Uint8Array(11);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, tileIndex);
+  view.setUint8(1, 0); // reserved
+  view.setUint8(2, 0); // reserved
+  view.setFloat32(3, userX, true);
+  view.setFloat32(7, userY, true);
+  return {
+    type: Type.SetUserPosition,
+    payload,
+    decode: NOOP,
+  };
+}
+
+/**
+ * @param {number} tileIndex
+ * @param {number} length
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} duration
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} colors
+ */
+export function Set64Command(tileIndex, length, x, y, width, duration, colors) {
+  const payload = new Uint8Array(522);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, tileIndex);
+  view.setUint8(1, length);
+  view.setUint8(2, 0); // reserved
+  view.setUint8(3, x);
+  view.setUint8(4, y);
+  view.setUint8(5, width);
+  view.setUint32(6, duration, true);
+  
+  for (let i = 0; i < 64; i++) {
+    const color = colors[i] || { hue: 0, saturation: 0, brightness: 0, kelvin: 0 };
+    const offset = 10 + (i * 8);
+    view.setUint16(offset, color.hue, true);
+    view.setUint16(offset + 2, color.saturation, true);
+    view.setUint16(offset + 4, color.brightness, true);
+    view.setUint16(offset + 6, color.kelvin, true);
+  }
+  
+  return {
+    type: Type.Set64,
+    payload,
+    decode: NOOP,
+  };
+}
+
+export function GetTileEffectCommand() {
+  const payload = new Uint8Array(2);
+  payload[0] = 0; // reserved6
+  payload[1] = 0; // reserved7
+  return {
+    type: Type.GetTileEffect,
+    payload,
+    decode: Encoding.decodeStateTileEffect,
+  };
+}
+
+/**
+ * @param {number} instanceid
+ * @param {import('./constants.js').TileEffectType} effectType
+ * @param {number} speed
+ * @param {bigint} duration
+ * @param {import('./constants.js').TileEffectSkyType} skyType
+ * @param {number} cloudSaturationMin
+ * @param {number} paletteCount
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} palette
+ */
+export function SetTileEffectCommand(instanceid, effectType, speed, duration, skyType, cloudSaturationMin, paletteCount, palette) {
+  const payload = new Uint8Array(188);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, 0); // reserved0
+  view.setUint8(1, 0); // reserved1
+  view.setUint32(2, instanceid, true);
+  view.setUint8(6, effectType);
+  view.setUint32(7, speed, true);
+  view.setBigUint64(11, duration, true);
+  view.setUint32(19, 0); // reserved2
+  view.setUint32(23, 0); // reserved3
+  view.setUint8(27, skyType);
+  view.setUint8(28, 0); // reserved4[0]
+  view.setUint8(29, 0); // reserved4[1]
+  view.setUint8(30, 0); // reserved4[2]
+  view.setUint8(31, cloudSaturationMin);
+  view.setUint32(32, 0); // reserved5 (first 3 bytes)
+  view.setUint32(35, 0); // reserved6 (24 bytes, filling with zeros)
+  view.setUint32(51, 0); 
+  view.setUint32(55, 0);
+  view.setUint32(59, 0);
+  view.setUint8(59, paletteCount);
+  
+  for (let i = 0; i < 16; i++) {
+    const color = palette[i] || { hue: 0, saturation: 0, brightness: 0, kelvin: 0 };
+    const offset = 60 + (i * 8);
+    view.setUint16(offset, color.hue, true);
+    view.setUint16(offset + 2, color.saturation, true);
+    view.setUint16(offset + 4, color.brightness, true);
+    view.setUint16(offset + 6, color.kelvin, true);
+  }
+  
+  return {
+    type: Type.SetTileEffect,
+    payload,
+    decode: Encoding.decodeStateTileEffect,
+  };
+}
+
+export function SensorGetAmbientLightCommand() {
+  return {
+    type: Type.SensorGetAmbientLight,
+    decode: Encoding.decodeSensorStateAmbientLight,
   };
 }

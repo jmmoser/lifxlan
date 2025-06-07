@@ -557,6 +557,171 @@ export function decodeState64(bytes, offsetRef) {
 }
 
 /**
+ * @param {Uint8Array} bytes
+ * @param {number} [offset]
+ */
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateZone(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const zones_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const zone_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  return {
+    zones_count,
+    zone_index,
+    hue,
+    saturation,
+    brightness,
+    kelvin,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateMultiZone(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const zones_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const zone_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
+
+  const colors = [];
+  for (let i = 0; i < 8; i++) {
+    const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    colors.push({ hue, saturation, brightness, kelvin });
+  }
+
+  return {
+    zones_count,
+    zone_index,
+    colors,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateMultiZoneEffect(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const instanceid = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const type = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const reserved6 = decodeBytes(bytes, offsetRef, 2);
+  const speed = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const duration = view.getBigUint64(offsetRef.current, true); offsetRef.current += 8;
+  const reserved7 = decodeBytes(bytes, offsetRef, 4);
+  const reserved8 = decodeBytes(bytes, offsetRef, 4);
+  const parameters = decodeBytes(bytes, offsetRef, 32);
+  return {
+    instanceid,
+    type,
+    reserved6,
+    speed,
+    duration,
+    reserved7,
+    reserved8,
+    parameters,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateExtendedColorZones(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const zones_count = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const zone_index = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const colors_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
+
+  const colors = [];
+  for (let i = 0; i < 82; i++) {
+    const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    colors.push({ hue, saturation, brightness, kelvin });
+  }
+
+  return {
+    zones_count,
+    zone_index,
+    colors_count,
+    colors,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeStateTileEffect(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const reserved0 = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const instanceid = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const type = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const speed = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
+  const duration = view.getBigUint64(offsetRef.current, true); offsetRef.current += 8;
+  const reserved1 = decodeBytes(bytes, offsetRef, 4);
+  const reserved2 = decodeBytes(bytes, offsetRef, 4);
+  const skyType = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const reserved3 = decodeBytes(bytes, offsetRef, 3);
+  const cloudSaturationMin = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const reserved4 = decodeBytes(bytes, offsetRef, 3);
+  const cloudSaturationMax = view.getUint8(offsetRef.current); offsetRef.current += 1;
+  const reserved5 = decodeBytes(bytes, offsetRef, 23);
+  const palette_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
+
+  const palette = [];
+  for (let i = 0; i < 16; i++) {
+    const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    const kelvin = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+    palette.push({ hue, saturation, brightness, kelvin });
+  }
+
+  return {
+    reserved0,
+    instanceid,
+    type,
+    speed,
+    duration,
+    reserved1,
+    reserved2,
+    skyType,
+    reserved3,
+    cloudSaturationMin,
+    reserved4,
+    cloudSaturationMax,
+    reserved5,
+    palette_count,
+    palette,
+  };
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {{ current: number; }} offsetRef
+ */
+export function decodeSensorStateAmbientLight(bytes, offsetRef) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const lux = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
+  return {
+    lux,
+  };
+}
+
+/**
  * @param {DataView} view
  * @param {number} [offset]
  */
