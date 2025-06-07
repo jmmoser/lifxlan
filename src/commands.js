@@ -682,7 +682,6 @@ export function SetTileEffectCommand(instanceid, effectType, speed, duration, sk
   view.setUint32(35, 0); // reserved6 (24 bytes, filling with zeros)
   view.setUint32(51, 0); 
   view.setUint32(55, 0);
-  view.setUint32(59, 0);
   view.setUint8(59, paletteCount);
   
   for (let i = 0; i < 16; i++) {

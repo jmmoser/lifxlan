@@ -76,7 +76,7 @@ const textEncoder = new TextEncoder();
  * @param {number} byteLength
  */
 export function encodeStringTo(bytes, offset, value, byteLength) {
-  textEncoder.encodeInto(value, bytes);
+  textEncoder.encodeInto(value, bytes.subarray(offset));
   if (value.length < byteLength) {
     bytes[offset + value.length] = 0;
   }
@@ -482,7 +482,7 @@ export function decodeStateDeviceChain(bytes, offsetRef) {
     const device_version_product = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
     const reserved8 = decodeBytes(bytes, offsetRef, 4);
     const firmware_build = decodeTimestamp(bytes, offsetRef);
-    const reversed9 = decodeBytes(bytes, offsetRef, 8);
+    const reserved9 = decodeBytes(bytes, offsetRef, 8);
     const firmware_version_minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
     const firmware_version_major = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
     const reserved10 = decodeBytes(bytes, offsetRef, 4);
@@ -500,7 +500,7 @@ export function decodeStateDeviceChain(bytes, offsetRef) {
       device_version_product,
       reserved8,
       firmware_build,
-      reversed9,
+      reserved9,
       firmware_version_minor,
       firmware_version_major,
       reserved10,

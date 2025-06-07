@@ -21,6 +21,25 @@ describe('encoding', () => {
     ]));
   });
 
+  test('encodeStringTo with offset', () => {
+    const bytes = new Uint8Array(20);
+    bytes.fill(0xff); // Fill with non-zero values to detect offset bug
+    
+    Encoding.encodeStringTo(bytes, 10, 'test', 8);
+    
+    // First 10 bytes should remain 0xff
+    assert.deepEqual(bytes.subarray(0, 10), new Uint8Array(10).fill(0xff));
+    
+    // Next 4 bytes should be 'test' (0x74, 0x65, 0x73, 0x74)
+    assert.deepEqual(bytes.subarray(10, 14), new Uint8Array([0x74, 0x65, 0x73, 0x74]));
+    
+    // Byte at offset 14 should be null terminator
+    assert.equal(bytes[14], 0);
+    
+    // Remaining bytes should be 0xff
+    assert.deepEqual(bytes.subarray(15), new Uint8Array(5).fill(0xff));
+  });
+
   test('decode', () => {
     const bytes = new Uint8Array([
       0x24, 0x00, 0x00, 0x34, 0x99, 0x9c, 0x8c, 0xc9,

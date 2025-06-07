@@ -267,7 +267,7 @@ export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: {
         device_version_product: number;
         reserved8: Uint8Array<ArrayBufferLike>;
         firmware_build: Date;
-        reversed9: Uint8Array<ArrayBufferLike>;
+        reserved9: Uint8Array<ArrayBufferLike>;
         firmware_version_minor: number;
         firmware_version_major: number;
         reserved10: Uint8Array<ArrayBufferLike>;
