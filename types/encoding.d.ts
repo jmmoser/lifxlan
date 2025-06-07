@@ -178,6 +178,167 @@ export function decodeSetColor(bytes: Uint8Array, offsetRef: {
  */
 export function encodeSetColor(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Uint8Array<ArrayBuffer>;
 /**
+ * @param {number | boolean} power
+ */
+export function encodeSetPower(power: number | boolean): Uint8Array<ArrayBuffer>;
+/**
+ * @param {Uint8Array | string} location
+ * @param {string} label
+ * @param {Date} updatedAt
+ */
+export function encodeSetLocation(location: Uint8Array | string, label: string, updatedAt: Date): Uint8Array<ArrayBuffer>;
+/**
+ * @param {Uint8Array | string} group
+ * @param {string} label
+ * @param {Date} updatedAt
+ */
+export function encodeSetGroup(group: Uint8Array | string, label: string, updatedAt: Date): Uint8Array<ArrayBuffer>;
+/**
+ * @param {Uint8Array} echoing
+ */
+export function encodeEchoRequest(echoing: Uint8Array): Uint8Array<ArrayBuffer>;
+/**
+ * @param {boolean} transient
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} period
+ * @param {number} cycles
+ * @param {number} skewRatio
+ * @param {import('./constants.js').Waveform} waveform
+ */
+export function encodeSetWaveform(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number | boolean} level
+ * @param {number} duration
+ */
+export function encodeSetLightPower(level: number | boolean, duration: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {boolean} transient
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} period
+ * @param {number} cycles
+ * @param {number} skewRatio
+ * @param {import('./constants.js').Waveform} waveform
+ * @param {boolean} setHue
+ * @param {boolean} setSaturation
+ * @param {boolean} setBrightness
+ * @param {boolean} setKelvin
+ */
+export function encodeSetWaveformOptional(transient: boolean, hue: number, saturation: number, brightness: number, kelvin: number, period: number, cycles: number, skewRatio: number, waveform: import("./constants.js").Waveform, setHue: boolean, setSaturation: boolean, setBrightness: boolean, setKelvin: boolean): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} brightness
+ */
+export function encodeSetInfrared(brightness: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {boolean} enable
+ * @param {number} durationSeconds
+ */
+export function encodeSetHevCycle(enable: boolean, durationSeconds: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {boolean} indication
+ * @param {number} durationSeconds
+ */
+export function encodeSetHevCycleConfiguration(indication: boolean, durationSeconds: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} relayIndex
+ */
+export function encodeGetRPower(relayIndex: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} relayIndex
+ * @param {number} level
+ */
+export function encodeSetRPower(relayIndex: number, level: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} tileIndex
+ * @param {number} length
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ */
+export function encodeGet64(tileIndex: number, length: number, x: number, y: number, width: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} startIndex
+ * @param {number} endIndex
+ */
+export function encodeGetColorZones(startIndex: number, endIndex: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} startIndex
+ * @param {number} endIndex
+ * @param {number} hue
+ * @param {number} saturation
+ * @param {number} brightness
+ * @param {number} kelvin
+ * @param {number} duration
+ * @param {import('./constants.js').MultiZoneApplicationRequest} apply
+ */
+export function encodeSetColorZones(startIndex: number, endIndex: number, hue: number, saturation: number, brightness: number, kelvin: number, duration: number, apply: import("./constants.js").MultiZoneApplicationRequest): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} instanceid
+ * @param {import('./constants.js').MultiZoneEffectType} effectType
+ * @param {number} speed
+ * @param {bigint} duration
+ * @param {Uint8Array} parameters
+ */
+export function encodeSetMultiZoneEffect(instanceid: number, effectType: import("./constants.js").MultiZoneEffectType, speed: number, duration: bigint, parameters: Uint8Array): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} duration
+ * @param {import('./constants.js').MultiZoneExtendedApplicationRequest} apply
+ * @param {number} zoneIndex
+ * @param {number} colorsCount
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} colors
+ */
+export function encodeSetExtendedColorZones(duration: number, apply: import("./constants.js").MultiZoneExtendedApplicationRequest, zoneIndex: number, colorsCount: number, colors: {
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+}[]): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} tileIndex
+ * @param {number} userX
+ * @param {number} userY
+ */
+export function encodeSetUserPosition(tileIndex: number, userX: number, userY: number): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} tileIndex
+ * @param {number} length
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} duration
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} colors
+ */
+export function encodeSet64(tileIndex: number, length: number, x: number, y: number, width: number, duration: number, colors: {
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+}[]): Uint8Array<ArrayBuffer>;
+/**
+ */
+export function encodeGetTileEffect(): Uint8Array<ArrayBuffer>;
+/**
+ * @param {number} instanceid
+ * @param {import('./constants.js').TileEffectType} effectType
+ * @param {number} speed
+ * @param {bigint} duration
+ * @param {import('./constants.js').TileEffectSkyType} skyType
+ * @param {number} cloudSaturationMin
+ * @param {number} paletteCount
+ * @param {{hue: number, saturation: number, brightness: number, kelvin: number}[]} palette
+ */
+export function encodeSetTileEffect(instanceid: number, effectType: import("./constants.js").TileEffectType, speed: number, duration: bigint, skyType: import("./constants.js").TileEffectSkyType, cloudSaturationMin: number, paletteCount: number, palette: {
+    hue: number;
+    saturation: number;
+    brightness: number;
+    kelvin: number;
+}[]): Uint8Array<ArrayBuffer>;
+/**
  * @param {Uint8Array} bytes
  * @param {{ current: number; }} offsetRef
  */
