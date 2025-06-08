@@ -1,0 +1,19 @@
+{
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(bun test:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(bun lint)",
+      "Bash(bun run:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(bun:*)"
+    ],
+    "deny": []
+  }
+}
