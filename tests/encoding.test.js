@@ -78,7 +78,6 @@ describe('encoding', () => {
       header.ack_required,
       header.sequence,
       header.type,
-      header.payload,
     );
     assert.deepEqual(encodedBytes, bytes);
   });

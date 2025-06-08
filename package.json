@@ -1,28 +1,25 @@
 {
   "name": "lifxlan",
   "version": "0.0.71",
-  "description": "LIFX LAN protocol in JavaScript",
-  "types": "./types/index.d.ts",
-  "module": "./src/index.js",
-  "main": "./src/index.js",
+  "description": "LIFX LAN protocol in TypeScript",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "main": "./dist/index.js",
   "type": "module",
   "unpkg": "./dist/lifxlan.min.js",
   "scripts": {
     "test": "bun test --coverage",
     "node:test": "node --test --experimental-test-coverage",
-    "types": "rm -rf ./types && tsc",
-    "build": "bun build ./src/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]",
+    "build": "tsc && bun build ./dist/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]",
     "lint": "oxlint",
     "benchmark": "bun run benchmarks/performance.js",
-    "prepack": "bun run types && bun run build && bun test"
+    "prepack": "bun run build && bun test"
   },
   "keywords": [
     "lifx",
     "lan"
   ],
   "files": [
-    "src/**/*",
-    "types/**/*",
     "dist/**/*"
   ],
   "repository": {

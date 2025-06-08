@@ -5,13 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 - **Test**: `bun test --coverage`
-- **Build**: `bun build ./src/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]`
-- **Type Check**: `bun types` (generates types in `./types` directory, don't modify the files in `./types` manually)
+- **Build**: `tsc && bun build ./dist/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]`
+- **Type Check**: `tsc --noEmit`
 - **Lint**: `oxlint`
 
 ## Project Architecture
 
-This is a JavaScript library for the LIFX LAN protocol that works across Node.js, Bun, and Deno runtimes. The architecture is based on three core abstractions:
+This is a TypeScript library for the LIFX LAN protocol that works across Node.js, Bun, and Deno runtimes. The architecture is based on three core abstractions:
 
 ### Core Components
 
@@ -37,13 +37,7 @@ Device discovery works by broadcasting `GetServiceCommand()` and registering res
 
 ## TypeScript Support
 
-The project uses JSDoc for type annotations in JavaScript source files. TypeScript declarations are generated automatically via `tsc` into the `./types` directory.
-
-## Check TypeScript type generation
-
-```
-npx tsc
-```
+The project is written in TypeScript with full type safety. TypeScript declarations and JavaScript files are compiled to the `./dist` directory for publication to npm.
 
 ## Run linter to check code quality
 

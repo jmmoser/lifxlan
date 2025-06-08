@@ -3,9 +3,9 @@ import assert from 'node:assert';
 import { Client } from '../src/client.js';
 import { Router } from '../src/router.js';
 import { Device } from '../src/devices.js';
-import { Type } from '../src/constants.js';
+import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand } from '../src/commands.js';
+import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand } from '../src/commands/index.js';
 
 describe('client', () => {
   const sharedDevice = Device({

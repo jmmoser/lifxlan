@@ -4,22 +4,31 @@
       "ESNext",
       "DOM"
     ],
-    "target": "ESNext",
+    "target": "ES2022",
     "moduleResolution": "node",
     "module": "esnext",
     "resolveJsonModule": true,
-    "allowJs": true,
-    "checkJs": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "strict": true,
     "declaration": true,
-    "emitDeclarationOnly": true,
-    "outDir": "./types",
-    "skipLibCheck": true
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true
   },
   "include": [
-    "src/**/*.js"
+    "src/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist",
+    "tests"
   ]
 }

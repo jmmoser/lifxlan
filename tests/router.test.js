@@ -2,7 +2,7 @@ import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { Router } from '../src/router.js';
 import { encode } from '../src/encoding.js';
-import { Type } from '../src/constants.js';
+import { Type } from '../src/constants/index.js';
 
 describe('router', () => {
   test('nextSource returns valid source', () => {

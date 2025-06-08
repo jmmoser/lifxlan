@@ -1,6 +1,6 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import * as Utils from '../src/utils.js';
+import * as Utils from '../src/utils/index.js';
 
 describe('utils', () => {
   test('NOOP function', () => {

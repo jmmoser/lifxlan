@@ -1,7 +1,7 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import * as Commands from '../src/commands.js';
-import { Type, Waveform, MultiZoneApplicationRequest, MultiZoneExtendedApplicationRequest, MultiZoneEffectType, TileEffectType, TileEffectSkyType } from '../src/constants.js';
+import * as Commands from '../src/commands/index.js';
+import { Type, Waveform, MultiZoneApplicationRequest, MultiZoneExtendedApplicationRequest, MultiZoneEffectType, TileEffectType, TileEffectSkyType } from '../src/constants/index.js';
 
 describe('commands', () => {
   test('GetServiceCommand', () => {

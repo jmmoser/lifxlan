@@ -12,7 +12,9 @@
       "Bash(bun run:*)",
       "Bash(rg:*)",
       "Bash(find:*)",
-      "Bash(bun:*)"
+      "Bash(bun:*)",
+      "Bash(rm:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": []
   }
