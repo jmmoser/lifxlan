@@ -3,7 +3,7 @@ import {
   PORT,
   BROADCAST_ADDRESS,
   NO_TARGET,
-} from './constants.js';
+} from './constants/index.js';
 
 import {
   encode,
@@ -12,7 +12,7 @@ import {
 
 import {
   PromiseWithResolvers,
-} from './utils.js';
+} from './utils/index.js';
 
 import {
   TimeoutError,

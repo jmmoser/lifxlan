@@ -1,5 +1,5 @@
-import { NO_TARGET, PORT } from './constants.js';
-import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils.js';
+import { NO_TARGET, PORT } from './constants/index.js';
+import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils/index.js';
 
 /**
  * @typedef {{

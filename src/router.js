@@ -1,5 +1,5 @@
 import { decodeHeader, getPayload } from './encoding.js';
-import { convertTargetToSerialNumber } from './utils.js';
+import { convertTargetToSerialNumber } from './utils/index.js';
 import { SourceExhaustionError, ValidationError } from './errors.js';
 
 /**
