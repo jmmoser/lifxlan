@@ -2,6 +2,7 @@ import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import { NOOP } from '../utils/index.js';
 import type { TileEffectType, TileEffectSkyType } from '../constants/index.js';
+import type { Decoder } from './index.js';
 
 export function GetDeviceChainCommand() {
   return {
@@ -10,11 +11,55 @@ export function GetDeviceChainCommand() {
   };
 }
 
-export function Get64Command(tileIndex: number, length: number, x: number, y: number, width: number) {
+export function Get64Command(
+  tileIndex: number, 
+  length: number, 
+  x: number, 
+  y: number, 
+  width: number,
+  onResponse?: (response: Encoding.State64) => boolean | void
+) {
+  const expectedTiles = new Set<number>();
+  for (let i = tileIndex; i < tileIndex + length; i++) {
+    expectedTiles.add(i);
+  }
+  
+  const responses: Encoding.State64[] = [];
+  
+  const decode: Decoder<Encoding.State64[]> = (bytes, offsetRef, continuation, responseType) => {
+    let response: Encoding.State64 | undefined;
+    
+    if (responseType === Type.State64) {
+      response = Encoding.decodeState64(bytes, offsetRef);
+      expectedTiles.delete(response.tile_index);
+    }
+    
+    // Update continuation to indicate if more responses are expected
+    if (continuation) {
+      if (response) {
+        responses.push(response);
+        
+        // Call user callback if provided
+        let shouldContinue = true;
+        if (onResponse) {
+          const result = onResponse(response);
+          shouldContinue = result !== false; // false = stop early
+        }
+        
+        continuation.expectMore = shouldContinue && expectedTiles.size > 0;
+      } else {
+        // Unknown response type - still expect more responses
+        continuation.expectMore = expectedTiles.size > 0;
+      }
+    }
+    
+    return responses; // Always return the accumulated array
+  };
+  
   return {
     type: Type.Get64,
     payload: Encoding.encodeGet64(tileIndex, length, x, y, width),
-    decode: Encoding.decodeState64,
+    decode,
   };
 }
 

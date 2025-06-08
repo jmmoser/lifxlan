@@ -98,10 +98,57 @@ export function SetMultiZoneEffectCommand(
   };
 }
 
-export function GetExtendedColorZonesCommand() {
+export function GetExtendedColorZonesCommand(
+  onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void
+) {
+  const expectedZoneIndexes = new Set<number>();
+  let firstResponse = true;
+  
+  const responses: Encoding.StateExtendedColorZones[] = [];
+  
+  const decode: Decoder<Encoding.StateExtendedColorZones[]> = (bytes, offsetRef, continuation, responseType) => {
+    let response: Encoding.StateExtendedColorZones | undefined;
+    
+    if (responseType === Type.StateExtendedColorZones) {
+      response = Encoding.decodeStateExtendedColorZones(bytes, offsetRef);
+      
+      // On first response, calculate expected zone indexes based on total zones
+      if (firstResponse && response.zones_count > 82) {
+        firstResponse = false;
+        // Each response can contain up to 82 zones
+        for (let i = 0; i < response.zones_count; i += 82) {
+          expectedZoneIndexes.add(i);
+        }
+      }
+      
+      expectedZoneIndexes.delete(response.zone_index);
+    }
+    
+    // Update continuation to indicate if more responses are expected
+    if (continuation) {
+      if (response) {
+        responses.push(response);
+        
+        // Call user callback if provided
+        let shouldContinue = true;
+        if (onResponse) {
+          const result = onResponse(response);
+          shouldContinue = result !== false; // false = stop early
+        }
+        
+        continuation.expectMore = shouldContinue && expectedZoneIndexes.size > 0;
+      } else {
+        // Unknown response type - still expect more responses
+        continuation.expectMore = expectedZoneIndexes.size > 0;
+      }
+    }
+    
+    return responses; // Always return the accumulated array
+  };
+  
   return {
     type: Type.GetExtendedColorZones,
-    decode: Encoding.decodeStateExtendedColorZones,
+    decode,
   };
 }
 
