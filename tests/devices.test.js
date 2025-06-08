@@ -98,4 +98,26 @@ describe('devices', () => {
 
     expect(onRemoved).toHaveBeenCalledTimes(1);
   });
+
+  test('multiple pending gets are handled when one is aborted', async () => {
+    const devices = Devices();
+
+    // Start multiple gets for the same device
+    const controller1 = new AbortController();
+    const controller2 = new AbortController();
+    
+    const promise1 = devices.get(sharedDevice.serialNumber, controller1.signal);
+    const promise2 = devices.get(sharedDevice.serialNumber, controller2.signal);
+
+    // Abort the first one
+    controller1.abort();
+
+    // Register the device
+    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+
+    // First should reject, second should resolve
+    await expect(promise1).rejects.toEqual(new Error('Abort'));
+    const device = await promise2;
+    expect(device).toEqual(sharedDevice);
+  });
 });
