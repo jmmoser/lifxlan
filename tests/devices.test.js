@@ -120,4 +120,55 @@ describe('devices', () => {
     const device = await promise2;
     expect(device).toEqual(sharedDevice);
   });
+
+  test('get device timeout without signal', async () => {
+    const devices = Devices({ defaultTimeoutMs: 10 });
+    
+    // Get device without registering it, should timeout
+    const promise = devices.get('nonexistent');
+    await expect(promise).rejects.toThrow('Timeout');
+  });
+
+  test('Device factory with default port and target', () => {
+    const device = Device({
+      address: '192.168.1.100',
+      serialNumber: 'abcdef123456'
+    });
+
+    expect(device.port).toBe(56700); // Default PORT from constants
+    expect(device.sequence).toBe(0);
+    expect(device.target).toBeDefined();
+    expect(device.address).toBe('192.168.1.100');
+    expect(device.serialNumber).toBe('abcdef123456');
+  });
+
+  test('Device factory with custom port and target', () => {
+    const customTarget = new Uint8Array([1, 2, 3, 4, 5, 6]);
+    const device = Device({
+      address: '192.168.1.100',
+      port: 12345,
+      target: customTarget
+    });
+
+    expect(device.port).toBe(12345);
+    expect(device.target).toBe(customTarget);
+    expect(device.sequence).toBe(0);
+  });
+
+  test('remove non-existent device returns false', () => {
+    const devices = Devices();
+    
+    const removed = devices.remove('nonexistent');
+    expect(removed).toBe(false);
+  });
+
+  test('get device with AbortError', async () => {
+    const devices = Devices();
+    const controller = new AbortController();
+    
+    const promise = devices.get('test-device', controller.signal);
+    controller.abort();
+    
+    expect(promise).rejects.toThrow('Abort');
+  });
 });

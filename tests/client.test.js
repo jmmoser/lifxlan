@@ -299,4 +299,52 @@ describe('client', () => {
     assert.equal(result[1].hue, 240);
     assert.equal(responseCount, 2); // Verify both responses were received
   });
+
+  test('client with custom onMessage handler', () => {
+    let onMessageCalled = false;
+    
+    const router = Router({
+      onSend() {},
+    });
+    
+    const client = Client({
+      router,
+      onMessage(header, payload, serialNumber) {
+        onMessageCalled = true;
+        assert.equal(header.source, client.source);
+        assert.equal(serialNumber, 'abcdef123456');
+      },
+    });
+    
+    // Simulate a message
+    const message = encode(
+      false,
+      client.source,
+      new Uint8Array([0xab, 0xcd, 0xef, 0x12, 0x34, 0x56]),
+      false,
+      false,
+      1,
+      Type.GetService,
+      new Uint8Array()
+    );
+    
+    router.receive(message);
+    
+    assert.ok(onMessageCalled, 'onMessage handler should be called');
+    
+    client.dispose();
+  });
+
+  test('client dispose is idempotent', () => {
+    const router = Router({
+      onSend() {},
+    });
+    
+    const client = Client({ router });
+    
+    // Multiple dispose calls should not throw
+    client.dispose();
+    client.dispose();
+    client.dispose();
+  });
 });
