@@ -128,11 +128,10 @@ The library uses three main components:
 
 ### Bring Your Own Socket
 
-This library doesn't include UDP socket implementation - you provide it. This makes it work across different JavaScript runtimes:
+This library doesn't include UDP socket implementation - you provide it. This makes it work across different server-side JavaScript runtimes:
 
 - **Node.js/Bun**: Use `dgram.createSocket('udp4')`
 - **Deno**: Use `Deno.listenDatagram()`
-- **Browser**: Use WebRTC or other transport mechanisms
 
 ## Examples by Runtime
 
