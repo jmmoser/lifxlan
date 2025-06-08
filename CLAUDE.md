@@ -38,3 +38,15 @@ Device discovery works by broadcasting `GetServiceCommand()` and registering res
 ## TypeScript Support
 
 The project uses JSDoc for type annotations in JavaScript source files. TypeScript declarations are generated automatically via `tsc` into the `./types` directory.
+
+## Check TypeScript type generation
+
+```
+npx tsc
+```
+
+## Run linter to check code quality
+
+```
+bun lint
+```
