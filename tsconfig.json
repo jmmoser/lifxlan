@@ -5,8 +5,8 @@
       "DOM"
     ],
     "target": "ES2022",
-    "moduleResolution": "node",
-    "module": "esnext",
+    // "moduleResolution": "nodenext",
+    "module": "nodenext",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

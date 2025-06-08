@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 - **Test**: `bun test --coverage`
-- **Build**: `tsc && bun build ./dist/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]`
-- **Type Check**: `tsc --noEmit`
+- **Build**: `bun run build`
+- **Type Check**: `npx tsc`
 - **Lint**: `oxlint`
 
 ## Project Architecture

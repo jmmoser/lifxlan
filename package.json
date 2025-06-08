@@ -1,26 +1,38 @@
 {
   "name": "lifxlan",
-  "version": "0.0.71",
-  "description": "LIFX LAN protocol in TypeScript",
-  "types": "./dist/index.d.ts",
-  "module": "./dist/index.js",
-  "main": "./dist/index.js",
+  "version": "0.0.72",
+  "description": "TypeScript library for controlling LIFX products over LAN",
   "type": "module",
-  "unpkg": "./dist/lifxlan.min.js",
   "scripts": {
     "test": "bun test --coverage",
     "node:test": "node --test --experimental-test-coverage",
-    "build": "tsc && bun build ./dist/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]",
+    "build:old": "tsc && bun build ./dist/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]",
+    "build": "bun run build:esm && bun run build:cjs",
+    "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
+    "prepack": "bun test && bun run build",
     "lint": "oxlint",
-    "benchmark": "bun run benchmarks/performance.js",
-    "prepack": "bun run build && bun test"
+    "benchmark": "bun run benchmarks/performance.js"
   },
   "keywords": [
     "lifx",
     "lan"
   ],
+  "exports": {
+    "./*": {
+      "import": "./dist/esm/*",
+      "require": "./dist/cjs/*"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/esm/*"
+      ]
+    }
+  },
   "files": [
-    "dist/**/*"
+    "dist"
   ],
   "repository": {
     "type": "git",
