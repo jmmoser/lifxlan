@@ -1,16 +1,15 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import type { Waveform } from '../constants/index.js';
-import type { Command } from './index.js';
 
-export function GetColorCommand(): Command<Encoding.LightState> {
+export function GetColorCommand() {
   return {
     type: Type.GetColor,
     decode: Encoding.decodeLightState,
   };
 }
 
-export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number): Command<Encoding.LightState> {
+export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number) {
   return {
     type: Type.SetColor,
     payload: Encoding.encodeSetColor(hue, saturation, brightness, kelvin, duration),
@@ -28,7 +27,7 @@ export function SetWaveformCommand(
   cycles: number,
   skewRatio: number,
   waveform: Waveform,
-): Command<Encoding.LightState> {
+) {
   return {
     type: Type.SetWaveform,
     payload: Encoding.encodeSetWaveform(
@@ -46,14 +45,14 @@ export function SetWaveformCommand(
   };
 }
 
-export function GetLightPowerCommand(): Command<number> {
+export function GetLightPowerCommand() {
   return {
     type: Type.GetLightPower,
     decode: Encoding.decodeStateLightPower,
   };
 }
 
-export function SetLightPowerCommand(level: number | boolean, duration: number): Command<number> {
+export function SetLightPowerCommand(level: number | boolean, duration: number) {
   return {
     type: Type.SetLightPower,
     payload: Encoding.encodeSetLightPower(level, duration),
@@ -75,7 +74,7 @@ export function SetWaveformOptionalCommand(
   setSaturation: boolean,
   setBrightness: boolean,
   setKelvin: boolean,
-): Command<number> {
+) {
   return {
     type: Type.SetWaveformOptional,
     payload: Encoding.encodeSetWaveformOptional(
@@ -97,14 +96,14 @@ export function SetWaveformOptionalCommand(
   };
 }
 
-export function GetInfraredCommand(): Command<number> {
+export function GetInfraredCommand() {
   return {
     type: Type.GetInfrared,
     decode: Encoding.decodeStateInfrared,
   };
 }
 
-export function SetInfraredCommand(brightness: number): Command<number> {
+export function SetInfraredCommand(brightness: number) {
   return {
     type: Type.SetInfrared,
     payload: Encoding.encodeSetInfrared(brightness),
@@ -112,14 +111,14 @@ export function SetInfraredCommand(brightness: number): Command<number> {
   };
 }
 
-export function GetHevCycleCommand(): Command<Encoding.StateHevCycle> {
+export function GetHevCycleCommand() {
   return {
     type: Type.GetHevCycle,
     decode: Encoding.decodeStateHevCycle,
   };
 }
 
-export function SetHevCycleCommand(enable: boolean, durationSeconds: number): Command<Encoding.StateHevCycle> {
+export function SetHevCycleCommand(enable: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycle,
     payload: Encoding.encodeSetHevCycle(enable, durationSeconds),
@@ -127,14 +126,14 @@ export function SetHevCycleCommand(enable: boolean, durationSeconds: number): Co
   };
 }
 
-export function GetHevCycleConfigurationCommand(): Command<Encoding.StateHevCycleConfiguration> {
+export function GetHevCycleConfigurationCommand() {
   return {
     type: Type.GetHevCycleConfiguration,
     decode: Encoding.decodeStateHevCycleConfiguration,
   };
 }
 
-export function SetHevCycleConfigurationCommand(indication: boolean, durationSeconds: number): Command<Encoding.StateHevCycleConfiguration> {
+export function SetHevCycleConfigurationCommand(indication: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycleConfiguration,
     payload: Encoding.encodeSetHevCycleConfiguration(indication, durationSeconds),
@@ -142,7 +141,7 @@ export function SetHevCycleConfigurationCommand(indication: boolean, durationSec
   };
 }
 
-export function GetLastHevCycleResultCommand(): Command<number> {
+export function GetLastHevCycleResultCommand() {
   return {
     type: Type.GetLastHevCycleResult,
     decode: Encoding.decodeStateLastHevCycleResult,

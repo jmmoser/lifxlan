@@ -2,16 +2,15 @@ import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import { NOOP } from '../utils/index.js';
 import type { TileEffectType, TileEffectSkyType } from '../constants/index.js';
-import type { Command } from './index.js';
 
-export function GetDeviceChainCommand(): Command<Encoding.StateDeviceChain> {
+export function GetDeviceChainCommand() {
   return {
     type: Type.GetDeviceChain,
     decode: Encoding.decodeStateDeviceChain,
   };
 }
 
-export function Get64Command(tileIndex: number, length: number, x: number, y: number, width: number): Command<Encoding.State64> {
+export function Get64Command(tileIndex: number, length: number, x: number, y: number, width: number) {
   return {
     type: Type.Get64,
     payload: Encoding.encodeGet64(tileIndex, length, x, y, width),
@@ -19,7 +18,7 @@ export function Get64Command(tileIndex: number, length: number, x: number, y: nu
   };
 }
 
-export function SetUserPositionCommand(tileIndex: number, userX: number, userY: number): Command<void> {
+export function SetUserPositionCommand(tileIndex: number, userX: number, userY: number) {
   return {
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
@@ -35,7 +34,7 @@ export function Set64Command(
   width: number, 
   duration: number, 
   colors: Encoding.Color[]
-): Command<void> {
+) {
   return {
     type: Type.Set64,
     payload: Encoding.encodeSet64(tileIndex, length, x, y, width, duration, colors),
@@ -43,7 +42,7 @@ export function Set64Command(
   };
 }
 
-export function GetTileEffectCommand(): Command<Encoding.StateTileEffect> {
+export function GetTileEffectCommand() {
   return {
     type: Type.GetTileEffect,
     payload: Encoding.encodeGetTileEffect(),
@@ -60,7 +59,7 @@ export function SetTileEffectCommand(
   cloudSaturationMin: number, 
   paletteCount: number, 
   palette: Encoding.Color[]
-): Command<Encoding.StateTileEffect> {
+) {
   return {
     type: Type.SetTileEffect,
     payload: Encoding.encodeSetTileEffect(instanceid, effectType, speed, duration, skyType, cloudSaturationMin, paletteCount, palette),

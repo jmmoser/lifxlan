@@ -1,6 +1,7 @@
 import { describe, test, spyOn, expect } from 'bun:test';
 import { Groups } from '../src/groups.js';
 import { Device } from '../src/devices.js';
+import assert from 'node:assert';
 
 describe('groups', () => {
   const device1 = Device({
@@ -70,6 +71,7 @@ describe('groups', () => {
 
     expect(onChanged).toHaveBeenCalledTimes(0);
     const group = groups.registered.get(groupData.group);
+    assert.ok(group);
     expect(group.devices.length).toBe(1);
   });
 
@@ -121,7 +123,9 @@ describe('groups', () => {
 
     groups.register(device1, groupData);
     groups.register(device2, groupData);
-    expect(groups.registered.get(groupData.group).devices.length).toBe(2);
+    const group = groups.registered.get(groupData.group);
+    assert.ok(group);
+    expect(group.devices.length).toBe(2);
 
     // Clear calls from registration, only track removeDevice call
     onChanged.mockClear();
@@ -130,7 +134,7 @@ describe('groups', () => {
 
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(groups.registered.size).toBe(1);
-    expect(groups.registered.get(groupData.group).devices.length).toBe(1);
+    expect(group.devices.length).toBe(1);
   });
 
   test('removeDevice from group with single device removes group', () => {
@@ -201,8 +205,12 @@ describe('groups', () => {
     groups.register(device2, groupData2);
 
     expect(groups.registered.size).toBe(2);
-    expect(groups.registered.get(groupData.group).devices).toEqual([device1]);
-    expect(groups.registered.get(groupData2.group).devices).toEqual([device2]);
+    const group1 = groups.registered.get(groupData.group);
+    const group2 = groups.registered.get(groupData2.group);
+    assert.ok(group1);
+    assert.ok(group2);
+    expect(group1.devices).toEqual([device1]);
+    expect(group2.devices).toEqual([device2]);
   });
 
   test('device removal preserves group when multiple devices remain', () => {
@@ -218,14 +226,17 @@ describe('groups', () => {
     groups.register(device2, groupData);
     groups.register(device3, groupData);
 
-    expect(groups.registered.get(groupData.group).devices.length).toBe(3);
+    const group = groups.registered.get(groupData.group);
+    assert.ok(group);
+
+    expect(group.devices.length).toBe(3);
 
     groups.removeDevice(device2);
 
     expect(groups.registered.size).toBe(1);
-    expect(groups.registered.get(groupData.group).devices.length).toBe(2);
-    expect(groups.registered.get(groupData.group).devices).toContain(device1);
-    expect(groups.registered.get(groupData.group).devices).toContain(device3);
-    expect(groups.registered.get(groupData.group).devices).not.toContain(device2);
+    expect(group.devices.length).toBe(2);
+    expect(group.devices).toContain(device1);
+    expect(group.devices).toContain(device3);
+    expect(group.devices).not.toContain(device2);
   });
 });

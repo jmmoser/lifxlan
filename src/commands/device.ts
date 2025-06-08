@@ -1,44 +1,43 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import { NOOP } from '../utils/index.js';
-import type { Command } from './index.js';
 
-export function GetServiceCommand(): Command<Encoding.StateService> {
+export function GetServiceCommand() {
   return {
     type: Type.GetService,
     decode: Encoding.decodeStateService,
   };
 }
 
-export function GetHostFirmwareCommand(): Command<Encoding.StateHostFirmware> {
+export function GetHostFirmwareCommand() {
   return {
     type: Type.GetHostFirmware,
     decode: Encoding.decodeStateHostFirmware,
   };
 }
 
-export function GetWifiInfoCommand(): Command<Encoding.StateWifiInfo> {
+export function GetWifiInfoCommand() {
   return {
     type: Type.GetWifiInfo,
     decode: Encoding.decodeStateWifiInfo,
   };
 }
 
-export function GetWifiFirmwareCommand(): Command<Encoding.StateWifiFirmware> {
+export function GetWifiFirmwareCommand() {
   return {
     type: Type.GetWifiFirmware,
     decode: Encoding.decodeStateWifiFirmware,
   };
 }
 
-export function GetPowerCommand(): Command<number> {
+export function GetPowerCommand() {
   return {
     type: Type.GetPower,
     decode: Encoding.decodeStatePower,
   };
 }
 
-export function SetPowerCommand(power: number | boolean): Command<number> {
+export function SetPowerCommand(power: number | boolean) {
   return {
     type: Type.SetPower,
     payload: Encoding.encodeSetPower(power),
@@ -46,14 +45,14 @@ export function SetPowerCommand(power: number | boolean): Command<number> {
   };
 }
 
-export function GetLabelCommand(): Command<string> {
+export function GetLabelCommand() {
   return {
     type: Type.GetLabel,
     decode: Encoding.decodeStateLabel,
   };
 }
 
-export function SetLabelCommand(label: string): Command<string> {
+export function SetLabelCommand(label: string) {
   return {
     type: Type.SetLabel,
     payload: Encoding.encodeString(label, 32),
@@ -61,35 +60,35 @@ export function SetLabelCommand(label: string): Command<string> {
   };
 }
 
-export function GetVersionCommand(): Command<Encoding.StateVersion> {
+export function GetVersionCommand() {
   return {
     type: Type.GetVersion,
     decode: Encoding.decodeStateVersion,
   };
 }
 
-export function GetInfoCommand(): Command<Encoding.StateInfo> {
+export function GetInfoCommand() {
   return {
     type: Type.GetInfo,
     decode: Encoding.decodeStateInfo,
   };
 }
 
-export function SetRebootCommand(): Command<void> {
+export function SetRebootCommand() {
   return {
     type: Type.SetReboot,
     decode: NOOP,
   };
 }
 
-export function GetLocationCommand(): Command<Encoding.StateLocation> {
+export function GetLocationCommand() {
   return {
     type: Type.GetLocation,
     decode: Encoding.decodeStateLocation,
   };
 }
 
-export function SetLocationCommand(location: Uint8Array | string, label: string, updatedAt: Date): Command<Encoding.StateLocation> {
+export function SetLocationCommand(location: Uint8Array | string, label: string, updatedAt: Date) {
   return {
     type: Type.SetLocation,
     payload: Encoding.encodeSetLocation(location, label, updatedAt),
@@ -97,14 +96,14 @@ export function SetLocationCommand(location: Uint8Array | string, label: string,
   };
 }
 
-export function GetGroupCommand(): Command<Encoding.StateGroup> {
+export function GetGroupCommand() {
   return {
     type: Type.GetGroup,
     decode: Encoding.decodeStateGroup,
   };
 }
 
-export function SetGroupCommand(group: Uint8Array | string, label: string, updatedAt: Date): Command<Encoding.StateGroup> {
+export function SetGroupCommand(group: Uint8Array | string, label: string, updatedAt: Date) {
   return {
     type: Type.SetGroup,
     payload: Encoding.encodeSetGroup(group, label, updatedAt),
@@ -112,7 +111,7 @@ export function SetGroupCommand(group: Uint8Array | string, label: string, updat
   };
 }
 
-export function EchoRequestCommand(echoing: Uint8Array): Command<Uint8Array> {
+export function EchoRequestCommand(echoing: Uint8Array) {
   return {
     type: Type.EchoRequest,
     payload: Encoding.encodeEchoRequest(echoing),

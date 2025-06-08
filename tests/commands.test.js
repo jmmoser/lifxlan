@@ -7,7 +7,7 @@ describe('commands', () => {
   test('GetServiceCommand', () => {
     const cmd = Commands.GetServiceCommand();
     assert.equal(cmd.type, Type.GetService);
-    assert.equal(cmd.payload, undefined);
+    assert.ok(!('payload' in cmd));
     assert.equal(typeof cmd.decode, 'function');
   });
 
@@ -386,8 +386,10 @@ describe('commands', () => {
     
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
-    assert.equal(result[0].zone_index, 0);
-    assert.equal(result[0].hue, 120);
+    const zone = result[0];
+    assert.equal(zone.zone_index, 0);
+    assert.ok('hue' in zone);
+    assert.equal(zone.hue, 120);
     assert.equal(continuation.expectMore, true); // Should expect more zones (0, 1, 2)
   });
 
@@ -420,8 +422,10 @@ describe('commands', () => {
     
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
-    assert.equal(result[0].zone_index, 0);
-    assert.equal(result[0].colors.length, 8);
+    const zone = result[0];
+    assert.equal(zone.zone_index, 0);
+    assert.ok('colors' in zone);
+    assert.equal(zone.colors.length, 8);
     assert.equal(continuation.expectMore, false); // All zones covered (0-7, more than we requested 0-2)
   });
 

@@ -1,7 +1,7 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import type { MultiZoneApplicationRequest, MultiZoneEffectType, MultiZoneExtendedApplicationRequest } from '../constants/index.js';
-import type { Command, Decoder } from './index.js';
+import type { Decoder } from './index.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
 
@@ -9,7 +9,7 @@ export function GetColorZonesCommand(
   startIndex: number, 
   endIndex: number, 
   onResponse?: (response: ColorZoneResponse) => boolean | void
-): Command<ColorZoneResponse[]> {
+) {
   const expectedZones = new Set<number>();
   for (let i = startIndex; i <= endIndex; i++) {
     expectedZones.add(i);
@@ -69,7 +69,7 @@ export function SetColorZonesCommand(
   kelvin: number, 
   duration: number, 
   apply: MultiZoneApplicationRequest
-): Command<Encoding.StateMultiZone> {
+) {
   return {
     type: Type.SetColorZones,
     payload: Encoding.encodeSetColorZones(startIndex, endIndex, hue, saturation, brightness, kelvin, duration, apply),
@@ -77,7 +77,7 @@ export function SetColorZonesCommand(
   };
 }
 
-export function GetMultiZoneEffectCommand(): Command<Encoding.StateMultiZoneEffect> {
+export function GetMultiZoneEffectCommand() {
   return {
     type: Type.GetMultiZoneEffect,
     decode: Encoding.decodeStateMultiZoneEffect,
@@ -90,7 +90,7 @@ export function SetMultiZoneEffectCommand(
   speed: number, 
   duration: bigint, 
   parameters: Uint8Array
-): Command<Encoding.StateMultiZoneEffect> {
+) {
   return {
     type: Type.SetMultiZoneEffect,
     payload: Encoding.encodeSetMultiZoneEffect(instanceid, effectType, speed, duration, parameters),
@@ -98,7 +98,7 @@ export function SetMultiZoneEffectCommand(
   };
 }
 
-export function GetExtendedColorZonesCommand(): Command<Encoding.StateExtendedColorZones> {
+export function GetExtendedColorZonesCommand() {
   return {
     type: Type.GetExtendedColorZones,
     decode: Encoding.decodeStateExtendedColorZones,
@@ -111,7 +111,7 @@ export function SetExtendedColorZonesCommand(
   zoneIndex: number, 
   colorsCount: number, 
   colors: Encoding.Color[]
-): Command<Encoding.StateExtendedColorZones> {
+) {
   return {
     type: Type.SetExtendedColorZones,
     payload: Encoding.encodeSetExtendedColorZones(duration, apply, zoneIndex, colorsCount, colors),

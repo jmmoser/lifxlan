@@ -291,6 +291,7 @@ describe('client', () => {
     // Request zones 0-1, should receive 2 StateZone responses
     const result = await client.send(GetColorZonesCommand(0, 1), device);
     
+    // TODO: is it possible to get more than 1 response?
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 2);
     assert.equal(result[0].zone_index, 0);

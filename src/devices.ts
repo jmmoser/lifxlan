@@ -11,8 +11,8 @@ export interface Device {
 
 export interface DeviceConfig {
   address: string;
-  serialNumber: string;
-  port: number;
+  serialNumber?: string;
+  port?: number;
   target?: Uint8Array;
   sequence?: number;
 }
@@ -21,7 +21,7 @@ export function Device(config: DeviceConfig): Device {
   const device = config as Device;
   device.port ??= PORT;
   device.target ??= config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET;
-  device.sequence = 0;
+  device.sequence = config.sequence ?? 0;
   return device;
 }
 

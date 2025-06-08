@@ -1,8 +1,7 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
-import type { Command } from './index.js';
 
-export function GetRPowerCommand(relayIndex: number): Command<Encoding.StateRPower> {
+export function GetRPowerCommand(relayIndex: number) {
   return {
     type: Type.GetRPower,
     payload: Encoding.encodeGetRPower(relayIndex),
@@ -10,7 +9,7 @@ export function GetRPowerCommand(relayIndex: number): Command<Encoding.StateRPow
   };
 }
 
-export function SetRPowerCommand(relayIndex: number, level: number): Command<Encoding.StateRPower> {
+export function SetRPowerCommand(relayIndex: number, level: number) {
   return {
     type: Type.SetRPower,
     payload: Encoding.encodeSetRPower(relayIndex, level),
