@@ -9,7 +9,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - 💡 **Control lights** (turn on/off, change colors, brightness)
 - 🎯 **Target specific devices** or broadcast to all devices
 - 🔗 **Group devices** for batch operations
-- ⚡ **High performance** - optimized for speed with 4M+ ops/sec
+- ⚡ **High performance** - optimized for speed
 - 🚀 **Zero dependencies** - bring your own UDP socket
 
 ## Quick Start
