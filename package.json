@@ -34,6 +34,7 @@
   "devDependencies": {
     "@types/bun": "^1.2.2",
     "@types/node": "^22.13.0",
+    "mitata": "^1.0.34",
     "oxlint": "^0.15.9",
     "typescript": "^5.7.3"
   }
