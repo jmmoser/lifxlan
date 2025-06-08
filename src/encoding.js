@@ -1,12 +1,20 @@
 /**
- * @param {boolean} tagged
- * @param {number} source
- * @param {Uint8Array} target
- * @param {boolean} resRequired
- * @param {boolean} ackRequired
- * @param {number} sequence
- * @param {number} type
- * @param {Uint8Array} [payload]
+ * Encodes a LIFX protocol message into a binary format.
+ * 
+ * This is the core encoding function that creates properly formatted LIFX LAN protocol messages.
+ * The encoding follows the official LIFX protocol specification with optimized binary operations.
+ * 
+ * @param {boolean} tagged - Whether the message is tagged (affects routing)
+ * @param {number} source - Source identifier for response correlation (0-4294967295)
+ * @param {Uint8Array} target - 8-byte target device identifier  
+ * @param {boolean} resRequired - Whether a response is required
+ * @param {boolean} ackRequired - Whether an acknowledgment is required
+ * @param {number} sequence - Message sequence number (0-255)
+ * @param {number} type - LIFX message type identifier
+ * @param {Uint8Array} [payload] - Optional message payload
+ * @returns {Uint8Array} Encoded message ready for transmission
+ * @performance Critical encoding path - optimized for minimal allocations and maximum throughput
+ * @internal
  */
 export function encode(
   tagged,
@@ -56,9 +64,20 @@ export function encode(
 }
 
 /**
- * @param {Uint8Array} bytes
- * @param {number} offset
- * @param {string} uuid
+ * Encodes a UUID string directly into a byte array at the specified offset.
+ * 
+ * Efficiently converts UUID format (e.g., "550e8400-e29b-41d4-a716-446655440000")
+ * into 16 bytes at the target location. Optimized for minimal string allocations.
+ * 
+ * @param {Uint8Array} bytes - Target byte array
+ * @param {number} offset - Starting offset in the byte array
+ * @param {string} uuid - UUID string with or without hyphens
+ * @performance Optimized hex parsing with minimal string operations
+ * @example
+ * ```javascript
+ * const bytes = new Uint8Array(20);
+ * encodeUuidTo(bytes, 4, "550e8400-e29b-41d4-a716-446655440000");
+ * ```
  */
 export function encodeUuidTo(bytes, offset, uuid) {
   const hex = uuid.replace(/-/g, '');
@@ -67,6 +86,7 @@ export function encodeUuidTo(bytes, offset, uuid) {
   }
 }
 
+// Reuse TextEncoder instance for performance - avoid repeated allocations
 const textEncoder = new TextEncoder();
 
 /**

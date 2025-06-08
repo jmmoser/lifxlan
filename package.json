@@ -12,7 +12,9 @@
     "node:test": "node --test --experimental-test-coverage",
     "types": "rm -rf ./types && tsc",
     "build": "bun build ./src/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "benchmark": "bun run benchmarks/performance.js",
+    "prepack": "bun run types && bun run build && bun test"
   },
   "keywords": [
     "lifx",

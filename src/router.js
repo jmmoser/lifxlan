@@ -1,5 +1,6 @@
 import { decodeHeader, getPayload } from './encoding.js';
 import { convertTargetToSerialNumber } from './utils.js';
+import { SourceExhaustionError, ValidationError } from './errors.js';
 
 /**
  * @typedef {(
@@ -57,7 +58,7 @@ export function Router(options) {
         }
       }
       if (source === -1) {
-        throw new Error('No available source');
+        throw new SourceExhaustionError();
       }
       return source;
     },
@@ -67,10 +68,10 @@ export function Router(options) {
      */
     register(source, handler) {
       if (source <= 1 || source > MAX_SOURCE) {
-        throw new Error('Invalid source');
+        throw new ValidationError('source', source, 'must be between 2 and 4294967295');
       }
       if (handlers.has(source)) {
-        throw new Error('Source already registered');
+        throw new ValidationError('source', source, 'already registered');
       }
       handlers.set(source, handler);
     },
@@ -80,7 +81,7 @@ export function Router(options) {
      */
     deregister(source, handler) {
       if (handlers.get(source) !== handler) {
-        throw new Error('Handler mismatch');
+        throw new ValidationError('messageHandler', handler, 'does not match registered handler');
       }
       handlers.delete(source);
     },

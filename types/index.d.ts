@@ -5,4 +5,5 @@ export * from "./commands.js";
 export * from "./encoding.js";
 export * from "./devices.js";
 export * from "./groups.js";
+export * from "./errors.js";
 export { hsbToRgb, rgbToHsb, getRssiStatus, convertSignalToRssi } from "./utils.js";

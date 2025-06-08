@@ -53,7 +53,9 @@ describe('router', () => {
     const source = router.nextSource();
     
     router.register(source, handler1);
-    assert.throws(() => router.register(source, handler2), /Source already registered/);
+    assert.throws(() => router.register(source, handler2), (error) => {
+      return error.name === 'ValidationError' && error.parameter === 'source';
+    });
   });
 
   test('deregister throws error for handler mismatch', () => {
@@ -66,7 +68,9 @@ describe('router', () => {
     const source = router.nextSource();
     
     router.register(source, handler1);
-    assert.throws(() => router.deregister(source, handler2), /Handler mismatch/);
+    assert.throws(() => router.deregister(source, handler2), (error) => {
+      return error.name === 'ValidationError' && error.parameter === 'messageHandler';
+    });
   });
 
   test('send calls onSend with correct parameters', () => {
@@ -311,7 +315,7 @@ describe('router', () => {
         const source = router.nextSource();
         sources.push(source);
         router.register(source, () => {});
-      } catch (e) {
+      } catch {
         break; // No more sources available
       }
     }

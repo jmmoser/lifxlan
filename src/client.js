@@ -14,16 +14,35 @@ import {
   PromiseWithResolvers,
 } from './utils.js';
 
+import {
+  TimeoutError,
+  UnhandledCommandError,
+  MessageConflictError,
+} from './errors.js';
+
 /**
- * @param {string} serialNumber
- * @param {number} sequence
+ * Creates a unique response key for correlating requests with responses.
+ * 
+ * @param {string} serialNumber - The device serial number
+ * @param {number} sequence - The message sequence number
+ * @returns {string} A unique key for this request-response pair
+ * @internal
+ * @performance Critical path - string concatenation optimized for V8
  */
 function getResponseKey(serialNumber, sequence) {
   return `${serialNumber}:${sequence}`;
 }
 
 /**
- * @param {number} [sequence]
+ * Increments the sequence number for message ordering.
+ * 
+ * Sequence numbers are limited to 0-254 (255 is reserved for broadcast messages).
+ * This ensures proper message ordering and prevents conflicts with broadcast operations.
+ * 
+ * @param {number} [sequence] - Current sequence number, undefined for initial sequence
+ * @returns {number} Next sequence number (0-254)
+ * @internal
+ * @performance Bitwise operations for maximum speed
  */
 function incrementSequence(sequence) {
   /** Only allow up to 254. We use 255 for broadcast messages. */
@@ -46,7 +65,7 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
   const key = getResponseKey(serialNumber, sequence);
 
   if (responseHandlerMap.has(key)) {
-    throw new Error('Conflict');
+    throw new MessageConflictError(key, sequence);
   }
 
   const { resolve, reject, promise } = PromiseWithResolvers();
@@ -56,7 +75,11 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
    */
   function onAbort(errOrEvent) {
     responseHandlerMap.delete(key);
-    reject(errOrEvent instanceof Error ? errOrEvent : new Error('Abort'));
+    if (errOrEvent instanceof Error) {
+      reject(errOrEvent);
+    } else {
+      reject(new Error('Operation aborted'));
+    }
   }
 
   /** @type {any} */
@@ -65,7 +88,7 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
   if (signal) {
     signal.addEventListener('abort', onAbort, { once: true });
   } else if (defaultTimeoutMs > 0) {
-    timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
+    timeout = setTimeout(() => onAbort(new TimeoutError(defaultTimeoutMs, 'device response')), defaultTimeoutMs);
   }
 
   function cleanupOnResponse() {
@@ -88,7 +111,7 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
     cleanupOnResponse();
     if (type === Type.StateUnhandled) {
       const requestType = decodeStateUnhandled(bytes, offsetRef);
-      reject(new Error(`Unhandled request type: ${requestType}`));
+      reject(new UnhandledCommandError(requestType, serialNumber));
       return;
     }
     if (!isAckOnly && decode) {
@@ -100,12 +123,25 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
 }
 
 /**
+ * Creates a high-level client for communicating with LIFX devices.
+ * 
+ * The Client provides methods for sending commands to devices with automatic
+ * timeout handling, retry logic, and response correlation. It uses the Router
+ * for message routing and supports both acknowledged and unacknowledged messaging patterns.
+ * 
  * @param {{
- *   router: ReturnType<typeof import('./router.js').Router>;
- *   defaultTimeoutMs?: number;
- *   source?: number;
- *   onMessage?: import('./router.js').MessageHandler;
- * }} options
+ *   router: ReturnType<typeof import('./router.js').Router>,
+ *   defaultTimeoutMs?: number,
+ *   source?: number,
+ *   onMessage?: import('./router.js').MessageHandler
+ * }} options Configuration options
+ * @returns {object} A new client instance
+ * @example
+ * ```javascript
+ * const client = Client({ router });
+ * const response = await client.send(GetColorCommand(), device);
+ * ```
+ * @performance Optimized for high-throughput scenarios with minimal allocations
  */
 export function Client(options) {
   const source = options.source ?? options.router.nextSource();
@@ -121,12 +157,33 @@ export function Client(options) {
   let disposed = false;
 
   const client = {
+    /**
+     * @readonly
+     * @returns {ReturnType<typeof import('./router.js').Router>} The router instance
+     */
     get router() {
       return router;
     },
+    /**
+     * @readonly  
+     * @returns {number} The client's unique source identifier
+     */
     get source() {
       return source;
     },
+    /**
+     * Disposes of the client and releases its source identifier.
+     * 
+     * Call this when creating many short-lived clients to prevent source exhaustion.
+     * Once disposed, the client cannot be used for further operations.
+     * 
+     * @example
+     * ```javascript
+     * const client = Client({ router });
+     * // ... use client
+     * client.dispose(); // Free up resources
+     * ```
+     */
     dispose() {
       if (disposed) return;
       disposed = true;

@@ -103,7 +103,9 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice), new Error(`Unhandled request type: ${Type.StatePower}`));
+    await assert.rejects(() => client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice), (error) => {
+      return error.name === 'UnhandledCommandError' && error.commandType === Type.StatePower;
+    });
   });
 
   test('broadcast', () => {
@@ -138,7 +140,9 @@ describe('client', () => {
 
     const signal = AbortSignal.timeout(0);
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, signal), new Error('Abort'));
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, signal), (error) => {
+      return error.message.includes('abort');
+    });
   });
 
   test('timeout send', async () => {
@@ -149,7 +153,9 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice), new Error('Timeout'));
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice), (error) => {
+      return error.name === 'TimeoutError';
+    });
   });
 
   test('dispose', () => {
@@ -182,7 +188,7 @@ describe('client', () => {
 
     assert.throws(
       () => client.sendOnlyAcknowledgement(GetPowerCommand(), device, new AbortController().signal),
-      new Error('Conflict'),
+      (error) => error.name === 'MessageConflictError',
     );
   });
 
@@ -205,7 +211,7 @@ describe('client', () => {
 
     assert.throws(
       () => client.send(GetPowerCommand(), device, new AbortController().signal),
-      new Error('Conflict'),
+      (error) => error.name === 'MessageConflictError',
     );
   });
 });
