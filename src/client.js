@@ -108,14 +108,31 @@ function registerHandler(isAckOnly, serialNumber, sequence, decode, defaultTimeo
       }
       return;
     }
-    cleanupOnResponse();
+    
     if (type === Type.StateUnhandled) {
+      cleanupOnResponse();
       const requestType = decodeStateUnhandled(bytes, offsetRef);
       reject(new UnhandledCommandError(requestType, serialNumber));
       return;
     }
+    
     if (!isAckOnly && decode) {
-      resolve(/** @type {T} */(decode(bytes, offsetRef)));
+      // Support both single-response and multi-response commands
+      const continuation = { expectMore: false };
+      
+      // Check if this is a multi-response command that accepts responseType parameter
+      const result = decode.length >= 4 
+        ? decode(bytes, offsetRef, continuation, type)
+        : decode(bytes, offsetRef, continuation);
+      
+      if (continuation.expectMore) {
+        // Don't cleanup or resolve yet - wait for more responses
+        return;
+      } else {
+        // This is the final response or a single-response command
+        cleanupOnResponse();
+        resolve(/** @type {T} */(result));
+      }
     }
   });
 

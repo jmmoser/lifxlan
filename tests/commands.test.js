@@ -341,7 +341,7 @@ describe('commands', () => {
     assert.equal(view.getUint8(5), 4); // width
   });
 
-  test('GetColorZonesCommand', () => {
+  test('GetColorZonesCommand basic usage without callback', () => {
     const cmd = Commands.GetColorZonesCommand(0, 15);
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(cmd.payload.length, 2);
@@ -349,6 +349,206 @@ describe('commands', () => {
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint8(0), 0);
     assert.equal(view.getUint8(1), 15);
+    assert.equal(typeof cmd.decode, 'function');
+  });
+
+  test('GetColorZonesCommand with callback', () => {
+    const responses = [];
+    const onResponse = (response) => {
+      responses.push(response);
+    };
+    
+    const cmd = Commands.GetColorZonesCommand(0, 3, onResponse);
+    assert.equal(cmd.type, Type.GetColorZones);
+    assert.equal(typeof cmd.decode, 'function');
+  });
+
+  test('GetColorZonesCommand decode handles StateZone responses', () => {
+    const cmd = Commands.GetColorZonesCommand(0, 2);
+    
+    // Mock StateZone response (Type.StateZone = 503)
+    const stateZoneBytes = new Uint8Array(36 + 13); // header + payload
+    const view = new DataView(stateZoneBytes.buffer);
+    view.setUint16(32, Type.StateZone, true); // message type
+    
+    // StateZone payload: zones_count, zone_index, hue, saturation, brightness, kelvin
+    view.setUint8(36, 3); // zones_count
+    view.setUint8(37, 0); // zone_index
+    view.setUint16(38, 120, true); // hue
+    view.setUint16(40, 65535, true); // saturation
+    view.setUint16(42, 32768, true); // brightness
+    view.setUint16(44, 3500, true); // kelvin
+    
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
+    
+    const result = cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
+    
+    assert.equal(Array.isArray(result), true);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].zone_index, 0);
+    assert.equal(result[0].hue, 120);
+    assert.equal(continuation.expectMore, true); // Should expect more zones (0, 1, 2)
+  });
+
+  test('GetColorZonesCommand decode handles StateMultiZone responses', () => {
+    const cmd = Commands.GetColorZonesCommand(0, 2);
+    
+    // Mock StateMultiZone response (Type.StateMultiZone = 506)
+    // StateMultiZone always contains 8 colors (fixed size)
+    const stateMultiZoneBytes = new Uint8Array(36 + 2 + 8 * 8); // header + basic payload + 8 colors
+    const view = new DataView(stateMultiZoneBytes.buffer);
+    view.setUint16(32, Type.StateMultiZone, true); // message type
+    
+    // StateMultiZone payload
+    view.setUint8(36, 3); // zones_count
+    view.setUint8(37, 0); // zone_index
+    
+    // 8 colors (StateMultiZone always has 8 colors)
+    for (let i = 0; i < 8; i++) {
+      const colorOffset = 38 + (i * 8);
+      view.setUint16(colorOffset, 120 + (i * 40), true); // hue
+      view.setUint16(colorOffset + 2, 65535, true); // saturation
+      view.setUint16(colorOffset + 4, 32768, true); // brightness
+      view.setUint16(colorOffset + 6, 3500, true); // kelvin
+    }
+    
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
+    
+    const result = cmd.decode(stateMultiZoneBytes, offsetRef, continuation, Type.StateMultiZone);
+    
+    assert.equal(Array.isArray(result), true);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].zone_index, 0);
+    assert.equal(result[0].colors.length, 8);
+    assert.equal(continuation.expectMore, false); // All zones covered (0-7, more than we requested 0-2)
+  });
+
+  test('GetColorZonesCommand callback receives responses', () => {
+    const receivedResponses = [];
+    const onResponse = (response) => {
+      receivedResponses.push(response);
+    };
+    
+    const cmd = Commands.GetColorZonesCommand(0, 1, onResponse);
+    
+    // Mock StateZone response for zone 0
+    const stateZoneBytes = new Uint8Array(36 + 13);
+    const view = new DataView(stateZoneBytes.buffer);
+    view.setUint16(32, Type.StateZone, true);
+    view.setUint8(36, 2); // zones_count
+    view.setUint8(37, 0); // zone_index
+    view.setUint16(38, 120, true); // hue
+    view.setUint16(40, 65535, true); // saturation
+    view.setUint16(42, 32768, true); // brightness
+    view.setUint16(44, 3500, true); // kelvin
+    
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
+    
+    cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
+    
+    assert.equal(receivedResponses.length, 1);
+    assert.equal(receivedResponses[0].zone_index, 0);
+    assert.equal(receivedResponses[0].hue, 120);
+    assert.equal(continuation.expectMore, true); // Still expecting zone 1
+  });
+
+  test('GetColorZonesCommand callback can stop early', () => {
+    const receivedResponses = [];
+    const onResponse = (response) => {
+      receivedResponses.push(response);
+      return false; // Stop early
+    };
+    
+    const cmd = Commands.GetColorZonesCommand(0, 5, onResponse);
+    
+    // Mock StateZone response for zone 0
+    const stateZoneBytes = new Uint8Array(36 + 13);
+    const view = new DataView(stateZoneBytes.buffer);
+    view.setUint16(32, Type.StateZone, true);
+    view.setUint8(36, 6); // zones_count
+    view.setUint8(37, 0); // zone_index
+    view.setUint16(38, 120, true); // hue
+    view.setUint16(40, 65535, true); // saturation
+    view.setUint16(42, 32768, true); // brightness
+    view.setUint16(44, 3500, true); // kelvin
+    
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
+    
+    cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
+    
+    assert.equal(receivedResponses.length, 1);
+    assert.equal(continuation.expectMore, false); // Stopped early due to callback returning false
+  });
+
+
+  test('GetColorZonesCommand accumulates responses correctly', () => {
+    const cmd = Commands.GetColorZonesCommand(0, 2);
+    
+    // First call should return array with 1 item
+    const stateZoneBytes1 = new Uint8Array(36 + 13);
+    let view = new DataView(stateZoneBytes1.buffer);
+    view.setUint16(32, Type.StateZone, true);
+    view.setUint8(36, 3); // zones_count
+    view.setUint8(37, 0); // zone_index
+    
+    let offsetRef = { current: 36 };
+    let continuation = { expectMore: false };
+    
+    let result1 = cmd.decode(stateZoneBytes1, offsetRef, continuation, Type.StateZone);
+    assert.equal(result1.length, 1);
+    assert.equal(continuation.expectMore, true);
+    
+    // Second call should return array with 2 items (accumulated)
+    const stateZoneBytes2 = new Uint8Array(36 + 13);
+    view = new DataView(stateZoneBytes2.buffer);
+    view.setUint16(32, Type.StateZone, true);
+    view.setUint8(36, 3); // zones_count
+    view.setUint8(37, 1); // zone_index
+    
+    offsetRef = { current: 36 };
+    continuation = { expectMore: false };
+    
+    let result2 = cmd.decode(stateZoneBytes2, offsetRef, continuation, Type.StateZone);
+    assert.equal(result2.length, 2);
+    assert.equal(result2[0].zone_index, 0);
+    assert.equal(result2[1].zone_index, 1);
+    assert.equal(continuation.expectMore, true); // Still need zone 2
+    
+    // Third call should return array with 3 items and be complete
+    const stateZoneBytes3 = new Uint8Array(36 + 13);
+    view = new DataView(stateZoneBytes3.buffer);
+    view.setUint16(32, Type.StateZone, true);
+    view.setUint8(36, 3); // zones_count
+    view.setUint8(37, 2); // zone_index
+    
+    offsetRef = { current: 36 };
+    continuation = { expectMore: false };
+    
+    let result3 = cmd.decode(stateZoneBytes3, offsetRef, continuation, Type.StateZone);
+    assert.equal(result3.length, 3);
+    assert.equal(result3[2].zone_index, 2);
+    assert.equal(continuation.expectMore, false); // Complete
+  });
+
+  test('GetColorZonesCommand ignores unknown response types', () => {
+    const cmd = Commands.GetColorZonesCommand(0, 1);
+    
+    // Mock unknown response type
+    const unknownBytes = new Uint8Array(36 + 10);
+    const view = new DataView(unknownBytes.buffer);
+    view.setUint16(32, 999, true); // Unknown message type
+    
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
+    
+    const result = cmd.decode(unknownBytes, offsetRef, continuation, 999);
+    
+    assert.equal(result.length, 0); // No responses added
+    assert.equal(continuation.expectMore, true); // Still expecting responses
   });
 
   test('SetColorZonesCommand', () => {

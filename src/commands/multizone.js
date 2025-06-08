@@ -3,14 +3,69 @@ import { Type } from '../constants/index.js';
 
 
 /**
+ * @typedef {ReturnType<typeof import('../encoding.js').decodeStateZone> | ReturnType<typeof import('../encoding.js').decodeStateMultiZone>} ColorZoneResponse
+ */
+
+/**
  * @param {number} startIndex
  * @param {number} endIndex
+ * @param {(response: ColorZoneResponse) => boolean | void} [onResponse] - Optional callback called for each response. Return false to stop early.
  */
-export function GetColorZonesCommand(startIndex, endIndex) {
+export function GetColorZonesCommand(startIndex, endIndex, onResponse) {
+  const expectedZones = new Set();
+  for (let i = startIndex; i <= endIndex; i++) {
+    expectedZones.add(i);
+  }
+  
+  /** @type {ColorZoneResponse[]} */
+  const responses = [];
+  
   return {
     type: Type.GetColorZones,
     payload: Encoding.encodeGetColorZones(startIndex, endIndex),
-    decode: Encoding.decodeStateMultiZone,
+    
+    /**
+     * @param {Uint8Array} bytes
+     * @param {{current: number}} offsetRef  
+     * @param {{expectMore: boolean}} [continuation] - Set expectMore to false to stop waiting for more responses
+     * @param {number} [responseType] - Message type (for multi-response commands)
+     */
+    decode(bytes, offsetRef, continuation, responseType) {
+      
+      let response;
+      
+      if (responseType === Type.StateZone) {
+        response = Encoding.decodeStateZone(bytes, offsetRef);
+        expectedZones.delete(response.zone_index);
+      } else if (responseType === Type.StateMultiZone) {
+        response = Encoding.decodeStateMultiZone(bytes, offsetRef);
+        // Remove all zones covered by this response
+        for (let i = 0; i < response.colors.length; i++) {
+          expectedZones.delete(response.zone_index + i);
+        }
+      }
+      
+      // Update continuation to indicate if more responses are expected
+      if (continuation) {
+        if (response) {
+          responses.push(response);
+          
+          // Call user callback if provided
+          let shouldContinue = true;
+          if (onResponse) {
+            const result = onResponse(response);
+            shouldContinue = result !== false; // false = stop early
+          }
+          
+          continuation.expectMore = shouldContinue && expectedZones.size > 0;
+        } else {
+          // Unknown response type - still expect more responses
+          continuation.expectMore = expectedZones.size > 0;
+        }
+      }
+      
+      return responses; // Always return the accumulated array
+    }
   };
 }
 

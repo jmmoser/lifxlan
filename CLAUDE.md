@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Test**: `bun test --coverage` or `node --test --experimental-test-coverage`
 - **Build**: `bun build ./src/index.js --outdir ./dist --minify --entry-naming [dir]/lifxlan.min.[ext]`
-- **Type Check**: `tsc` (generates types in `./types` directory)
+- **Type Check**: `bun types` (generates types in `./types` directory, don't modify the files in `./types` manually)
 - **Lint**: `oxlint`
 
 ## Project Architecture

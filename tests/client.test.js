@@ -5,7 +5,7 @@ import { Router } from '../src/router.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPowerCommand, GetServiceCommand } from '../src/commands.js';
+import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand } from '../src/commands.js';
 
 describe('client', () => {
   const sharedDevice = Device({
@@ -213,5 +213,90 @@ describe('client', () => {
       () => client.send(GetPowerCommand(), device, new AbortController().signal),
       (error) => error.name === 'MessageConflictError',
     );
+  });
+
+  test('send multi-response command with expectMore true', async () => {
+    let responseCount = 0;
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          assert.equal(header.source, client.source);
+          
+          // Simulate multiple responses arriving
+          setTimeout(() => {
+            // First response: StateZone for zone 0 (expectMore = true)
+            const stateZoneBytes = new Uint8Array(36 + 13);
+            const view = new DataView(stateZoneBytes.buffer);
+            view.setUint16(32, Type.StateZone, true); // message type
+            view.setUint8(36, 2); // zones_count
+            view.setUint8(37, 0); // zone_index
+            view.setUint16(38, 120, true); // hue
+            view.setUint16(40, 65535, true); // saturation
+            view.setUint16(42, 32768, true); // brightness
+            view.setUint16(44, 3500, true); // kelvin
+            
+            client.router.receive(
+              encode(
+                header.tagged,
+                header.source,
+                header.target,
+                false,
+                false,
+                header.sequence,
+                Type.StateZone,
+                stateZoneBytes.subarray(36), // payload only
+              ),
+            );
+            responseCount++;
+          }, 0);
+          
+          setTimeout(() => {
+            // Second response: StateZone for zone 1 (expectMore = false)
+            const stateZoneBytes = new Uint8Array(36 + 13);
+            const view = new DataView(stateZoneBytes.buffer);
+            view.setUint16(32, Type.StateZone, true); // message type
+            view.setUint8(36, 2); // zones_count
+            view.setUint8(37, 1); // zone_index
+            view.setUint16(38, 240, true); // hue
+            view.setUint16(40, 65535, true); // saturation
+            view.setUint16(42, 32768, true); // brightness
+            view.setUint16(44, 3500, true); // kelvin
+            
+            client.router.receive(
+              encode(
+                header.tagged,
+                header.source,
+                header.target,
+                false,
+                false,
+                header.sequence,
+                Type.StateZone,
+                stateZoneBytes.subarray(36), // payload only
+              ),
+            );
+            responseCount++;
+          }, 1);
+        },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    // Request zones 0-1, should receive 2 StateZone responses
+    const result = await client.send(GetColorZonesCommand(0, 1), device);
+    
+    assert.equal(Array.isArray(result), true);
+    assert.equal(result.length, 2);
+    assert.equal(result[0].zone_index, 0);
+    assert.equal(result[0].hue, 120);
+    assert.equal(result[1].zone_index, 1);
+    assert.equal(result[1].hue, 240);
+    assert.equal(responseCount, 2); // Verify both responses were received
   });
 });

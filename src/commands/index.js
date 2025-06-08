@@ -1,6 +1,6 @@
 /**
  * @template OutputType
- * @typedef {(bytes: Uint8Array, offsetRef: { current: number; }) => OutputType} Decoder
+ * @typedef {(bytes: Uint8Array, offsetRef: { current: number; }, continuation?: { expectMore: boolean; }, responseType?: number) => OutputType} Decoder
  */
 
 /**
