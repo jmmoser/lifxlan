@@ -11,6 +11,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - 🔗 **Group devices** for batch operations
 - ⚡ **High performance** - optimized for speed
 - 🚀 **Zero dependencies** - bring your own UDP socket
+- 🎛️ **Direct packet control** - each client operation sends exactly one packet with no hidden behavior
 
 ## Quick Start
 
