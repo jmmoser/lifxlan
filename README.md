@@ -25,7 +25,7 @@ npm install lifxlan
 
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan/index.js';
 
 const socket = dgram.createSocket('udp4');
 
@@ -77,7 +77,7 @@ socket.close();
 ### Discover and control all devices
 
 ```javascript
-import { GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { GetServiceCommand, SetPowerCommand } from 'lifxlan/index.js';
 
 // ... setup code from above ...
 
@@ -299,7 +299,7 @@ while (true) {
 ### Device Groups
 
 ```javascript
-import { Groups, GetGroupCommand } from 'lifxlan';
+import { Groups, GetGroupCommand } from 'lifxlan/index.js';
 
 const groups = Groups({
   onAdded(group) {
