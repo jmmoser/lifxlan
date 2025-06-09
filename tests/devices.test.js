@@ -76,7 +76,7 @@ describe('devices', () => {
   test('get device aborts', async () => {
     const devices = Devices();
 
-    expect(devices.get(sharedDevice.serialNumber, AbortSignal.timeout(0))).rejects.toEqual(new Error('Abort'));
+    await expect(devices.get(sharedDevice.serialNumber, AbortSignal.timeout(0))).rejects.toThrow('device lookup was aborted');
   });
 
   test('remove device calls onRemoved', () => {
@@ -116,7 +116,7 @@ describe('devices', () => {
     devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
 
     // First should reject, second should resolve
-    await expect(promise1).rejects.toEqual(new Error('Abort'));
+    await expect(promise1).rejects.toThrow('device lookup was aborted');
     const device = await promise2;
     expect(device).toEqual(sharedDevice);
   });
@@ -169,6 +169,54 @@ describe('devices', () => {
     const promise = devices.get('test-device', controller.signal);
     controller.abort();
     
-    expect(promise).rejects.toThrow('Abort');
+    expect(promise).rejects.toThrow('device lookup was aborted');
+  });
+
+  test('Device factory validates address is required', () => {
+    expect(() => Device({ })).toThrow('Invalid address: undefined (is required)');
+    expect(() => Device({ address: '' })).toThrow('Invalid address:  (is required)');
+  });
+
+  test('Device factory validates port range', () => {
+    expect(() => Device({ 
+      address: '192.168.1.1', 
+      port: 0 
+    })).toThrow('Invalid port: 0 (must be between 1 and 65535)');
+    
+    expect(() => Device({ 
+      address: '192.168.1.1', 
+      port: 65536 
+    })).toThrow('Invalid port: 65536 (must be between 1 and 65535)');
+    
+    expect(() => Device({ 
+      address: '192.168.1.1', 
+      port: -1 
+    })).toThrow('Invalid port: -1 (must be between 1 and 65535)');
+  });
+
+  test('Device factory validates sequence range', () => {
+    expect(() => Device({ 
+      address: '192.168.1.1', 
+      sequence: -1 
+    })).toThrow('Invalid sequence: -1 (must be between 0 and 254)');
+    
+    expect(() => Device({ 
+      address: '192.168.1.1', 
+      sequence: 255 
+    })).toThrow('Invalid sequence: 255 (must be between 0 and 254)');
+  });
+
+  test('Device factory allows valid values', () => {
+    const device = Device({
+      address: '192.168.1.1',
+      port: 56700,
+      sequence: 100,
+      serialNumber: 'abcdef123456'
+    });
+
+    expect(device.address).toBe('192.168.1.1');
+    expect(device.port).toBe(56700);
+    expect(device.sequence).toBe(100);
+    expect(device.serialNumber).toBe('abcdef123456');
   });
 });

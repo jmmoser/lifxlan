@@ -1,5 +1,6 @@
 import { NO_TARGET, PORT } from './constants/index.js';
 import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils/index.js';
+import { AbortError, ValidationError } from './errors.js';
 
 export interface Device {
   address: string;
@@ -18,6 +19,18 @@ export interface DeviceConfig {
 }
 
 export function Device(config: DeviceConfig): Device {
+  if (!config.address) {
+    throw new ValidationError('address', config.address, 'is required');
+  }
+  
+  if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
+    throw new ValidationError('port', config.port, 'must be between 1 and 65535');
+  }
+  
+  if (config.sequence !== undefined && (config.sequence < 0 || config.sequence > 254)) {
+    throw new ValidationError('sequence', config.sequence, 'must be between 0 and 254');
+  }
+  
   const device = config as Device;
   device.port ??= PORT;
   device.target ??= config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET;
@@ -120,7 +133,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
             deviceResolvers.delete(serialNumber);
           }
         }
-        reject(errOrEvent instanceof Error ? errOrEvent : new Error('Abort'));
+        reject(errOrEvent instanceof Error ? errOrEvent : new AbortError('device lookup'));
       }
 
       let timeout: ReturnType<typeof setTimeout> | undefined;

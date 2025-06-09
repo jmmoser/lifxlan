@@ -92,6 +92,18 @@ export class DisposedClientError extends LifxError {
 }
 
 /**
+ * Thrown when an operation is aborted via AbortSignal.
+ */
+export class AbortError extends LifxError {
+  public readonly operation: string;
+
+  constructor(operation = 'operation') {
+    super(`${operation} was aborted`);
+    this.operation = operation;
+  }
+}
+
+/**
  * Thrown when validation of input parameters fails.
  */
 export class ValidationError extends LifxError {

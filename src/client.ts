@@ -18,6 +18,8 @@ import {
   TimeoutError,
   UnhandledCommandError,
   MessageConflictError,
+  AbortError,
+  DisposedClientError,
 } from './errors.js';
 
 import type { RouterInstance, MessageHandler, Header } from './router.js';
@@ -94,7 +96,7 @@ function registerHandler<T, ACK extends boolean>(
     if (errOrEvent instanceof Error) {
       reject(errOrEvent);
     } else {
-      reject(new Error('Operation aborted'));
+      reject(new AbortError('device response'));
     }
   }
 
@@ -229,12 +231,25 @@ export function Client(options: ClientOptions): ClientInstance {
     dispose() {
       if (disposed) return;
       disposed = true;
+      
+      // Clear all pending response handlers
+      for (const handler of responseHandlerMap.values()) {
+        try {
+          handler(0, new Uint8Array(), { current: 0 });
+        } catch {
+          // Ignore errors during disposal cleanup
+        }
+      }
+      responseHandlerMap.clear();
+      
       router.deregister(source, client.onMessage);
     },
     /**
      * Broadcast a command to the local network.
      */
     broadcast<T>(command: Command<T>) {
+      if (disposed) throw new DisposedClientError(source);
+      
       const bytes = encode(
         true,
         source,
@@ -252,6 +267,8 @@ export function Client(options: ClientOptions): ClientInstance {
      * Send a command to a device without expecting a response or acknowledgement.
      */
     unicast<T>(command: Command<T>, device: Device) {
+      if (disposed) throw new DisposedClientError(source);
+      
       const bytes = encode(
         false,
         source,
@@ -271,6 +288,8 @@ export function Client(options: ClientOptions): ClientInstance {
      * Send a command to a device and only require an acknowledgement.
      */
     sendOnlyAcknowledgement<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<void> {
+      if (disposed) throw new DisposedClientError(source);
+      
       const bytes = encode(
         false,
         source,
@@ -294,6 +313,8 @@ export function Client(options: ClientOptions): ClientInstance {
      * Send a command to a device and require a response.
      */
     send<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<T> {
+      if (disposed) throw new DisposedClientError(source);
+      
       const bytes = encode(
         false,
         source,

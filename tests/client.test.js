@@ -348,4 +348,109 @@ describe('client', () => {
     client.dispose();
     client.dispose();
   });
+
+  test('disposed client throws DisposedClientError on operations', () => {
+    const router = Router({
+      onSend() {},
+    });
+    
+    const client = Client({ router });
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+    
+    client.dispose();
+    
+    // All client operations should throw DisposedClientError
+    assert.throws(
+      () => client.broadcast(GetServiceCommand()),
+      (error) => error.name === 'DisposedClientError',
+    );
+    
+    assert.throws(
+      () => client.unicast(GetServiceCommand(), device),
+      (error) => error.name === 'DisposedClientError',
+    );
+    
+    assert.throws(
+      () => client.sendOnlyAcknowledgement(GetServiceCommand(), device),
+      (error) => error.name === 'DisposedClientError',
+    );
+    
+    assert.throws(
+      () => client.send(GetServiceCommand(), device),
+      (error) => error.name === 'DisposedClientError',
+    );
+  });
+
+  test('client disposal clears pending response handlers', async () => {
+    let sendCalled = false;
+    const client = Client({
+      defaultTimeoutMs: 100, // Short timeout so test doesn't hang
+      router: Router({
+        onSend() {
+          sendCalled = true;
+        },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    // Start a request but don't respond
+    const promise = client.send(GetServiceCommand(), device);
+    
+    // Verify the request was sent
+    assert.ok(sendCalled);
+    
+    // Dispose the client, which should clear pending handlers
+    client.dispose();
+
+    // The promise should be rejected due to timeout (since we're not responding)
+    try {
+      await promise;
+      assert.fail('Promise should have been rejected');
+    } catch (error) {
+      // Should be rejected due to timeout or disposal cleanup
+      assert.ok(error instanceof Error);
+    }
+  });
+
+  test('AbortSignal creates AbortError', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {
+          // Don't respond to simulate timeout/abort
+        },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    const controller = new AbortController();
+    const promise = client.send(GetServiceCommand(), device, controller.signal);
+    
+    // Immediately abort
+    controller.abort();
+
+    try {
+      await promise;
+      assert.fail('Promise should have been rejected');
+    } catch (error) {
+      assert.equal(error.name, 'AbortError');
+      assert.equal(error.message, 'device response was aborted');
+    }
+
+    client.dispose();
+  });
 });

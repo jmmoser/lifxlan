@@ -6,6 +6,7 @@ import {
   MessageConflictError,
   SourceExhaustionError,
   DisposedClientError,
+  AbortError,
   ValidationError,
 } from '../src/errors.js';
 
@@ -74,6 +75,19 @@ describe('errors', () => {
     expect(error.message).toBe('Cannot use disposed client with source 123');
     expect(error.source).toBe(123);
     expect(error instanceof LifxError).toBe(true);
+  });
+
+  test('AbortError', () => {
+    const error = new AbortError('device response');
+    expect(error.message).toBe('device response was aborted');
+    expect(error.operation).toBe('device response');
+    expect(error instanceof LifxError).toBe(true);
+  });
+
+  test('AbortError with default operation', () => {
+    const error = new AbortError();
+    expect(error.message).toBe('operation was aborted');
+    expect(error.operation).toBe('operation');
   });
 
   test('ValidationError', () => {

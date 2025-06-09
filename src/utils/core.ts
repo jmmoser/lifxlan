@@ -1,4 +1,4 @@
-export const NOOP = (value: unknown) => {};
+export const NOOP = (_value: unknown) => {};
 
 export function PromiseWithResolvers<T>(): {
   resolve: (value: T) => void;
