@@ -1,28 +1,10 @@
 // Core LIFX protocol implementation
-export {
-  PORT,
-  BROADCAST_ADDRESS,
-  PRODUCTS_URL,
-  NO_TARGET,
-  ServiceType,
-  Direction,
-  LightLastHevCycleResult,
-  MultiZoneApplicationRequest,
-  MultiZoneEffectType,
-  MultiZoneExtendedApplicationRequest,
-  TileEffectType,
-  TileEffectSkyType,
-  Waveform,
-  Type,
-} from './constants/index.js';
-
-export {
-  Router,
-} from './router.js';
-
-export {
-  Client,
-} from './client.js';
+export * from './constants/index.js';
+export * from './router.js';
+export * from './client.js';
+export * from './devices.js';
+export * from './groups.js';
+export * from './errors.js';
 
 export {
   GetServiceCommand,
@@ -124,70 +106,6 @@ export {
   encodeSetTileEffect,
 } from './encoding.js';
 
-export {
-  Devices,
-} from './devices.js';
+export * from './utils/core.js';
 
-export {
-  Groups,
-} from './groups.js';
-
-// Core utility functions (always included)
-export {
-  NOOP,
-  PromiseWithResolvers,
-  getRssiStatus,
-  convertSignalToRssi,
-  convertTargetToSerialNumber,
-  convertSerialNumberToTarget,
-} from './utils/core.js';
-
-// Optional utility functions (for tree-shaking)
-export {
-  hsbToRgb,
-  rgbToHsb,
-} from './utils/color.js';
-
-// Enhanced features for extensibility and performance
-export {
-  LifxError,
-  TimeoutError,
-  UnhandledCommandError,
-  MessageConflictError,
-  SourceExhaustionError,
-  DisposedClientError,
-  ValidationError,
-} from './errors.js';
-
-// Export types for TypeScript consumers
-export type {
-  Header,
-  MessageHandler,
-  RouterOptions,
-  RouterInstance,
-} from './router.js';
-
-export type {
-  Device,
-  DeviceConfig,
-  DevicesOptions,
-  DevicesInstance,
-} from './devices.js';
-
-export type {
-  Group,
-  GroupsOptions,
-  StateGroup,
-  GroupsInstance,
-} from './groups.js';
-
-export type {
-  ClientOptions,
-  ClientInstance,
-  Command,
-  Decoder,
-} from './client.js';
-
-export type {
-  RssiStatus,
-} from './utils/core.js';
+export * from './utils/color.js';

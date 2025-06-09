@@ -24,13 +24,15 @@ import {
 
 import type { RouterInstance, MessageHandler, Header } from './router.js';
 
-export interface Device {
-  address: string;
-  port: number;
-  target: Uint8Array;
-  serialNumber: string;
-  sequence: number;
-}
+import type { Device } from './devices.js';
+
+// export interface Device {
+//   address: string;
+//   port: number;
+//   target: Uint8Array;
+//   serialNumber: string;
+//   sequence: number;
+// }
 
 export type Decoder<T> = (
   bytes: Uint8Array,
