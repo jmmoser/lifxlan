@@ -1,26 +1,8 @@
-import { decodeHeader, getPayload } from './encoding.js';
+import { decodeHeader, getPayload, Header } from './encoding.js';
 import { convertTargetToSerialNumber } from './utils/index.js';
 import { SourceExhaustionError, ValidationError } from './errors.js';
 
-export interface Header {
-  bytes: Uint8Array;
-  size: number;
-  protocol: number;
-  addressable: boolean;
-  tagged: boolean;
-  origin: number;
-  source: number;
-  target: Uint8Array;
-  reserved1: Uint8Array;
-  reserved2: Uint8Array;
-  res_required: boolean;
-  ack_required: boolean;
-  reserved3: number;
-  reserved4: Uint8Array;
-  sequence: number;
-  reserved5: Uint8Array;
-  type: number;
-}
+export type { Header };
 
 export type MessageHandler = (
   header: Header,
@@ -108,7 +90,7 @@ export function Router(options: RouterOptions): RouterInstance {
       options.onSend(message, port, address, serialNumber);
     },
     receive(message: Uint8Array) {
-      const header = decodeHeader(message) as Header;
+      const header = decodeHeader(message);
       const payload = getPayload(message);
 
       const serialNumber = convertTargetToSerialNumber(header.target);

@@ -25,27 +25,7 @@ import {
 import type { RouterInstance, MessageHandler, Header } from './router.js';
 
 import type { Device } from './devices.js';
-
-// export interface Device {
-//   address: string;
-//   port: number;
-//   target: Uint8Array;
-//   serialNumber: string;
-//   sequence: number;
-// }
-
-export type Decoder<T> = (
-  bytes: Uint8Array,
-  offsetRef: { current: number },
-  continuation?: { expectMore: boolean },
-  responseType?: number
-) => T;
-
-export interface Command<T> {
-  type: number;
-  payload?: Uint8Array;
-  decode?: Decoder<T>;
-}
+import type { Decoder, Command } from './commands/index.js';
 
 /**
  * Creates a unique response key for correlating requests with responses.

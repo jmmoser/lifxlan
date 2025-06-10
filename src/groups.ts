@@ -1,4 +1,5 @@
 import type { Device } from './devices.js';
+import type { StateGroup } from './encoding.js';
 
 export interface Group {
   label: string;
@@ -10,11 +11,6 @@ export interface GroupsOptions {
   onAdded?: (group: Group) => void;
   onChanged?: (group: Group) => void;
   onRemoved?: (group: Group) => void;
-}
-
-export interface StateGroup {
-  group: string;
-  label: string;
 }
 
 export interface GroupsInstance {
