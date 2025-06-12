@@ -9,7 +9,7 @@ import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
 import { Devices, Device } from '../src/devices.js';
 import { GetColorCommand, SetColorCommand, GetServiceCommand, SetPowerCommand } from '../src/commands.js';
-import { NO_TARGET } from '../src/constants.js';
+import { NO_TARGET } from '../src/constants/core.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber } from '../src/utils/index.js';
 import { hsbToRgb, rgbToHsb } from '../src/utils/color.js';
 
