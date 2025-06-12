@@ -53,7 +53,7 @@ describe('router', () => {
     const source = router.nextSource();
     
     router.register(source, handler1);
-    assert.throws(() => router.register(source, handler2), (error) => {
+    assert.throws(() => router.register(source, handler2), (error: any) => {
       return error.name === 'ValidationError' && error.parameter === 'source';
     });
   });
@@ -68,13 +68,13 @@ describe('router', () => {
     const source = router.nextSource();
     
     router.register(source, handler1);
-    assert.throws(() => router.deregister(source, handler2), (error) => {
+    assert.throws(() => router.deregister(source, handler2), (error: any) => {
       return error.name === 'ValidationError' && error.parameter === 'messageHandler';
     });
   });
 
   test('send calls onSend with correct parameters', () => {
-    let sentMessage, sentPort, sentAddress, sentSerialNumber;
+    let sentMessage: Uint8Array | undefined, sentPort: number | undefined, sentAddress: string | undefined, sentSerialNumber: string | undefined;
     
     const router = Router({
       onSend(message, port, address, serialNumber) {
@@ -95,7 +95,7 @@ describe('router', () => {
   });
 
   test('send calls onSend without serial number', () => {
-    let sentMessage, sentPort, sentAddress, sentSerialNumber;
+    let sentMessage: Uint8Array | undefined, sentPort: number | undefined, sentAddress: string | undefined, sentSerialNumber: string | undefined;
     
     const router = Router({
       onSend(message, port, address, serialNumber) {
@@ -116,13 +116,13 @@ describe('router', () => {
   });
 
   test('receive routes message to registered handler', () => {
-    let receivedHeader, receivedPayload, receivedSerialNumber;
+    let receivedHeader: any, receivedPayload: Uint8Array | undefined, receivedSerialNumber: string | undefined;
     
     const router = Router({
       onSend() {},
     });
     
-    const handler = (header, payload, serialNumber) => {
+    const handler = (header: any, payload: Uint8Array, serialNumber: string) => {
       receivedHeader = header;
       receivedPayload = payload;
       receivedSerialNumber = serialNumber;
@@ -157,7 +157,7 @@ describe('router', () => {
   });
 
   test('receive calls onMessage when provided', () => {
-    let onMessageHeader, onMessagePayload, onMessageSerialNumber;
+    let onMessageHeader: any, onMessagePayload: Uint8Array | undefined, onMessageSerialNumber: string | undefined;
     
     const router = Router({
       onSend() {},
@@ -224,7 +224,7 @@ describe('router', () => {
     const router = Router({
       onSend() {},
       handlers,
-    });
+    } as any);
     
     // This test verifies the concept but can't actually test all 4 billion sources
     // We'll just verify that the router can handle the case when sources are registered
@@ -235,7 +235,7 @@ describe('router', () => {
         router.register(source, () => {});
         sourceCount++;
       }
-    } catch (error) {
+    } catch (error: any) {
       // This might throw if we run out, which is expected behavior
       assert.ok(error.message.includes('No available source') || error.message.includes('Source already registered'));
     }
@@ -302,7 +302,7 @@ describe('router', () => {
     const router = Router({
       onSend() {},
       handlers,
-    });
+    } as any);
     
     // The router will start with sourceCounter = 2, but since 2-100 are taken,
     // it will keep incrementing. Eventually it will find an available source
@@ -312,7 +312,7 @@ describe('router', () => {
     try {
       const source = router.nextSource();
       foundSource = source > 100; // Should find something beyond our filled range
-    } catch (error) {
+    } catch (error: any) {
       // If it throws SourceExhaustionError, that's also valid behavior
       assert.ok(error.message.includes('No more source IDs available'));
     }
@@ -354,15 +354,15 @@ describe('router', () => {
     const router = Router({
       onSend() {},
       handlers,
-    });
+    } as any);
     
     // Try to get a source - this should force the router to search through
     // the filled range and potentially trigger the wraparound logic
-    let source;
+    let source: number;
     try {
       source = router.nextSource();
       assert.ok(source >= 1000 || source < 2, 'Source should be outside filled range');
-    } catch (error) {
+    } catch (error: any) {
       // SourceExhaustionError is also acceptable
       assert.ok(error.message.includes('No more source IDs available'));
     }

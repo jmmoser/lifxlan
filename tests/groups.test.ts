@@ -24,7 +24,7 @@ describe('groups', () => {
 
   test('register new group calls onAdded', () => {
     const groupsOptions = {
-      onAdded(group) {
+      onAdded(group: any) {
         expect(group.uuid).toEqual(groupData.group);
         expect(group.label).toEqual(groupData.label);
         expect(group.devices).toEqual([device1]);
@@ -42,7 +42,7 @@ describe('groups', () => {
   test('register device to existing group calls onChanged', () => {
     const groupsOptions = {
       onAdded() {},
-      onChanged(group) {
+      onChanged(group: any) {
         expect(group.devices.length).toBe(2);
         expect(group.devices).toContain(device1);
         expect(group.devices).toContain(device2);
@@ -78,7 +78,7 @@ describe('groups', () => {
   test('remove group calls onRemoved', () => {
     const groupsOptions = {
       onAdded() {},
-      onRemoved(group) {
+      onRemoved(group: any) {
         expect(group.uuid).toEqual(groupData.group);
         expect(group.label).toEqual(groupData.label);
       },
@@ -109,7 +109,7 @@ describe('groups', () => {
     let onChangedCalled = false;
     const groupsOptions = {
       onAdded() {},
-      onChanged(group) {
+      onChanged(group: any) {
         // This will be called after removeDevice
         if (onChangedCalled) {
           expect(group.devices.length).toBe(1);
@@ -140,7 +140,7 @@ describe('groups', () => {
   test('removeDevice from group with single device removes group', () => {
     const groupsOptions = {
       onAdded() {},
-      onRemoved(group) {
+      onRemoved(group: any) {
         expect(group.uuid).toEqual(groupData.group);
       },
     };

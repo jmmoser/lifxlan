@@ -33,7 +33,7 @@ describe('devices', () => {
 
   test('registered device changes address calls onChanged', () => {
     const devicesOptions = {
-      onChanged(device) {
+      onChanged(device: any) {
         expect(device.address).toEqual(sharedDevice.address + '1');
       },
     };
@@ -81,7 +81,7 @@ describe('devices', () => {
 
   test('remove device calls onRemoved', () => {
     const devicesOptions = {
-      onRemoved(device) {
+      onRemoved(device: any) {
         expect(device.address).toEqual(sharedDevice.address);
       },
     };
@@ -173,8 +173,8 @@ describe('devices', () => {
   });
 
   test('Device factory validates address is required', () => {
-    expect(() => Device({ })).toThrow('Invalid address: undefined (is required)');
-    expect(() => Device({ address: '' })).toThrow('Invalid address:  (is required)');
+    expect(() => Device({ } as any)).toThrow('Invalid address: undefined (is required)');
+    expect(() => Device({ address: '' } as any)).toThrow('Invalid address:  (is required)');
   });
 
   test('Device factory validates port range', () => {

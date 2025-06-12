@@ -10,7 +10,7 @@ describe('utils', () => {
   });
 
   test('PromiseWithResolvers creates resolvable promise', async () => {
-    const { promise, resolve } = Utils.PromiseWithResolvers();
+    const { promise, resolve } = Utils.PromiseWithResolvers<string>();
     
     setTimeout(() => resolve('success'), 0);
     
@@ -19,7 +19,7 @@ describe('utils', () => {
   });
 
   test('PromiseWithResolvers creates rejectable promise', async () => {
-    const { promise, reject } = Utils.PromiseWithResolvers();
+    const { promise, reject } = Utils.PromiseWithResolvers<string>();
     
     setTimeout(() => reject(new Error('test error')), 0);
     
