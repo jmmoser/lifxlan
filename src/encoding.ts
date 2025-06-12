@@ -704,7 +704,25 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
   const view = new DataView(bytes.buffer, bytes.byteOffset);
   const start_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
-  const devices = [];
+  const devices: Array<{
+    accel_meas_x: number;
+    accel_meas_y: number;
+    accel_meas_z: number;
+    reserved6: Uint8Array;
+    user_x: number;
+    user_y: number;
+    width: number;
+    height: number;
+    reserved7: Uint8Array;
+    device_version_vendor: number;
+    device_version_product: number;
+    reserved8: Uint8Array;
+    firmware_build: Date;
+    reserved9: Uint8Array;
+    firmware_version_minor: number;
+    firmware_version_major: number;
+    reserved10: Uint8Array;
+  }> = [];
   for (let i = 0; i < 16; i++) {
     const accel_meas_x = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
     const accel_meas_y = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
