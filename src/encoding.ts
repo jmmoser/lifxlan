@@ -277,8 +277,6 @@ export function decodeStateLocation(bytes: Uint8Array, offsetRef: OffsetRef) {
 export function decodeStateGroup(bytes: Uint8Array, offsetRef: OffsetRef) {
   const group = decodeUuid(bytes, offsetRef);
   const label = decodeString(bytes, offsetRef, 32);
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
-  // const updated_at = view.getBigUint64(offsetRef.current, true); offsetRef.current += 8;
   const updated_at = decodeTimestamp(bytes, offsetRef);
 
   return {

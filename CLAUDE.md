@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Test**: `bun run test`
 - **Build**: `bun run build`
 - **Type Check**: `npx tsc`
-- **Lint**: `oxlint`
+- **Lint**: `bun run lint`
 
 ## Project Architecture
 
@@ -39,8 +39,8 @@ Device discovery works by broadcasting `GetServiceCommand()` and registering res
 
 The project is written in TypeScript with full type safety. TypeScript declarations and JavaScript files are compiled to the `./dist` directory for publication to npm.
 
-## Run linter to check code quality
+## Check code quality
 
 ```
-bun lint
+bun run lint && npx tsc && bun run test
 ```
