@@ -2,6 +2,7 @@ import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import * as Commands from '../src/commands/index.js';
 import { Type, Waveform, MultiZoneApplicationRequest, MultiZoneExtendedApplicationRequest, MultiZoneEffectType, TileEffectType, TileEffectSkyType } from '../src/constants/index.js';
+import { State64, StateExtendedColorZones } from '../src/encoding.js';
 
 describe('commands', () => {
   test('GetServiceCommand', () => {
@@ -342,12 +343,7 @@ describe('commands', () => {
   });
 
   test('Get64Command with callback', () => {
-    const responses = [];
-    const onResponse = (response) => {
-      responses.push(response);
-    };
-    
-    const cmd = Commands.Get64Command(0, 3, 0, 0, 8, onResponse);
+    const cmd = Commands.Get64Command(0, 3, 0, 0, 8);
     assert.equal(cmd.type, Type.Get64);
     assert.equal(typeof cmd.decode, 'function');
   });
@@ -391,12 +387,10 @@ describe('commands', () => {
   });
 
   test('Get64Command callback receives responses', () => {
-    const receivedResponses = [];
-    const onResponse = (response) => {
+    const receivedResponses: State64[] = [];
+    const cmd = Commands.Get64Command(0, 2, 0, 0, 8, (response) => {
       receivedResponses.push(response);
-    };
-    
-    const cmd = Commands.Get64Command(0, 2, 0, 0, 8, onResponse);
+    });
     
     // Mock State64 response for tile 0
     const state64Bytes = new Uint8Array(36 + 5 + 64 * 8);
@@ -419,13 +413,12 @@ describe('commands', () => {
   });
 
   test('Get64Command callback can stop early', () => {
-    const receivedResponses = [];
-    const onResponse = (response) => {
+    const receivedResponses: State64[] = [];
+    
+    const cmd = Commands.Get64Command(0, 3, 0, 0, 8, (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    };
-    
-    const cmd = Commands.Get64Command(0, 3, 0, 0, 8, onResponse);
+    });
     
     // Mock State64 response for tile 0
     const state64Bytes = new Uint8Array(36 + 5 + 64 * 8);
@@ -503,12 +496,10 @@ describe('commands', () => {
   });
 
   test('GetColorZonesCommand with callback', () => {
-    const responses = [];
-    const onResponse = (response) => {
+    const responses: Commands.ColorZoneResponse[] = [];
+    const cmd = Commands.GetColorZonesCommand(0, 3, (response) => {
       responses.push(response);
-    };
-    
-    const cmd = Commands.GetColorZonesCommand(0, 3, onResponse);
+    });
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(typeof cmd.decode, 'function');
   });
@@ -580,12 +571,10 @@ describe('commands', () => {
   });
 
   test('GetColorZonesCommand callback receives responses', () => {
-    const receivedResponses = [];
-    const onResponse = (response) => {
+    const receivedResponses: Commands.ColorZoneResponse[] = [];
+    const cmd = Commands.GetColorZonesCommand(0, 1, (response) => {
       receivedResponses.push(response);
-    };
-    
-    const cmd = Commands.GetColorZonesCommand(0, 1, onResponse);
+    });
     
     // Mock StateZone response for zone 0
     const stateZoneBytes = new Uint8Array(36 + 13);
@@ -604,19 +593,20 @@ describe('commands', () => {
     cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
     
     assert.equal(receivedResponses.length, 1);
-    assert.equal(receivedResponses[0].zone_index, 0);
-    assert.equal(receivedResponses[0].hue, 120);
+    const res = receivedResponses[0];
+    assert.equal(res.zone_index, 0);
+    assert.ok('hue' in res);
+    assert.equal(res.hue, 120);
     assert.equal(continuation.expectMore, true); // Still expecting zone 1
   });
 
   test('GetColorZonesCommand callback can stop early', () => {
-    const receivedResponses = [];
-    const onResponse = (response) => {
+    const receivedResponses: Commands.ColorZoneResponse[] = [];
+    
+    const cmd = Commands.GetColorZonesCommand(0, 5, (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    };
-    
-    const cmd = Commands.GetColorZonesCommand(0, 5, onResponse);
+    });
     
     // Mock StateZone response for zone 0
     const stateZoneBytes = new Uint8Array(36 + 13);
@@ -750,12 +740,7 @@ describe('commands', () => {
   });
 
   test('GetExtendedColorZonesCommand with callback', () => {
-    const responses = [];
-    const onResponse = (response) => {
-      responses.push(response);
-    };
-    
-    const cmd = Commands.GetExtendedColorZonesCommand(onResponse);
+    const cmd = Commands.GetExtendedColorZonesCommand();
     assert.equal(cmd.type, Type.GetExtendedColorZones);
     assert.equal(typeof cmd.decode, 'function');
   });
@@ -861,12 +846,10 @@ describe('commands', () => {
   });
 
   test('GetExtendedColorZonesCommand callback receives responses', () => {
-    const receivedResponses = [];
-    const onResponse = (response) => {
+    const receivedResponses: StateExtendedColorZones[] = [];
+    const cmd = Commands.GetExtendedColorZonesCommand((response) => {
       receivedResponses.push(response);
-    };
-    
-    const cmd = Commands.GetExtendedColorZonesCommand(onResponse);
+    });
     
     // Mock StateExtendedColorZones response - decoder always reads 82 colors
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
@@ -897,13 +880,11 @@ describe('commands', () => {
   });
 
   test('GetExtendedColorZonesCommand callback can stop early', () => {
-    const receivedResponses = [];
-    const onResponse = (response) => {
+    const receivedResponses: StateExtendedColorZones[] = [];
+    const cmd = Commands.GetExtendedColorZonesCommand((response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    };
-    
-    const cmd = Commands.GetExtendedColorZonesCommand(onResponse);
+    });
     
     // Mock first response for device with >82 zones
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);

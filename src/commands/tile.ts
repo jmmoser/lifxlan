@@ -19,10 +19,7 @@ export function Get64Command(
   width: number,
   onResponse?: (response: Encoding.State64) => boolean | void
 ) {
-  const expectedTiles = new Set<number>();
-  for (let i = tileIndex; i < tileIndex + length; i++) {
-    expectedTiles.add(i);
-  }
+  let tilesSeen = 0;
   
   const responses: Encoding.State64[] = [];
   
@@ -31,7 +28,7 @@ export function Get64Command(
     
     if (responseType === Type.State64) {
       response = Encoding.decodeState64(bytes, offsetRef);
-      expectedTiles.delete(response.tile_index);
+      tilesSeen++;
     }
     
     // Update continuation to indicate if more responses are expected
@@ -46,10 +43,10 @@ export function Get64Command(
           shouldContinue = result !== false; // false = stop early
         }
         
-        continuation.expectMore = shouldContinue && expectedTiles.size > 0;
+        continuation.expectMore = shouldContinue && tilesSeen < length;
       } else {
         // Unknown response type - still expect more responses
-        continuation.expectMore = expectedTiles.size > 0;
+        continuation.expectMore = tilesSeen < length;
       }
     }
     
