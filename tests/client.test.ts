@@ -6,6 +6,7 @@ import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand } from '../src/commands/index.js';
+import { UnhandledCommandError } from '../src/errors.js';
 
 describe('client', () => {
   const sharedDevice = Device({
@@ -104,7 +105,7 @@ describe('client', () => {
     });
 
     await assert.rejects(() => client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice), (error) => {
-      return error.name === 'UnhandledCommandError' && error.commandType === Type.StatePower;
+      return error instanceof UnhandledCommandError && error.commandType === Type.StatePower;
     });
   });
 
@@ -141,7 +142,7 @@ describe('client', () => {
     const signal = AbortSignal.timeout(0);
 
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, signal), (error) => {
-      return error.message.includes('abort');
+      return Error.isError(error) && error.message.includes('abort');
     });
   });
 
@@ -154,7 +155,7 @@ describe('client', () => {
     });
 
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice), (error) => {
-      return error.name === 'TimeoutError';
+      return Error.isError(error) && error.name === 'TimeoutError';
     });
   });
 
@@ -188,7 +189,7 @@ describe('client', () => {
 
     assert.throws(
       () => client.sendOnlyAcknowledgement(GetPowerCommand(), device, new AbortController().signal),
-      (error) => error.name === 'MessageConflictError',
+      (error) => Error.isError(error) && error.name === 'MessageConflictError',
     );
   });
 
@@ -211,7 +212,7 @@ describe('client', () => {
 
     assert.throws(
       () => client.send(GetPowerCommand(), device, new AbortController().signal),
-      (error) => error.name === 'MessageConflictError',
+      (error) => Error.isError(error) && error.name === 'MessageConflictError',
     );
   });
 
@@ -294,10 +295,16 @@ describe('client', () => {
     // TODO: is it possible to get more than 1 response?
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 2);
-    assert.equal(result[0].zone_index, 0);
-    assert.equal(result[0].hue, 120);
-    assert.equal(result[1].zone_index, 1);
-    assert.equal(result[1].hue, 240);
+    const color0 = result[0];
+    assert.ok(color0);
+    assert.equal(color0.zone_index, 0);
+    assert.ok('hue' in color0);
+    assert.equal(color0.hue, 120);
+    const color1 = result[1];
+    assert.ok(color1);
+    assert.equal(color1.zone_index, 1);
+    assert.ok('hue' in color1);
+    assert.equal(color1.hue, 240);
     assert.equal(responseCount, 2); // Verify both responses were received
   });
 
@@ -366,22 +373,22 @@ describe('client', () => {
     // All client operations should throw DisposedClientError
     assert.throws(
       () => client.broadcast(GetServiceCommand()),
-      (error) => error.name === 'DisposedClientError',
+      (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
     
     assert.throws(
       () => client.unicast(GetServiceCommand(), device),
-      (error) => error.name === 'DisposedClientError',
+      (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
     
     assert.throws(
       () => client.sendOnlyAcknowledgement(GetServiceCommand(), device),
-      (error) => error.name === 'DisposedClientError',
+      (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
     
     assert.throws(
       () => client.send(GetServiceCommand(), device),
-      (error) => error.name === 'DisposedClientError',
+      (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
   });
 
@@ -447,6 +454,7 @@ describe('client', () => {
       await promise;
       assert.fail('Promise should have been rejected');
     } catch (error) {
+      assert.ok(Error.isError(error));
       assert.equal(error.name, 'AbortError');
       assert.equal(error.message, 'device response was aborted');
     }

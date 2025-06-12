@@ -440,15 +440,16 @@ describe('encoding', () => {
     bytes[16 + label.length] = 0; // null terminator
     
     // Set timestamp (8 bytes) as bigint
-    const timestamp = BigInt(1640995200000); // Example timestamp
-    view.setBigUint64(48, timestamp, true);
+    const timestamp = 1640995200000;
+    // const timestamp = BigInt(1640995200000); // Example timestamp
+    view.setBigUint64(48, 1000000n * BigInt(timestamp), true);
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateGroup(bytes, offsetRef);
     
     assert.equal(result.group, '4e0352bf19944ff2b4251c4455479f33');
     assert.equal(result.label, label);
-    assert.equal(result.updated_at, timestamp);
+    assert.equal(result.updated_at.getTime(), timestamp);
     assert.equal(offsetRef.current, 56);
   });
 
@@ -629,6 +630,7 @@ describe('encoding', () => {
     assert.equal(result.tile_devices_count, 1);
     
     const firstDevice = result.devices[0];
+    assert.ok(firstDevice);
     assert.equal(firstDevice.accel_meas_x, -100);
     assert.equal(firstDevice.accel_meas_y, 200);
     assert.equal(firstDevice.accel_meas_z, 50);
@@ -673,6 +675,7 @@ describe('encoding', () => {
     assert.equal(result.colors.length, 64);
     
     const firstColor = result.colors[0];
+    assert.ok(firstColor);
     assert.equal(firstColor.hue, 120);
     assert.equal(firstColor.saturation, 65535);
     assert.equal(firstColor.brightness, 32768);
@@ -726,6 +729,7 @@ describe('encoding', () => {
     assert.equal(result.colors.length, 8);
     
     const firstColor = result.colors[0];
+    assert.ok(firstColor);
     assert.equal(firstColor.hue, 180);
     assert.equal(firstColor.saturation, 50000);
     assert.equal(firstColor.brightness, 45000);
@@ -787,6 +791,7 @@ describe('encoding', () => {
     assert.equal(result.colors.length, 82);
     
     const firstColor = result.colors[0];
+    assert.ok(firstColor);
     assert.equal(firstColor.hue, 300);
     assert.equal(firstColor.saturation, 40000);
     assert.equal(firstColor.brightness, 50000);
@@ -841,6 +846,7 @@ describe('encoding', () => {
     assert.equal(result.palette.length, 16);
     
     const firstPaletteColor = result.palette[0];
+    assert.ok(firstPaletteColor);
     assert.equal(firstPaletteColor.hue, 60);
     assert.equal(firstPaletteColor.saturation, 55000);
     assert.equal(firstPaletteColor.brightness, 35000);

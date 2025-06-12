@@ -19,7 +19,7 @@ describe('groups', () => {
   const groupData = {
     group: '4e0352bf19944ff2b4251c4455479f33',
     label: 'Living Room',
-    updatedAt: new Date('2023-01-01T00:00:00Z'),
+    updated_at: new Date('2023-01-01T00:00:00Z'),
   };
 
   test('register new group calls onAdded', () => {
@@ -196,7 +196,7 @@ describe('groups', () => {
     const groupData2 = {
       group: 'different-uuid-here-1234567890',
       label: 'Kitchen',
-      updatedAt: new Date('2023-01-02T00:00:00Z'),
+      updated_at: new Date('2023-01-02T00:00:00Z'),
     };
 
     const groups = Groups();

@@ -380,9 +380,10 @@ describe('commands', () => {
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
     const tile = result[0];
+    assert.ok(tile);
     assert.equal(tile.tile_index, 0);
     assert.equal(tile.colors.length, 64);
-    assert.equal(tile.colors[0].hue, 120);
+    assert.equal(tile.colors[0]?.hue, 120);
     assert.equal(continuation.expectMore, true); // Should expect more tiles (0, 1)
   });
 
@@ -408,7 +409,7 @@ describe('commands', () => {
     cmd.decode(state64Bytes, offsetRef, continuation, Type.State64);
     
     assert.equal(receivedResponses.length, 1);
-    assert.equal(receivedResponses[0].tile_index, 0);
+    assert.equal(receivedResponses[0]?.tile_index, 0);
     assert.equal(continuation.expectMore, true); // Still expecting tile 1
   });
 
@@ -444,10 +445,10 @@ describe('commands', () => {
     view.setUint16(32, Type.State64, true);
     view.setUint8(36, 0); // tile_index
     
-    let offsetRef = { current: 36 };
-    let continuation = { expectMore: false };
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
     
-    let result1 = cmd.decode(state64Bytes1, offsetRef, continuation, Type.State64);
+    const result1 = cmd.decode(state64Bytes1, offsetRef, continuation, Type.State64);
     assert.equal(result1.length, 1);
     assert.equal(continuation.expectMore, true);
     
@@ -457,13 +458,13 @@ describe('commands', () => {
     view.setUint16(32, Type.State64, true);
     view.setUint8(36, 1); // tile_index
     
-    offsetRef = { current: 36 };
-    continuation = { expectMore: false };
+    offsetRef.current = 36;
+    continuation.expectMore = false;
     
-    let result2 = cmd.decode(state64Bytes2, offsetRef, continuation, Type.State64);
+    const result2 = cmd.decode(state64Bytes2, offsetRef, continuation, Type.State64);
     assert.equal(result2.length, 2);
-    assert.equal(result2[0].tile_index, 0);
-    assert.equal(result2[1].tile_index, 1);
+    assert.equal(result2[0]?.tile_index, 0);
+    assert.equal(result2[1]?.tile_index, 1);
     assert.equal(continuation.expectMore, false); // Complete
   });
 
@@ -528,6 +529,7 @@ describe('commands', () => {
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
     const zone = result[0];
+    assert.ok(zone);
     assert.equal(zone.zone_index, 0);
     assert.ok('hue' in zone);
     assert.equal(zone.hue, 120);
@@ -564,6 +566,7 @@ describe('commands', () => {
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
     const zone = result[0];
+    assert.ok(zone);
     assert.equal(zone.zone_index, 0);
     assert.ok('colors' in zone);
     assert.equal(zone.colors.length, 8);
@@ -594,6 +597,7 @@ describe('commands', () => {
     
     assert.equal(receivedResponses.length, 1);
     const res = receivedResponses[0];
+    assert.ok(res);
     assert.equal(res.zone_index, 0);
     assert.ok('hue' in res);
     assert.equal(res.hue, 120);
@@ -639,10 +643,10 @@ describe('commands', () => {
     view.setUint8(36, 3); // zones_count
     view.setUint8(37, 0); // zone_index
     
-    let offsetRef = { current: 36 };
-    let continuation = { expectMore: false };
+    const offsetRef = { current: 36 };
+    const continuation = { expectMore: false };
     
-    let result1 = cmd.decode(stateZoneBytes1, offsetRef, continuation, Type.StateZone);
+    const result1 = cmd.decode(stateZoneBytes1, offsetRef, continuation, Type.StateZone);
     assert.equal(result1.length, 1);
     assert.equal(continuation.expectMore, true);
     
@@ -653,13 +657,13 @@ describe('commands', () => {
     view.setUint8(36, 3); // zones_count
     view.setUint8(37, 1); // zone_index
     
-    offsetRef = { current: 36 };
-    continuation = { expectMore: false };
+    offsetRef.current = 36;
+    continuation.expectMore = false;
     
-    let result2 = cmd.decode(stateZoneBytes2, offsetRef, continuation, Type.StateZone);
+    const result2 = cmd.decode(stateZoneBytes2, offsetRef, continuation, Type.StateZone);
     assert.equal(result2.length, 2);
-    assert.equal(result2[0].zone_index, 0);
-    assert.equal(result2[1].zone_index, 1);
+    assert.equal(result2[0]?.zone_index, 0);
+    assert.equal(result2[1]?.zone_index, 1);
     assert.equal(continuation.expectMore, true); // Still need zone 2
     
     // Third call should return array with 3 items and be complete
@@ -669,12 +673,12 @@ describe('commands', () => {
     view.setUint8(36, 3); // zones_count
     view.setUint8(37, 2); // zone_index
     
-    offsetRef = { current: 36 };
-    continuation = { expectMore: false };
+    offsetRef.current = 36;
+    continuation.expectMore = false;
     
-    let result3 = cmd.decode(stateZoneBytes3, offsetRef, continuation, Type.StateZone);
+    const result3 = cmd.decode(stateZoneBytes3, offsetRef, continuation, Type.StateZone);
     assert.equal(result3.length, 3);
-    assert.equal(result3[2].zone_index, 2);
+    assert.equal(result3[2]?.zone_index, 2);
     assert.equal(continuation.expectMore, false); // Complete
   });
 
@@ -776,11 +780,11 @@ describe('commands', () => {
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
     const zones = result[0];
-    assert.equal(zones.zones_count, 10);
-    assert.equal(zones.zone_index, 0);
-    assert.equal(zones.colors_count, 10);
-    assert.equal(zones.colors.length, 82); // Decoder always reads 82 colors
-    assert.equal(zones.colors[0].hue, 120);
+    assert.equal(zones?.zones_count, 10);
+    assert.equal(zones?.zone_index, 0);
+    assert.equal(zones?.colors_count, 10);
+    assert.equal(zones?.colors.length, 82); // Decoder always reads 82 colors
+    assert.equal(zones?.colors[0]?.hue, 120);
     assert.equal(continuation.expectMore, false); // Single response, no more expected
   });
 
@@ -808,11 +812,11 @@ describe('commands', () => {
     let offsetRef = { current: 36 };
     let continuation = { expectMore: false };
     
-    let result1 = cmd.decode(stateExtendedBytes1, offsetRef, continuation, Type.StateExtendedColorZones);
+    const result1 = cmd.decode(stateExtendedBytes1, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(result1.length, 1);
-    assert.equal(result1[0].zone_index, 0);
-    assert.equal(result1[0].colors_count, 82);
+    assert.equal(result1[0]?.zone_index, 0);
+    assert.equal(result1[0]?.colors_count, 82);
     assert.equal(continuation.expectMore, true); // Should expect more responses for zones 82-149
     
     // Mock second StateExtendedColorZones response - decoder always reads 82 colors
@@ -836,12 +840,12 @@ describe('commands', () => {
     offsetRef = { current: 36 };
     continuation = { expectMore: false };
     
-    let result2 = cmd.decode(stateExtendedBytes2, offsetRef, continuation, Type.StateExtendedColorZones);
+    const result2 = cmd.decode(stateExtendedBytes2, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(result2.length, 2); // Accumulated responses
-    assert.equal(result2[1].zone_index, 82);
-    assert.equal(result2[1].colors_count, 68);
-    assert.equal(result2[1].colors.length, 82); // Decoder always reads 82 colors
+    assert.equal(result2[1]?.zone_index, 82);
+    assert.equal(result2[1]?.colors_count, 68);
+    assert.equal(result2[1]?.colors.length, 82); // Decoder always reads 82 colors
     assert.equal(continuation.expectMore, false); // Complete
   });
 
@@ -874,8 +878,8 @@ describe('commands', () => {
     cmd.decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(receivedResponses.length, 1);
-    assert.equal(receivedResponses[0].zones_count, 50);
-    assert.equal(receivedResponses[0].zone_index, 0);
+    assert.equal(receivedResponses[0]?.zones_count, 50);
+    assert.equal(receivedResponses[0]?.zone_index, 0);
     assert.equal(continuation.expectMore, false); // Single response for ≤82 zones
   });
 

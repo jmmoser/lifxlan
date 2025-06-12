@@ -10,7 +10,7 @@ describe('devices', () => {
 
   test('onAdded is called when a device is registered', () => {
     const devicesOptions = {
-      onAdded(device) {
+      onAdded(device: Device) {
         expect(device).toEqual(sharedDevice);
       },
     };

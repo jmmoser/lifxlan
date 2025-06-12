@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-- **Test**: `bun test --coverage`
+- **Test**: `bun run test`
 - **Build**: `bun run build`
 - **Type Check**: `npx tsc`
 - **Lint**: `oxlint`
