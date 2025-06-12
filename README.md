@@ -1,6 +1,6 @@
 # lifxlan
 
-A fast, lightweight JavaScript library for controlling LIFX smart lights over your local network (LAN). Works with Node.js, Bun, and Deno with zero dependencies.
+A fast, lightweight TypeScript library for controlling LIFX smart lights over your local network (LAN). Works with Node.js, Bun, and Deno with zero dependencies.
 
 ## What does this do?
 
