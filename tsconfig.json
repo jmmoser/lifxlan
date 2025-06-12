@@ -1,20 +1,16 @@
 {
   "compilerOptions": {
     "lib": [
-      "ESNext",
-      "DOM"
+      "ESNext"
     ],
     "target": "ES2022",
-    // "moduleResolution": "nodenext",
     "module": "nodenext",
+    "moduleResolution": "nodenext",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "strict": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
+    "noEmit": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": true,

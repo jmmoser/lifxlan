@@ -441,7 +441,6 @@ describe('encoding', () => {
     
     // Set timestamp (8 bytes) as bigint
     const timestamp = 1640995200000;
-    // const timestamp = BigInt(1640995200000); // Example timestamp
     view.setBigUint64(48, 1000000n * BigInt(timestamp), true);
     
     const offsetRef = { current: 0 };
