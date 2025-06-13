@@ -8,6 +8,7 @@
   "types": "./dist/esm/index.d.ts",
   "scripts": {
     "test": "bun test --coverage",
+    "test:integration": "bun test tests/integration.test.ts --timeout 30000",
     "build": "bun run build:esm && bun run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
     "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
