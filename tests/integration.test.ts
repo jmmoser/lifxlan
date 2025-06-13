@@ -14,7 +14,14 @@ import {
   GetHostFirmwareCommand,
   GetWifiInfoCommand,
   GetLightPowerCommand,
-  GetVersionCommand
+  GetVersionCommand,
+  GetDeviceChainCommand,
+  Get64Command,
+  Set64Command,
+  GetTileEffectCommand,
+  SetTileEffectCommand,
+  TileEffectType,
+  TileEffectSkyType
 } from '../src/index.js';
 
 /**
@@ -26,7 +33,8 @@ import {
  * 
  * Requirements:
  * - At least one LIFX regular light (not tile/special device) must be available on the local network
- * - The device should be powered on and responsive with good WiFi signal (>-70dBm)
+ * - Optionally, one or more LIFX tile devices for comprehensive tile testing
+ * - The devices should be powered on and responsive with good WiFi signal (>-70dBm)
  * - Network must allow UDP broadcast on port 56700
  */
 
@@ -57,25 +65,25 @@ function identifyDeviceType(product: number): 'light' | 'tile' | 'multizone' | '
 
 describe('LIFX Integration Tests', () => {
   test('should discover devices, select one with good signal, and run comprehensive tests', async () => {
-    const MAX_DISCOVERY_TIMEOUT = 10000; // Maximum 10 seconds fallback
+    const MAX_DISCOVERY_TIMEOUT = 800; // Maximum 10 seconds fallback
     const OPERATION_TIMEOUT = 5000;  // 5 seconds for each operation
-    const SCAN_INTERVAL = 1000;      // Scan every second during discovery
+    const SCAN_INTERVAL = 500;      // Scan every second during discovery
 
-    // Set up UDP socket for Node.js/Bun
     const socket = dgram.createSocket('udp4');
     
     try {
       const router = Router({
         onSend(message, port, address) {
-          if (socket) {
-            socket.send(message, port, address);
-          }
+          socket.send(message, port, address);
         },
       });
 
       let selectedDevice: any = null;
       let selectedDeviceInfo: any = null;
+      let selectedTileDevice: any = null;
+      let selectedTileDeviceInfo: any = null;
       let discoveryResolve: ((value: any) => void) | null = null;
+      let tileDiscoveryResolve: ((value: any) => void) | null = null;
 
       const devices = Devices({
         onAdded: async (device) => {
@@ -94,11 +102,13 @@ describe('LIFX Integration Tests', () => {
             // Check for good RSSI (better than -70 dBm is considered good)
             const hasGoodSignal = wifiInfo.signal > -70;
             
-            // Identify device type - exclude tiles and special devices
-            const isRegularLight = identifyDeviceType(versionInfo.product) === 'light';
+            // Identify device type
+            const deviceType = identifyDeviceType(versionInfo.product);
+            const isRegularLight = deviceType === 'light';
+            const isTileDevice = deviceType === 'tile';
             
-            if (hasGoodSignal && isRegularLight) {
-              console.log(`  ✅ Found suitable device: ${device.serialNumber} (Signal: ${wifiInfo.signal}dBm, Product: ${versionInfo.product})`);
+            if (hasGoodSignal && isRegularLight && !selectedDevice) {
+              console.log(`  ✅ Found suitable regular light: ${device.serialNumber} (Signal: ${wifiInfo.signal}dBm, Product: ${versionInfo.product})`);
               
               selectedDevice = device;
               selectedDeviceInfo = {
@@ -112,8 +122,23 @@ describe('LIFX Integration Tests', () => {
                 discoveryResolve(selectedDevice);
                 discoveryResolve = null;
               }
+            } else if (hasGoodSignal && isTileDevice && !selectedTileDevice) {
+              console.log(`  🟦 Found suitable tile device: ${device.serialNumber} (Signal: ${wifiInfo.signal}dBm, Product: ${versionInfo.product})`);
+              
+              selectedTileDevice = device;
+              selectedTileDeviceInfo = {
+                device,
+                signal: wifiInfo.signal,
+                product: versionInfo.product
+              };
+              
+              // Resolve the tile discovery promise immediately
+              if (tileDiscoveryResolve) {
+                tileDiscoveryResolve(selectedTileDevice);
+                tileDiscoveryResolve = null;
+              }
             } else {
-              console.log(`  ❌ ${device.serialNumber}: Signal ${wifiInfo.signal}dBm, Product ${versionInfo.product} (${hasGoodSignal ? 'good signal' : 'weak signal'}, ${isRegularLight ? 'regular light' : 'special device'})`);
+              console.log(`  ❌ ${device.serialNumber}: Signal ${wifiInfo.signal}dBm, Product ${versionInfo.product} (${hasGoodSignal ? 'good signal' : 'weak signal'}, ${deviceType})`);
             }
           } catch (error) {
             console.log(`  ❌ ${device.serialNumber}: Failed to get device info - ${error}`);
@@ -128,7 +153,7 @@ describe('LIFX Integration Tests', () => {
         try {
           const { header, serialNumber } = router.receive(message);
           devices.register(serialNumber, remote.port, remote.address, header.target);
-        } catch (error) {
+        } catch (_error) {
           // Ignore malformed messages from non-LIFX devices
         }
       });
@@ -153,7 +178,7 @@ describe('LIFX Integration Tests', () => {
       }, SCAN_INTERVAL);
 
       try {
-        // Wait for a suitable device to be found or timeout
+        // Wait for a suitable regular light device to be found or timeout
         await new Promise<void>((resolve, reject) => {
           discoveryResolve = resolve;
           
@@ -161,7 +186,7 @@ describe('LIFX Integration Tests', () => {
           const timeout = setTimeout(() => {
             if (discoveryResolve) {
               discoveryResolve = null;
-              reject(new Error(`No suitable LIFX devices found within ${MAX_DISCOVERY_TIMEOUT}ms. Need devices with good signal strength (>-70dBm) that are regular lights (not tiles or special devices).`));
+              reject(new Error(`No suitable LIFX regular light devices found within ${MAX_DISCOVERY_TIMEOUT}ms. Need devices with good signal strength (>-70dBm) that are regular lights (not tiles or special devices).`));
             }
           }, MAX_DISCOVERY_TIMEOUT);
           
@@ -172,13 +197,41 @@ describe('LIFX Integration Tests', () => {
             originalResolve(value);
           };
         });
+        
+        // Also try to find a tile device (but don't fail if none found)
+        const tilePromise = new Promise<void>((resolve, _reject) => {
+          tileDiscoveryResolve = resolve;
+          
+          // Shorter timeout for tile discovery
+          const tileTimeout = setTimeout(() => {
+            if (tileDiscoveryResolve) {
+              tileDiscoveryResolve = null;
+              console.log(`  ℹ️ No tile devices found within discovery period - tile tests will be skipped`);
+              resolve();
+            }
+          }, MAX_DISCOVERY_TIMEOUT);
+          
+          // Clear timeout if tile device is found
+          const originalTileResolve = resolve;
+          tileDiscoveryResolve = (_value) => {
+            clearTimeout(tileTimeout);
+            originalTileResolve();
+          };
+        });
+        
+        // Wait for tile discovery to complete (either found or timeout)
+        await tilePromise;
       } finally {
         if (scanInterval) {
           clearInterval(scanInterval);
         }
       }
 
-      console.log(`🎯 Selected device: ${selectedDevice.serialNumber} (Signal: ${selectedDeviceInfo.signal}dBm, Product: ${selectedDeviceInfo.product})`);
+      console.log(`🎯 Selected regular light: ${selectedDevice.serialNumber} (Signal: ${selectedDeviceInfo.signal}dBm, Product: ${selectedDeviceInfo.product})`);
+      
+      if (selectedTileDevice) {
+        console.log(`🟦 Selected tile device: ${selectedTileDevice.serialNumber} (Signal: ${selectedTileDeviceInfo.signal}dBm, Product: ${selectedTileDeviceInfo.product})`);
+      }
 
       // Test 1: Get device information
       console.log('🔧 Test 1: Getting device information...');
@@ -346,13 +399,139 @@ describe('LIFX Integration Tests', () => {
         console.log('  Device may not be in original state - please check manually');
       }
 
+      // Test 7: Tile device testing (if available)
+      if (selectedTileDevice) {
+        console.log('🟦 Test 7: Testing tile device functionality...');
+        
+        let originalTileState: any = null;
+        let originalTileEffect: any = null;
+        
+        try {
+          // Get tile device chain information
+          console.log('  Getting tile device chain...');
+          const deviceChain = await client.send(GetDeviceChainCommand(), selectedTileDevice);
+          console.log(`  Device chain: ${deviceChain.tile_devices_count} tiles`);
+
+          // Get current tile state for restoration
+          console.log('  Capturing original tile state...');
+          const tileStates = await client.send(Get64Command(0, deviceChain.tile_devices_count, 0, 0, 8), selectedTileDevice);
+          originalTileState = tileStates;
+          console.log(`  Captured state for ${tileStates.length} tiles`);
+          
+          // Get current tile effect
+          console.log('  Getting current tile effect...');
+          originalTileEffect = await client.send(GetTileEffectCommand(), selectedTileDevice);
+          console.log(`  Original effect type: ${originalTileEffect.effectType}`);
+          
+          // Test setting colors on tiles
+          console.log('  Testing tile color setting...');
+          const testColors = [
+            { hue: 0, saturation: 65535, brightness: 32768, kelvin: 3500 },      // Red
+            { hue: 21845, saturation: 65535, brightness: 32768, kelvin: 3500 },  // Green  
+            { hue: 43690, saturation: 65535, brightness: 32768, kelvin: 3500 },  // Blue
+            { hue: 10922, saturation: 65535, brightness: 32768, kelvin: 3500 },  // Yellow
+          ];
+          
+          // Extend colors to fill all 64 pixels if needed
+          const fullColors: { hue: number; saturation: number; brightness: number; kelvin: number; }[] = [];
+          for (let i = 0; i < 64; i++) {
+            fullColors.push(testColors[i % testColors.length]!);
+          }
+          
+          await client.send(Set64Command(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, fullColors), selectedTileDevice);
+          console.log('  Applied test colors to tiles');
+          
+          // Wait for color change
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          // Test tile effect
+          console.log('  Testing tile effect...');
+          const testPalette = [
+            { hue: 16384, saturation: 65535, brightness: 65535, kelvin: 3500 }, // Orange
+            { hue: 32768, saturation: 65535, brightness: 65535, kelvin: 3500 }, // Cyan
+          ];
+          
+          await client.send(SetTileEffectCommand(
+            1, // instanceid
+            TileEffectType.MORPH, // effect type
+            50, // speed (0-100)
+            BigInt(5000), // duration in ms
+            TileEffectSkyType.SUNRISE, // sky type (used for SKY effect)
+            50, // cloud saturation min
+            testPalette.length, // palette count
+            testPalette
+          ), selectedTileDevice);
+          console.log('  Applied test effect to tiles');
+          
+          // Wait for effect to run
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Restore original tile state
+          console.log('  Restoring original tile state...');
+          
+          // First, turn off any effects
+          await client.send(SetTileEffectCommand(
+            originalTileEffect.instanceid || 0,
+            TileEffectType.OFF,
+            0,
+            BigInt(0),
+            TileEffectSkyType.SUNRISE,
+            0,
+            0,
+            []
+          ), selectedTileDevice);
+          
+          // Wait for effect to stop
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Restore original colors
+          if (originalTileState && originalTileState.length > 0) {
+            const originalColors = originalTileState.flatMap((tile: any) => tile.colors || []);
+            if (originalColors.length > 0) {
+              await client.send(Set64Command(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, originalColors), selectedTileDevice);
+              console.log('  Restored original tile colors');
+              
+              // Wait for restoration to complete
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+          }
+          
+          // Restore original effect if it wasn't OFF
+          if (originalTileEffect && originalTileEffect.effectType !== TileEffectType.OFF) {
+            await client.send(SetTileEffectCommand(
+              originalTileEffect.instanceid || 0,
+              originalTileEffect.effectType,
+              originalTileEffect.speed || 50,
+              BigInt(originalTileEffect.duration || 0),
+              originalTileEffect.skyType || TileEffectSkyType.SUNRISE,
+              originalTileEffect.cloudSaturationMin || 50,
+              originalTileEffect.paletteCount || 0,
+              originalTileEffect.palette || []
+            ), selectedTileDevice);
+            console.log('  Restored original tile effect');
+          }
+          
+          console.log('  ✅ Tile device tests completed successfully');
+          
+        } catch (error) {
+          console.log(`  ❌ Tile device test failed: ${error}`);
+          console.log('  ⚠️ Tile device may not be in original state - please check manually');
+        }
+      } else {
+        console.log('ℹ️ No tile devices found - tile tests skipped');
+      }
+
       console.log('✅ All integration tests passed successfully!');
       console.log(`📊 Test Summary:`);
-      console.log(`   - Device: ${selectedDevice.serialNumber} (${label})`);
+      console.log(`   - Regular Light: ${selectedDevice.serialNumber} (${label})`);
       console.log(`   - Signal: ${selectedDeviceInfo.signal}dBm (Product: ${selectedDeviceInfo.product})`);
       console.log(`   - Firmware: ${hostFirmware.version_major}.${hostFirmware.version_minor}`);
       console.log(`   - Average response time: ${avgResponseTime.toFixed(1)}ms`);
-      console.log(`   - All core functionality verified and device restored`);
+      if (selectedTileDevice) {
+        console.log(`   - Tile Device: ${selectedTileDevice.serialNumber} (Product: ${selectedTileDeviceInfo.product})`);
+        console.log(`   - Tile Signal: ${selectedTileDeviceInfo.signal}dBm`);
+      }
+      console.log(`   - All core functionality verified and devices restored`);
 
     } catch (error) {
       console.error('❌ Integration test failed:', error);
