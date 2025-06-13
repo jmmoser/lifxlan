@@ -164,17 +164,19 @@ function registerHandler<T>(
 }
 
 export interface SendOptions {
+  /**
+   * Controls acknowledgment behavior for the command.
+   * - 'auto': Use the command's default behavior (recommended)
+   * - 'none': Fire-and-forget (fastest, no confirmation)
+   * - 'ack-only': Wait for acknowledgment packet (confirms receipt)
+   * - 'response': Wait for response data packet (Get commands)
+   * - 'both': Wait for both ack and response (maximum reliability)
+   */
   acknowledgment?: 'auto' | 'none' | 'ack-only' | 'response' | 'both';
+  /** AbortSignal to cancel the operation */
   signal?: AbortSignal;
 }
 
-// Helper type to determine return type based on acknowledgment mode and command defaults
-type SendReturnType<T, Options extends SendOptions | undefined> = 
-  Options extends { acknowledgment: 'ack-only' | 'none' } 
-    ? Promise<void>
-    : Options extends { acknowledgment: 'response' | 'both' }
-    ? Promise<T>
-    : Promise<T>; // Default case for 'auto' or undefined - assumes command default will provide typed response
 
 export interface ClientOptions {
   router: RouterInstance;
@@ -189,7 +191,9 @@ export interface ClientInstance {
   dispose(): void;
   broadcast<T>(command: Command<T>): void;
   unicast<T>(command: Command<T>, device: Device): void;
-  send<T, Options extends SendOptions | undefined = undefined>(command: Command<T>, device: Device, options?: Options): SendReturnType<T, Options>;
+  
+  send<T>(command: Command<T>, device: Device, options?: SendOptions): Promise<T>;
+  
   onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
 
@@ -306,7 +310,7 @@ export function Client(options: ClientOptions): ClientInstance {
     /**
      * Send a command to a device with configurable acknowledgment behavior.
      */
-    send<T, Options extends SendOptions | undefined = undefined>(command: Command<T>, device: Device, options?: Options): SendReturnType<T, Options> {
+    send<T>(command: Command<T>, device: Device, options?: SendOptions): Promise<T> {
       if (disposed) throw new DisposedClientError(source);
       
       // Determine acknowledgment mode
@@ -355,7 +359,7 @@ export function Client(options: ClientOptions): ClientInstance {
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 
-      return promise as SendReturnType<T, Options>;
+      return promise as Promise<T>;
     },
     onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
       if (options.onMessage) {
