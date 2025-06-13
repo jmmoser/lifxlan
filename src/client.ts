@@ -22,7 +22,7 @@ import {
   DisposedClientError,
 } from './errors.js';
 
-import type { RouterInstance, MessageHandler, Header, BatchSendMessage } from './router.js';
+import type { RouterInstance, MessageHandler, Header } from './router.js';
 
 import type { Device } from './devices.js';
 import type { Decoder, Command } from './commands/index.js';
@@ -145,11 +145,6 @@ export interface ClientOptions {
   onMessage?: MessageHandler;
 }
 
-export interface BatchCommand<T> {
-  command: Command<T>;
-  device: Device;
-}
-
 export interface ClientInstance {
   readonly router: RouterInstance;
   readonly source: number;
@@ -158,9 +153,6 @@ export interface ClientInstance {
   unicast<T>(command: Command<T>, device: Device): void;
   sendOnlyAcknowledgement<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<void>;
   send<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<T>;
-  batchUnicast<T>(commands: BatchCommand<T>[]): void;
-  batchSendOnlyAcknowledgement<T>(commands: BatchCommand<T>[], signal?: AbortSignal): Promise<void[]>;
-  batchSend<T>(commands: BatchCommand<T>[], signal?: AbortSignal): Promise<T[]>;
   onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
 
@@ -323,114 +315,6 @@ export function Client(options: ClientOptions): ClientInstance {
       router.send(bytes, device.port, device.address, device.serialNumber);
 
       return promise;
-    },
-    /**
-     * Send multiple commands to multiple devices without expecting responses or acknowledgements.
-     */
-    batchUnicast<T>(commands: BatchCommand<T>[]) {
-      if (disposed) throw new DisposedClientError(source);
-      
-      const messages: BatchSendMessage[] = [];
-      
-      for (const { command, device } of commands) {
-        const bytes = encode(
-          false,
-          source,
-          device.target,
-          false,
-          false,
-          device.sequence,
-          command.type,
-          command.payload,
-        );
-        
-        messages.push({
-          message: bytes,
-          port: device.port,
-          address: device.address,
-          serialNumber: device.serialNumber,
-        });
-        
-        device.sequence = incrementSequence(device.sequence);
-      }
-      
-      router.batchSend(messages);
-    },
-    /**
-     * Send multiple commands to multiple devices and only require acknowledgements.
-     */
-    batchSendOnlyAcknowledgement<T>(commands: BatchCommand<T>[], signal?: AbortSignal): Promise<void[]> {
-      if (disposed) throw new DisposedClientError(source);
-      
-      const messages: BatchSendMessage[] = [];
-      const promises: Promise<void>[] = [];
-      
-      for (const { command, device } of commands) {
-        const bytes = encode(
-          false,
-          source,
-          device.target,
-          false,
-          true,
-          device.sequence,
-          command.type,
-          command.payload,
-        );
-        
-        const promise = registerHandler(true, device.serialNumber, device.sequence, undefined, defaultTimeoutMs, responseHandlerMap, signal);
-        promises.push(promise);
-        
-        messages.push({
-          message: bytes,
-          port: device.port,
-          address: device.address,
-          serialNumber: device.serialNumber,
-        });
-        
-        device.sequence = incrementSequence(device.sequence);
-      }
-      
-      router.batchSend(messages);
-      
-      return Promise.all(promises);
-    },
-    /**
-     * Send multiple commands to multiple devices and require responses.
-     */
-    batchSend<T>(commands: BatchCommand<T>[], signal?: AbortSignal): Promise<T[]> {
-      if (disposed) throw new DisposedClientError(source);
-      
-      const messages: BatchSendMessage[] = [];
-      const promises: Promise<T>[] = [];
-      
-      for (const { command, device } of commands) {
-        const bytes = encode(
-          false,
-          source,
-          device.target,
-          true,
-          false,
-          device.sequence,
-          command.type,
-          command.payload,
-        );
-        
-        const promise = registerHandler(false, device.serialNumber, device.sequence, command.decode, defaultTimeoutMs, responseHandlerMap, signal);
-        promises.push(promise);
-        
-        messages.push({
-          message: bytes,
-          port: device.port,
-          address: device.address,
-          serialNumber: device.serialNumber,
-        });
-        
-        device.sequence = incrementSequence(device.sequence);
-      }
-      
-      router.batchSend(messages);
-      
-      return Promise.all(promises);
     },
     onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
       if (options.onMessage) {
