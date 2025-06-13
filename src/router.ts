@@ -15,8 +15,16 @@ const MAX_SOURCE = 0xFFFFFFFF;
 /** 0 and 1 are reserved */
 const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 
+export interface BatchSendMessage {
+  message: Uint8Array;
+  port: number;
+  address: string;
+  serialNumber?: string;
+}
+
 export interface RouterOptions {
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+  onBatchSend?: (messages: BatchSendMessage[]) => void;
   onMessage?: MessageHandler;
   handlers?: Map<number, MessageHandler>;
 }
@@ -26,6 +34,7 @@ export interface RouterInstance {
   register(source: number, handler: MessageHandler): void;
   deregister(source: number, handler: MessageHandler): void;
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+  batchSend(messages: BatchSendMessage[]): void;
   receive(message: Uint8Array): {
     header: Header;
     payload: Uint8Array;
@@ -88,6 +97,16 @@ export function Router(options: RouterOptions): RouterInstance {
     },
     send(message: Uint8Array, port: number, address: string, serialNumber?: string) {
       options.onSend(message, port, address, serialNumber);
+    },
+    batchSend(messages: BatchSendMessage[]) {
+      if (options.onBatchSend) {
+        options.onBatchSend(messages);
+      } else {
+        // Fallback to individual sends if batch send is not available
+        for (const msg of messages) {
+          options.onSend(msg.message, msg.port, msg.address, msg.serialNumber);
+        }
+      }
     },
     receive(message: Uint8Array) {
       const header = decodeHeader(message);
