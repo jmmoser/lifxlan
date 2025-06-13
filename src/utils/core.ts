@@ -14,9 +14,7 @@ export function PromiseWithResolvers<T>(): {
   return { resolve, reject, promise };
 }
 
-export type RssiStatus = 'none' | 'very bad' | 'somewhat bad' | 'alright' | 'good';
-
-export function getRssiStatus(rssi: number): RssiStatus {
+export function getRssiStatus(rssi: number) {
   if (rssi === 200) return 'none';
 
   if (rssi < -80 || rssi === 4 || rssi === 5 || rssi === 6) {
@@ -37,6 +35,8 @@ export function getRssiStatus(rssi: number): RssiStatus {
 
   return 'none';
 }
+
+export type RssiStatus = ReturnType<typeof getRssiStatus>;
 
 export function convertSignalToRssi(signal: number): number {
   return Math.floor(10 * Math.log10(signal) + 0.5);
