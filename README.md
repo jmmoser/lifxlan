@@ -5,7 +5,7 @@ A fast, lightweight TypeScript library for controlling LIFX smart lights over yo
 ## What does this do?
 
 This library lets you discover and control LIFX smart lights on your local network. You can:
-- 🔍 **Discover devices** automatically on your network
+- 🔍 **Discover devices** on your network
 - 💡 **Control lights** (turn on/off, change colors, brightness)
 - 🎯 **Target specific devices** or broadcast to all devices
 - 🔗 **Group devices** for batch operations
@@ -69,7 +69,7 @@ const device = await devices.get('d07123456789');
 clearInterval(scanInterval);
 
 // Turn the light on!
-await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
+await client.sendOnlyAcknowledgement(SetPowerCommand(true), device);
 
 socket.close();
 ```
@@ -94,8 +94,8 @@ await new Promise(resolve => setTimeout(resolve, 3000));
 clearInterval(scanInterval);
 
 // Turn on all discovered lights
-for (const device of devices.registered.values()) {
-  await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
+for (const device of devices) {
+  await client.sendOnlyAcknowledgement(SetPowerCommand(true), device);
 }
 ```
 
@@ -105,13 +105,13 @@ for (const device of devices.registered.values()) {
 import { SetColorCommand } from 'lifxlan';
 
 // Set to bright red
-await client.sendOnlyAcknowledge(
+await client.sendOnlyAcknowledgement(
   SetColorCommand(0, 65535, 65535, 3500), // hue, saturation, brightness, kelvin
   device
 );
 
 // Set to blue with 2-second transition
-await client.sendOnlyAcknowledge(
+await client.sendOnlyAcknowledgement(
   SetColorCommand(43690, 65535, 65535, 3500, 2000),
   device
 );
@@ -267,7 +267,7 @@ const device = Device({
   address: '192.168.1.50',
 });
 
-await client.sendOnlyAcknowledge(SetPowerCommand(true), device);
+await client.sendOnlyAcknowledgement(SetPowerCommand(true), device);
 ```
 
 ### Multiple Clients
@@ -278,7 +278,7 @@ const client2 = Client({ router });
 
 // Both clients share the same router and can operate independently
 await client1.broadcast(GetServiceCommand());
-await client2.sendOnlyAcknowledge(SetPowerCommand(true), device);
+await client2.sendOnlyAcknowledgement(SetPowerCommand(true), device);
 ```
 
 ### Resource Management for Many Clients
@@ -337,7 +337,7 @@ const PARTY_COLORS = [
 ];
 
 while (true) {
-  for (const device of devices.registered.values()) {
+  for (const device of devices) {
     const [hue, saturation, brightness, kelvin] = 
       PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
     
