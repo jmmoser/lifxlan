@@ -52,7 +52,7 @@ describe('client', () => {
     assert.equal(res, 0xFFFF);
   });
 
-  test('sendOnlyAcknowledgement', async () => {
+  test('send with ack-only option', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
@@ -74,12 +74,12 @@ describe('client', () => {
       }),
     });
 
-    await client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice);
+    await client.send(GetPowerCommand(), sharedDevice, { acknowledgment: 'ack-only' });
 
-    await client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice, new AbortController().signal);
+    await client.send(GetPowerCommand(), sharedDevice, { acknowledgment: 'ack-only', signal: new AbortController().signal });
   });
 
-  test('sendOnlyAcknowledgement with StateUnhandled response', async () => {
+  test('send with ack-only and StateUnhandled response', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
@@ -104,7 +104,7 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.sendOnlyAcknowledgement(GetPowerCommand(), sharedDevice), (error) => {
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { acknowledgment: 'ack-only' }), (error) => {
       return error instanceof UnhandledCommandError && error.commandType === Type.StatePower;
     });
   });
@@ -141,7 +141,7 @@ describe('client', () => {
 
     const signal = AbortSignal.timeout(0);
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, signal), (error) => {
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
       return Error.isError(error) && error.message.includes('abort');
     });
   });
@@ -170,7 +170,7 @@ describe('client', () => {
     client.dispose();
   });
 
-  test('max number of inflight sendOnlyAcknowledgement requests', async () => {
+  test('max number of inflight ack-only requests', async () => {
     const client = Client({
       router: Router({
         onSend() { },
@@ -184,11 +184,11 @@ describe('client', () => {
     });
 
     for (let i = 0; i < 255; i++) {
-      client.sendOnlyAcknowledgement(GetPowerCommand(), device, new AbortController().signal);
+      client.send(GetPowerCommand(), device, { acknowledgment: 'ack-only', signal: new AbortController().signal });
     }
 
     assert.throws(
-      () => client.sendOnlyAcknowledgement(GetPowerCommand(), device, new AbortController().signal),
+      () => client.send(GetPowerCommand(), device, { acknowledgment: 'ack-only', signal: new AbortController().signal }),
       (error) => Error.isError(error) && error.name === 'MessageConflictError',
     );
   });
@@ -207,11 +207,11 @@ describe('client', () => {
     });
 
     for (let i = 0; i < 255; i++) {
-      client.send(GetPowerCommand(), device, new AbortController().signal);
+      client.send(GetPowerCommand(), device, { signal: new AbortController().signal });
     }
 
     assert.throws(
-      () => client.send(GetPowerCommand(), device, new AbortController().signal),
+      () => client.send(GetPowerCommand(), device, { signal: new AbortController().signal }),
       (error) => Error.isError(error) && error.name === 'MessageConflictError',
     );
   });
@@ -382,7 +382,7 @@ describe('client', () => {
     );
     
     assert.throws(
-      () => client.sendOnlyAcknowledgement(GetServiceCommand(), device),
+      () => client.send(GetServiceCommand(), device, { acknowledgment: 'ack-only' }),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
     
@@ -445,7 +445,7 @@ describe('client', () => {
     });
 
     const controller = new AbortController();
-    const promise = client.send(GetServiceCommand(), device, controller.signal);
+    const promise = client.send(GetServiceCommand(), device, { signal: controller.signal });
     
     // Immediately abort
     controller.abort();

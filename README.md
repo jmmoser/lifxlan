@@ -69,7 +69,7 @@ const device = await devices.get('d07123456789');
 clearInterval(scanInterval);
 
 // Turn the light on!
-await client.sendOnlyAcknowledgement(SetPowerCommand(true), device);
+await client.send(SetPowerCommand(true), device);
 
 socket.close();
 ```
@@ -95,7 +95,7 @@ clearInterval(scanInterval);
 
 // Turn on all discovered lights
 for (const device of devices) {
-  await client.sendOnlyAcknowledgement(SetPowerCommand(true), device);
+  await client.send(SetPowerCommand(true), device);
 }
 ```
 
@@ -105,13 +105,13 @@ for (const device of devices) {
 import { SetColorCommand } from 'lifxlan';
 
 // Set to bright red
-await client.sendOnlyAcknowledgement(
+await client.send(
   SetColorCommand(0, 65535, 65535, 3500), // hue, saturation, brightness, kelvin
   device
 );
 
 // Set to blue with 2-second transition
-await client.sendOnlyAcknowledgement(
+await client.send(
   SetColorCommand(43690, 65535, 65535, 3500, 2000),
   device
 );
@@ -133,6 +133,40 @@ This library doesn't include UDP socket implementation - you provide it. This ma
 
 - **Node.js/Bun**: Use `dgram.createSocket('udp4')`
 - **Deno**: Use `Deno.listenDatagram()`
+
+### Acknowledgment Control
+
+The `client.send()` method supports flexible acknowledgment modes to control reliability vs performance:
+
+```javascript
+// Use command defaults (recommended)
+await client.send(GetColorCommand(), device);     // Gets response data
+await client.send(SetPowerCommand(true), device); // Gets acknowledgment
+
+// Override acknowledgment behavior
+await client.send(command, device, { acknowledgment: 'none' });      // Fire-and-forget
+await client.send(command, device, { acknowledgment: 'ack-only' });  // Wait for ack
+await client.send(command, device, { acknowledgment: 'response' });  // Wait for response data
+await client.send(command, device, { acknowledgment: 'both' });      // Wait for both ack + response
+
+// With abort signal
+await client.send(command, device, { 
+  acknowledgment: 'both', 
+  signal: abortController.signal 
+});
+```
+
+**Acknowledgment Modes:**
+- `'auto'` - Use the command's default behavior (recommended)
+- `'none'` - Fire-and-forget (fastest, no confirmation)
+- `'ack-only'` - Wait for acknowledgment packet (confirms receipt)
+- `'response'` - Wait for response data packet (Get commands)
+- `'both'` - Wait for both ack and response (maximum reliability)
+
+**Command Defaults:**
+- **Get commands** (GetColor, GetPower, etc.) default to `'response'`
+- **Set commands** (SetColor, SetPower, etc.) default to `'ack-only'`
+- **Fire-and-forget commands** (SetReboot, etc.) default to `'none'`
 
 ## Examples by Runtime
 
@@ -246,7 +280,7 @@ const timeout = setTimeout(() => {
 }, 100);
 
 try {
-  console.log(await client.send(GetColorCommand(), device, controller.signal));
+  console.log(await client.send(GetColorCommand(), device, { signal: controller.signal }));
 } finally {
   clearTimeout(timeout)
 }
@@ -267,7 +301,7 @@ const device = Device({
   address: '192.168.1.50',
 });
 
-await client.sendOnlyAcknowledgement(SetPowerCommand(true), device);
+await client.send(SetPowerCommand(true), device);
 ```
 
 ### Multiple Clients
@@ -278,7 +312,7 @@ const client2 = Client({ router });
 
 // Both clients share the same router and can operate independently
 await client1.broadcast(GetServiceCommand());
-await client2.sendOnlyAcknowledgement(SetPowerCommand(true), device);
+await client2.send(SetPowerCommand(true), device);
 ```
 
 ### Resource Management for Many Clients
@@ -292,6 +326,29 @@ while (true) {
   // When creating a lot of clients, call dispose to avoid running out of source values
   client.dispose();
 }
+```
+
+### Acknowledgment Control Examples
+
+```javascript
+// High-reliability mode: wait for both ack and response
+await client.send(SetColorCommand(120, 100, 100, 3500, 1000), device, { 
+  acknowledgment: 'both' 
+});
+
+// Fast mode: fire-and-forget for animations
+for (let i = 0; i < 360; i += 10) {
+  client.send(SetColorCommand(i * 182, 65535, 65535, 3500, 100), device, { 
+    acknowledgment: 'none' 
+  });
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+// Get response data when you normally wouldn't
+const currentState = await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
+  acknowledgment: 'response' 
+});
+console.log('Light is now:', currentState);
 ```
 
 ## Advanced Examples

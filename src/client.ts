@@ -56,22 +56,26 @@ function incrementSequence(sequence?: number): number {
   return sequence == null ? 0 : (sequence + 1) % 0xFF;
 }
 
-function registerHandler<T, ACK extends boolean>(
-  isAckOnly: ACK,
+function registerHandler<T>(
+  ackMode: 'none' | 'ack-only' | 'response' | 'both',
   serialNumber: string,
   sequence: number,
   decode: Decoder<T> | undefined,
   defaultTimeoutMs: number,
   responseHandlerMap: Map<string, (type: number, bytes: Uint8Array, ref: { current: number }) => void>,
   signal?: AbortSignal
-): Promise<ACK extends true ? void : T> {
+): Promise<T | void> {
   const key = getResponseKey(serialNumber, sequence);
 
   if (responseHandlerMap.has(key)) {
     throw new MessageConflictError(key, sequence);
   }
 
-  const { resolve, reject, promise } = PromiseWithResolvers<ACK extends true ? void : T>();
+  const { resolve, reject, promise } = PromiseWithResolvers<T | void>();
+
+  let receivedAck = false;
+  let receivedResponse = false;
+  let responseResult: T | undefined;
 
   function onAbort(errOrEvent: Error | Event) {
     responseHandlerMap.delete(key);
@@ -99,12 +103,32 @@ function registerHandler<T, ACK extends boolean>(
     responseHandlerMap.delete(key);
   }
 
+  function checkForCompletion() {
+    if (ackMode === 'ack-only' && receivedAck) {
+      cleanupOnResponse();
+      resolve(undefined);
+      return true;
+    }
+    
+    if (ackMode === 'response' && receivedResponse) {
+      cleanupOnResponse();
+      resolve(responseResult);
+      return true;
+    }
+    
+    if (ackMode === 'both' && receivedAck && receivedResponse) {
+      cleanupOnResponse();
+      resolve(responseResult);
+      return true;
+    }
+    
+    return false;
+  }
+
   responseHandlerMap.set(key, (type, bytes, offsetRef) => {
     if (type === Type.Acknowledgement) {
-      if (isAckOnly) {
-        cleanupOnResponse();
-        resolve(undefined as ACK extends true ? void : T);
-      }
+      receivedAck = true;
+      checkForCompletion();
       return;
     }
     
@@ -115,7 +139,7 @@ function registerHandler<T, ACK extends boolean>(
       return;
     }
     
-    if (!isAckOnly && decode) {
+    if (decode) {
       // Support both single-response and multi-response commands
       const continuation = { expectMore: false };
       
@@ -129,14 +153,28 @@ function registerHandler<T, ACK extends boolean>(
         return;
       } else {
         // This is the final response or a single-response command
-        cleanupOnResponse();
-        resolve(result as ACK extends true ? void : T);
+        receivedResponse = true;
+        responseResult = result;
+        checkForCompletion();
       }
     }
   });
 
   return promise;
 }
+
+export interface SendOptions {
+  acknowledgment?: 'auto' | 'none' | 'ack-only' | 'response' | 'both';
+  signal?: AbortSignal;
+}
+
+// Helper type to determine return type based on acknowledgment mode and command defaults
+type SendReturnType<T, Options extends SendOptions | undefined> = 
+  Options extends { acknowledgment: 'ack-only' | 'none' } 
+    ? Promise<void>
+    : Options extends { acknowledgment: 'response' | 'both' }
+    ? Promise<T>
+    : Promise<T>; // Default case for 'auto' or undefined - assumes command default will provide typed response
 
 export interface ClientOptions {
   router: RouterInstance;
@@ -151,8 +189,7 @@ export interface ClientInstance {
   dispose(): void;
   broadcast<T>(command: Command<T>): void;
   unicast<T>(command: Command<T>, device: Device): void;
-  sendOnlyAcknowledgement<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<void>;
-  send<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<T>;
+  send<T, Options extends SendOptions | undefined = undefined>(command: Command<T>, device: Device, options?: Options): SendReturnType<T, Options>;
   onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
 
@@ -267,54 +304,58 @@ export function Client(options: ClientOptions): ClientInstance {
       device.sequence = incrementSequence(device.sequence);
     },
     /**
-     * Send a command to a device and only require an acknowledgement.
+     * Send a command to a device with configurable acknowledgment behavior.
      */
-    sendOnlyAcknowledgement<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<void> {
+    send<T, Options extends SendOptions | undefined = undefined>(command: Command<T>, device: Device, options?: Options): SendReturnType<T, Options> {
       if (disposed) throw new DisposedClientError(source);
+      
+      // Determine acknowledgment mode
+      let ackMode: 'none' | 'ack-only' | 'response' | 'both';
+      if (options?.acknowledgment === 'auto' || !options?.acknowledgment) {
+        // Use command's default acknowledgment
+        ackMode = command.defaultAcknowledgment ?? 'response';
+      } else {
+        ackMode = options.acknowledgment;
+      }
+
+      // Determine protocol flags based on acknowledgment mode
+      let resRequired = false;
+      let ackRequired = false;
+      
+      switch (ackMode) {
+        case 'none':
+          // No flags needed
+          break;
+        case 'ack-only':
+          ackRequired = true;
+          break;
+        case 'response':
+          resRequired = true;
+          break;
+        case 'both':
+          resRequired = true;
+          ackRequired = true;
+          break;
+      }
       
       const bytes = encode(
         false,
         source,
         device.target,
-        false,
-        true,
+        resRequired,
+        ackRequired,
         device.sequence,
         command.type,
         command.payload,
       );
 
-      const promise = registerHandler(true, device.serialNumber, device.sequence, undefined, defaultTimeoutMs, responseHandlerMap, signal);
+      const promise = registerHandler(ackMode, device.serialNumber, device.sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal);
 
       device.sequence = incrementSequence(device.sequence);
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 
-      return promise;
-    },
-    /**
-     * Send a command to a device and require a response.
-     */
-    send<T>(command: Command<T>, device: Device, signal?: AbortSignal): Promise<T> {
-      if (disposed) throw new DisposedClientError(source);
-      
-      const bytes = encode(
-        false,
-        source,
-        device.target,
-        true,
-        false,
-        device.sequence,
-        command.type,
-        command.payload,
-      );
-
-      const promise = registerHandler(false, device.serialNumber, device.sequence, command.decode, defaultTimeoutMs, responseHandlerMap, signal);
-
-      device.sequence = incrementSequence(device.sequence);
-
-      router.send(bytes, device.port, device.address, device.serialNumber);
-
-      return promise;
+      return promise as SendReturnType<T, Options>;
     },
     onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
       if (options.onMessage) {

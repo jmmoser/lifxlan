@@ -5,5 +5,6 @@ export function SensorGetAmbientLightCommand() {
   return {
     type: Type.SensorGetAmbientLight,
     decode: Encoding.decodeSensorStateAmbientLight,
+    defaultAcknowledgment: 'response' as const,
   };
 }

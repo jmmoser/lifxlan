@@ -57,6 +57,7 @@ export function GetColorZonesCommand(
     type: Type.GetColorZones,
     payload: Encoding.encodeGetColorZones(startIndex, endIndex),
     decode,
+    defaultAcknowledgment: 'response' as const,
   };
 }
 
@@ -74,6 +75,7 @@ export function SetColorZonesCommand(
     type: Type.SetColorZones,
     payload: Encoding.encodeSetColorZones(startIndex, endIndex, hue, saturation, brightness, kelvin, duration, apply),
     decode: Encoding.decodeStateMultiZone,
+    defaultAcknowledgment: 'ack-only' as const,
   };
 }
 
@@ -81,6 +83,7 @@ export function GetMultiZoneEffectCommand() {
   return {
     type: Type.GetMultiZoneEffect,
     decode: Encoding.decodeStateMultiZoneEffect,
+    defaultAcknowledgment: 'response' as const,
   };
 }
 
@@ -95,6 +98,7 @@ export function SetMultiZoneEffectCommand(
     type: Type.SetMultiZoneEffect,
     payload: Encoding.encodeSetMultiZoneEffect(instanceid, effectType, speed, duration, parameters),
     decode: Encoding.decodeStateMultiZoneEffect,
+    defaultAcknowledgment: 'ack-only' as const,
   };
 }
 
