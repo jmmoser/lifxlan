@@ -50,6 +50,7 @@ export interface DevicesInstance {
   register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
   remove(serialNumber: string): boolean;
   get(serialNumber: string, signal?: AbortSignal): Promise<Device>;
+  [Symbol.iterator](): Iterator<Device>;
 }
 
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
@@ -161,6 +162,9 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
 
       return promise;
+    },
+    [Symbol.iterator](): Iterator<Device> {
+      return knownDevices.values();
     },
   };
 }

@@ -219,4 +219,141 @@ describe('devices', () => {
     expect(device.sequence).toBe(100);
     expect(device.serialNumber).toBe('abcdef123456');
   });
+
+  test('Devices can be iterated with for...of loop', () => {
+    const devices = Devices();
+    
+    const device1 = Device({
+      address: '192.168.1.1',
+      serialNumber: 'device123456'
+    });
+    
+    const device2 = Device({
+      address: '192.168.1.2', 
+      serialNumber: 'device789012'
+    });
+
+    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
+    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+
+    const iteratedDevices: any[] = [];
+    for (const device of devices) {
+      iteratedDevices.push(device);
+    }
+
+    expect(iteratedDevices).toHaveLength(2);
+    expect(iteratedDevices.some(d => d.serialNumber === 'device123456')).toBe(true);
+    expect(iteratedDevices.some(d => d.serialNumber === 'device789012')).toBe(true);
+  });
+
+  test('Devices iterator works with empty collection', () => {
+    const devices = Devices();
+    
+    const iteratedDevices: any[] = [];
+    for (const device of devices) {
+      iteratedDevices.push(device);
+    }
+
+    expect(iteratedDevices).toHaveLength(0);
+  });
+
+  test('Devices iterator reflects changes when devices are added', () => {
+    const devices = Devices();
+    
+    let iteratedDevices: any[] = [];
+    for (const device of devices) {
+      iteratedDevices.push(device);
+    }
+    expect(iteratedDevices).toHaveLength(0);
+
+    const device1 = Device({
+      address: '192.168.1.1',
+      serialNumber: 'device123456'
+    });
+
+    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
+
+    iteratedDevices = [];
+    for (const device of devices) {
+      iteratedDevices.push(device);
+    }
+    expect(iteratedDevices).toHaveLength(1);
+    expect(iteratedDevices[0].serialNumber).toBe('device123456');
+  });
+
+  test('Devices iterator reflects changes when devices are removed', () => {
+    const devices = Devices();
+    
+    const device1 = Device({
+      address: '192.168.1.1',
+      serialNumber: 'device123456'
+    });
+    
+    const device2 = Device({
+      address: '192.168.1.2',
+      serialNumber: 'device789012'  
+    });
+
+    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
+    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+
+    let iteratedDevices: any[] = [];
+    for (const device of devices) {
+      iteratedDevices.push(device);
+    }
+    expect(iteratedDevices).toHaveLength(2);
+
+    devices.remove('device123456');
+
+    iteratedDevices = [];
+    for (const device of devices) {
+      iteratedDevices.push(device);
+    }
+    expect(iteratedDevices).toHaveLength(1);
+    expect(iteratedDevices[0].serialNumber).toBe('device789012');
+  });
+
+  test('Devices iterator can be used with Array.from', () => {
+    const devices = Devices();
+    
+    const device1 = Device({
+      address: '192.168.1.1',
+      serialNumber: 'device123456'
+    });
+    
+    const device2 = Device({
+      address: '192.168.1.2',
+      serialNumber: 'device789012'
+    });
+
+    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
+    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+
+    const deviceArray = Array.from(devices);
+    expect(deviceArray).toHaveLength(2);
+    expect(deviceArray.some(d => d.serialNumber === 'device123456')).toBe(true);
+    expect(deviceArray.some(d => d.serialNumber === 'device789012')).toBe(true);
+  });
+
+  test('Devices iterator can be used with destructuring', () => {
+    const devices = Devices();
+    
+    const device1 = Device({
+      address: '192.168.1.1',
+      serialNumber: 'device123456'
+    });
+    
+    const device2 = Device({
+      address: '192.168.1.2',
+      serialNumber: 'device789012'
+    });
+
+    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
+    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+
+    const [...deviceArray] = devices;
+    expect(deviceArray).toHaveLength(2);
+    expect(deviceArray.some(d => d.serialNumber === 'device123456')).toBe(true);
+    expect(deviceArray.some(d => d.serialNumber === 'device789012')).toBe(true);
+  });
 });
