@@ -6,7 +6,7 @@ export function GetRPowerCommand(relayIndex: number) {
     type: Type.GetRPower,
     payload: Encoding.encodeGetRPower(relayIndex),
     decode: Encoding.decodeStateRPower,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -15,6 +15,6 @@ export function SetRPowerCommand(relayIndex: number, level: number) {
     type: Type.SetRPower,
     payload: Encoding.encodeSetRPower(relayIndex, level),
     decode: Encoding.decodeStateRPower,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }

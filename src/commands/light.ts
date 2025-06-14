@@ -6,7 +6,7 @@ export function GetColorCommand() {
   return {
     type: Type.GetColor,
     decode: Encoding.decodeLightState,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -15,7 +15,7 @@ export function SetColorCommand(hue: number, saturation: number, brightness: num
     type: Type.SetColor,
     payload: Encoding.encodeSetColor(hue, saturation, brightness, kelvin, duration),
     decode: Encoding.decodeLightState,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -44,7 +44,7 @@ export function SetWaveformCommand(
       waveform,
     ),
     decode: Encoding.decodeLightState,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -52,7 +52,7 @@ export function GetLightPowerCommand() {
   return {
     type: Type.GetLightPower,
     decode: Encoding.decodeStateLightPower,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -61,7 +61,7 @@ export function SetLightPowerCommand(level: number | boolean, duration: number) 
     type: Type.SetLightPower,
     payload: Encoding.encodeSetLightPower(level, duration),
     decode: Encoding.decodeStateLightPower,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -98,7 +98,7 @@ export function SetWaveformOptionalCommand(
       setKelvin,
     ),
     decode: Encoding.decodeStateLightPower,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -106,7 +106,7 @@ export function GetInfraredCommand() {
   return {
     type: Type.GetInfrared,
     decode: Encoding.decodeStateInfrared,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -115,7 +115,7 @@ export function SetInfraredCommand(brightness: number) {
     type: Type.SetInfrared,
     payload: Encoding.encodeSetInfrared(brightness),
     decode: Encoding.decodeStateInfrared,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -123,7 +123,7 @@ export function GetHevCycleCommand() {
   return {
     type: Type.GetHevCycle,
     decode: Encoding.decodeStateHevCycle,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -132,7 +132,7 @@ export function SetHevCycleCommand(enable: boolean, durationSeconds: number) {
     type: Type.SetHevCycle,
     payload: Encoding.encodeSetHevCycle(enable, durationSeconds),
     decode: Encoding.decodeStateHevCycle,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -140,7 +140,7 @@ export function GetHevCycleConfigurationCommand() {
   return {
     type: Type.GetHevCycleConfiguration,
     decode: Encoding.decodeStateHevCycleConfiguration,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -149,7 +149,7 @@ export function SetHevCycleConfigurationCommand(indication: boolean, durationSec
     type: Type.SetHevCycleConfiguration,
     payload: Encoding.encodeSetHevCycleConfiguration(indication, durationSeconds),
     decode: Encoding.decodeStateHevCycleConfiguration,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -157,6 +157,6 @@ export function GetLastHevCycleResultCommand() {
   return {
     type: Type.GetLastHevCycleResult,
     decode: Encoding.decodeStateLastHevCycleResult,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }

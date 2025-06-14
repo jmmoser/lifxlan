@@ -134,39 +134,42 @@ This library doesn't include UDP socket implementation - you provide it. This ma
 - **Node.js/Bun**: Use `dgram.createSocket('udp4')`
 - **Deno**: Use `Deno.listenDatagram()`
 
-### Acknowledgment Control
+### Response Mode Control
 
-The `client.send()` method supports flexible acknowledgment modes to control reliability vs performance:
+The `client.send()` method supports flexible response modes with **full type safety** - the return type changes based on the response mode you choose:
 
 ```javascript
 // Use command defaults (recommended)
-await client.send(GetColorCommand(), device);     // Gets response data
-await client.send(SetPowerCommand(true), device); // Gets acknowledgment
+const color = await client.send(GetColorCommand(), device);     // Promise<LightState>
+await client.send(SetPowerCommand(true), device);              // Promise<StatePower> (ack-only default)
 
-// Override acknowledgment behavior
-await client.send(command, device, { acknowledgment: 'none' });      // Fire-and-forget
-await client.send(command, device, { acknowledgment: 'ack-only' });  // Wait for ack
-await client.send(command, device, { acknowledgment: 'response' });  // Wait for response data
-await client.send(command, device, { acknowledgment: 'both' });      // Wait for both ack + response
+// Override response behavior with type-safe returns
+await client.send(command, device, { responseMode: 'none' });      // Promise<void>
+await client.send(command, device, { responseMode: 'ack-only' });  // Promise<void>
+const data = await client.send(command, device, { responseMode: 'response' }); // Promise<T>
+const result = await client.send(command, device, { responseMode: 'both' });   // Promise<T>
 
 // With abort signal
-await client.send(command, device, { 
-  acknowledgment: 'both', 
+const response = await client.send(GetColorCommand(), device, { 
+  responseMode: 'both',     // TypeScript knows this returns Promise<LightState>
   signal: abortController.signal 
 });
+console.log(response.hue);    // ✅ TypeScript knows response is LightState
 ```
 
-**Acknowledgment Modes:**
-- `'auto'` - Use the command's default behavior (recommended)
-- `'none'` - Fire-and-forget (fastest, no confirmation)
-- `'ack-only'` - Wait for acknowledgment packet (confirms receipt)
-- `'response'` - Wait for response data packet (Get commands)
-- `'both'` - Wait for both ack and response (maximum reliability)
+**Response Modes:**
+- `'auto'` - Use the command's default behavior (recommended) → `Promise<T>`
+- `'none'` - Fire-and-forget (fastest, no confirmation) → `Promise<void>`
+- `'ack-only'` - Wait for acknowledgment packet (confirms receipt) → `Promise<void>`
+- `'response'` - Wait for response data packet (Get commands) → `Promise<T>`
+- `'both'` - Wait for both ack and response (maximum reliability) → `Promise<T>`
 
 **Command Defaults:**
 - **Get commands** (GetColor, GetPower, etc.) default to `'response'`
 - **Set commands** (SetColor, SetPower, etc.) default to `'ack-only'`
 - **Fire-and-forget commands** (SetReboot, etc.) default to `'none'`
+
+**Type Safety:** The return type automatically changes based on your response mode choice - no type assertions needed!
 
 ## Examples by Runtime
 
@@ -328,27 +331,33 @@ while (true) {
 }
 ```
 
-### Acknowledgment Control Examples
+### Response Mode Control Examples
 
 ```javascript
-// High-reliability mode: wait for both ack and response
-await client.send(SetColorCommand(120, 100, 100, 3500, 1000), device, { 
-  acknowledgment: 'both' 
+// High-reliability mode: wait for both ack and response (typed return)
+const state = await client.send(SetColorCommand(120, 100, 100, 3500, 1000), device, { 
+  responseMode: 'both'     // TypeScript knows this returns Promise<LightState>
 });
+console.log('Confirmed color:', state.hue); // ✅ Fully typed
 
-// Fast mode: fire-and-forget for animations
+// Fast mode: fire-and-forget for animations (void return)
 for (let i = 0; i < 360; i += 10) {
   client.send(SetColorCommand(i * 182, 65535, 65535, 3500, 100), device, { 
-    acknowledgment: 'none' 
+    responseMode: 'none'   // TypeScript knows this returns Promise<void>
   });
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
-// Get response data when you normally wouldn't
-const currentState = await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
-  acknowledgment: 'response' 
+// Confirmation only (void return)
+await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
+  responseMode: 'ack-only' // TypeScript knows this returns Promise<void>
 });
-console.log('Light is now:', currentState);
+
+// Get response data (typed return)
+const currentState = await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
+  responseMode: 'response' // TypeScript knows this returns Promise<LightState>
+});
+console.log('Light is now:', currentState.hue); // ✅ Fully typed, no assertions needed
 ```
 
 ## Advanced Examples

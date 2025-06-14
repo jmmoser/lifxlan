@@ -163,17 +163,28 @@ function registerHandler<T>(
   return promise;
 }
 
-export interface SendOptions {
+// Define response modes as const to get literal types
+const RESPONSE_MODES = ['auto', 'none', 'ack-only', 'response', 'both'] as const;
+export type ResponseMode = typeof RESPONSE_MODES[number];
+
+// Conditional type to determine return type based on response mode
+type SendReturnType<T, A extends ResponseMode | undefined> = 
+  A extends 'none' | 'ack-only' ? Promise<void> :
+  A extends 'response' | 'both' | 'auto' ? Promise<T> :
+  Promise<T>; // Default case when A is undefined
+
+export interface SendOptions<A extends ResponseMode = ResponseMode> {
   /**
-   * Controls acknowledgment behavior for the command.
+   * Controls response behavior for the command.
+   * 
+   * Available options:
    * - 'auto': Use the command's default behavior (recommended)
-   * - 'none': Fire-and-forget (fastest, no confirmation)
+   * - 'none': Fire-and-forget (fastest, no confirmation)  
    * - 'ack-only': Wait for acknowledgment packet (confirms receipt)
    * - 'response': Wait for response data packet (Get commands)
    * - 'both': Wait for both ack and response (maximum reliability)
    */
-  acknowledgment?: 'auto' | 'none' | 'ack-only' | 'response' | 'both';
-  /** AbortSignal to cancel the operation */
+  responseMode?: A;
   signal?: AbortSignal;
 }
 
@@ -192,7 +203,8 @@ export interface ClientInstance {
   broadcast<T>(command: Command<T>): void;
   unicast<T>(command: Command<T>, device: Device): void;
   
-  send<T>(command: Command<T>, device: Device, options?: SendOptions): Promise<T>;
+  send<T>(command: Command<T>, device: Device): Promise<T>;
+  send<T, A extends ResponseMode>(command: Command<T>, device: Device, options: SendOptions<A>): SendReturnType<T, A>;
   
   onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
@@ -310,19 +322,19 @@ export function Client(options: ClientOptions): ClientInstance {
     /**
      * Send a command to a device with configurable acknowledgment behavior.
      */
-    send<T>(command: Command<T>, device: Device, options?: SendOptions): Promise<T> {
+    send<T, A extends ResponseMode>(command: Command<T>, device: Device, options?: SendOptions<A>): SendReturnType<T, A> | Promise<T> {
       if (disposed) throw new DisposedClientError(source);
       
-      // Determine acknowledgment mode
+      // Determine response mode
       let ackMode: 'none' | 'ack-only' | 'response' | 'both';
-      if (options?.acknowledgment === 'auto' || !options?.acknowledgment) {
-        // Use command's default acknowledgment
-        ackMode = command.defaultAcknowledgment ?? 'response';
+      if (options?.responseMode === 'auto' || !options?.responseMode) {
+        // Use command's default response mode
+        ackMode = command.defaultResponseMode ?? 'response';
       } else {
-        ackMode = options.acknowledgment;
+        ackMode = options.responseMode;
       }
 
-      // Determine protocol flags based on acknowledgment mode
+      // Determine protocol flags based on response mode
       let resRequired = false;
       let ackRequired = false;
       
@@ -359,7 +371,7 @@ export function Client(options: ClientOptions): ClientInstance {
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 
-      return promise as Promise<T>;
+      return promise as SendReturnType<T, A> | Promise<T>;
     },
     onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
       if (options.onMessage) {

@@ -6,7 +6,7 @@ export function GetServiceCommand() {
   return {
     type: Type.GetService,
     decode: Encoding.decodeStateService,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -14,7 +14,7 @@ export function GetHostFirmwareCommand() {
   return {
     type: Type.GetHostFirmware,
     decode: Encoding.decodeStateHostFirmware,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -22,7 +22,7 @@ export function GetWifiInfoCommand() {
   return {
     type: Type.GetWifiInfo,
     decode: Encoding.decodeStateWifiInfo,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -30,7 +30,7 @@ export function GetWifiFirmwareCommand() {
   return {
     type: Type.GetWifiFirmware,
     decode: Encoding.decodeStateWifiFirmware,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -38,7 +38,7 @@ export function GetPowerCommand() {
   return {
     type: Type.GetPower,
     decode: Encoding.decodeStatePower,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -47,7 +47,7 @@ export function SetPowerCommand(power: number | boolean) {
     type: Type.SetPower,
     payload: Encoding.encodeSetPower(power),
     decode: Encoding.decodeStatePower,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -55,7 +55,7 @@ export function GetLabelCommand() {
   return {
     type: Type.GetLabel,
     decode: Encoding.decodeStateLabel,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -64,7 +64,7 @@ export function SetLabelCommand(label: string) {
     type: Type.SetLabel,
     payload: Encoding.encodeString(label, 32),
     decode: Encoding.decodeStateLabel,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -72,7 +72,7 @@ export function GetVersionCommand() {
   return {
     type: Type.GetVersion,
     decode: Encoding.decodeStateVersion,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -80,7 +80,7 @@ export function GetInfoCommand() {
   return {
     type: Type.GetInfo,
     decode: Encoding.decodeStateInfo,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -88,7 +88,7 @@ export function SetRebootCommand() {
   return {
     type: Type.SetReboot,
     decode: NOOP,
-    defaultAcknowledgment: 'none' as const,
+    defaultResponseMode: 'none' as const,
   };
 }
 
@@ -96,7 +96,7 @@ export function GetLocationCommand() {
   return {
     type: Type.GetLocation,
     decode: Encoding.decodeStateLocation,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -105,7 +105,7 @@ export function SetLocationCommand(location: Uint8Array | string, label: string,
     type: Type.SetLocation,
     payload: Encoding.encodeSetLocation(location, label, updatedAt),
     decode: Encoding.decodeStateLocation,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -113,7 +113,7 @@ export function GetGroupCommand() {
   return {
     type: Type.GetGroup,
     decode: Encoding.decodeStateGroup,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -122,7 +122,7 @@ export function SetGroupCommand(group: Uint8Array | string, label: string, updat
     type: Type.SetGroup,
     payload: Encoding.encodeSetGroup(group, label, updatedAt),
     decode: Encoding.decodeStateGroup,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -131,6 +131,6 @@ export function EchoRequestCommand(echoing: Uint8Array) {
     type: Type.EchoRequest,
     payload: Encoding.encodeEchoRequest(echoing),
     decode: Encoding.decodeEchoResponse,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }

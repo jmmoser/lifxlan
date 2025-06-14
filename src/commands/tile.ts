@@ -8,7 +8,7 @@ export function GetDeviceChainCommand() {
   return {
     type: Type.GetDeviceChain,
     decode: Encoding.decodeStateDeviceChain,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -58,7 +58,7 @@ export function Get64Command(
     type: Type.Get64,
     payload: Encoding.encodeGet64(tileIndex, length, x, y, width),
     decode,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -67,7 +67,7 @@ export function SetUserPositionCommand(tileIndex: number, userX: number, userY: 
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
     decode: NOOP,
-    defaultAcknowledgment: 'none' as const,
+    defaultResponseMode: 'none' as const,
   };
 }
 
@@ -84,7 +84,7 @@ export function Set64Command(
     type: Type.Set64,
     payload: Encoding.encodeSet64(tileIndex, length, x, y, width, duration, colors),
     decode: NOOP,
-    defaultAcknowledgment: 'none' as const,
+    defaultResponseMode: 'none' as const,
   };
 }
 
@@ -93,7 +93,7 @@ export function GetTileEffectCommand() {
     type: Type.GetTileEffect,
     payload: Encoding.encodeGetTileEffect(),
     decode: Encoding.decodeStateTileEffect,
-    defaultAcknowledgment: 'response' as const,
+    defaultResponseMode: 'response' as const,
   };
 }
 
@@ -111,6 +111,6 @@ export function SetTileEffectCommand(
     type: Type.SetTileEffect,
     payload: Encoding.encodeSetTileEffect(instanceid, effectType, speed, duration, skyType, cloudSaturationMin, paletteCount, palette),
     decode: Encoding.decodeStateTileEffect,
-    defaultAcknowledgment: 'ack-only' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }

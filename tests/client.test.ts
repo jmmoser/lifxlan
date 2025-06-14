@@ -74,9 +74,9 @@ describe('client', () => {
       }),
     });
 
-    await client.send(GetPowerCommand(), sharedDevice, { acknowledgment: 'ack-only' });
+    await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only' });
 
-    await client.send(GetPowerCommand(), sharedDevice, { acknowledgment: 'ack-only', signal: new AbortController().signal });
+    await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only', signal: new AbortController().signal });
   });
 
   test('send with ack-only and StateUnhandled response', async () => {
@@ -104,7 +104,7 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { acknowledgment: 'ack-only' }), (error) => {
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only' }), (error) => {
       return error instanceof UnhandledCommandError && error.commandType === Type.StatePower;
     });
   });
@@ -184,11 +184,11 @@ describe('client', () => {
     });
 
     for (let i = 0; i < 255; i++) {
-      client.send(GetPowerCommand(), device, { acknowledgment: 'ack-only', signal: new AbortController().signal });
+      client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal });
     }
 
     assert.throws(
-      () => client.send(GetPowerCommand(), device, { acknowledgment: 'ack-only', signal: new AbortController().signal }),
+      () => client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal }),
       (error) => Error.isError(error) && error.name === 'MessageConflictError',
     );
   });
@@ -382,7 +382,7 @@ describe('client', () => {
     );
     
     assert.throws(
-      () => client.send(GetServiceCommand(), device, { acknowledgment: 'ack-only' }),
+      () => client.send(GetServiceCommand(), device, { responseMode: 'ack-only' }),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
     
