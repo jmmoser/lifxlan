@@ -88,7 +88,7 @@ export function SetRebootCommand() {
   return {
     type: Type.SetReboot,
     decode: NOOP,
-    defaultResponseMode: 'none' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 

@@ -144,7 +144,6 @@ const color = await client.send(GetColorCommand(), device);     // Promise<Light
 await client.send(SetPowerCommand(true), device);              // Promise<StatePower> (ack-only default)
 
 // Override response behavior with type-safe returns
-await client.send(command, device, { responseMode: 'none' });      // Promise<void>
 await client.send(command, device, { responseMode: 'ack-only' });  // Promise<void>
 const data = await client.send(command, device, { responseMode: 'response' }); // Promise<T>
 const result = await client.send(command, device, { responseMode: 'both' });   // Promise<T>
@@ -159,7 +158,6 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 
 **Response Modes:**
 - `'auto'` - Use the command's default behavior (recommended) → `Promise<T>`
-- `'none'` - Fire-and-forget (fastest, no confirmation) → `Promise<void>`
 - `'ack-only'` - Wait for acknowledgment packet (confirms receipt) → `Promise<void>`
 - `'response'` - Wait for response data packet (Get commands) → `Promise<T>`
 - `'both'` - Wait for both ack and response (maximum reliability) → `Promise<T>`
@@ -167,7 +165,8 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 **Command Defaults:**
 - **Get commands** (GetColor, GetPower, etc.) default to `'response'`
 - **Set commands** (SetColor, SetPower, etc.) default to `'ack-only'`
-- **Fire-and-forget commands** (SetReboot, etc.) default to `'none'`
+
+**Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
 
 **Type Safety:** The return type automatically changes based on your response mode choice - no type assertions needed!
 
@@ -340,11 +339,9 @@ const state = await client.send(SetColorCommand(120, 100, 100, 3500, 1000), devi
 });
 console.log('Confirmed color:', state.hue); // ✅ Fully typed
 
-// Fast mode: fire-and-forget for animations (void return)
+// Fast mode: fire-and-forget for animations (no promise)
 for (let i = 0; i < 360; i += 10) {
-  client.send(SetColorCommand(i * 182, 65535, 65535, 3500, 100), device, { 
-    responseMode: 'none'   // TypeScript knows this returns Promise<void>
-  });
+  client.unicast(SetColorCommand(i * 182, 65535, 65535, 3500, 100), device);
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 

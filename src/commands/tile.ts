@@ -67,7 +67,7 @@ export function SetUserPositionCommand(tileIndex: number, userX: number, userY: 
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
     decode: NOOP,
-    defaultResponseMode: 'none' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 
@@ -84,7 +84,7 @@ export function Set64Command(
     type: Type.Set64,
     payload: Encoding.encodeSet64(tileIndex, length, x, y, width, duration, colors),
     decode: NOOP,
-    defaultResponseMode: 'none' as const,
+    defaultResponseMode: 'ack-only' as const,
   };
 }
 

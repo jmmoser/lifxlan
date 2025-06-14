@@ -57,7 +57,7 @@ function incrementSequence(sequence?: number): number {
 }
 
 function registerHandler<T>(
-  ackMode: 'none' | 'ack-only' | 'response' | 'both',
+  ackMode: 'ack-only' | 'response' | 'both',
   serialNumber: string,
   sequence: number,
   decode: Decoder<T> | undefined,
@@ -164,12 +164,12 @@ function registerHandler<T>(
 }
 
 // Define response modes as const to get literal types
-const RESPONSE_MODES = ['auto', 'none', 'ack-only', 'response', 'both'] as const;
+const RESPONSE_MODES = ['auto', 'ack-only', 'response', 'both'] as const;
 export type ResponseMode = typeof RESPONSE_MODES[number];
 
 // Conditional type to determine return type based on response mode
 type SendReturnType<T, A extends ResponseMode | undefined> = 
-  A extends 'none' | 'ack-only' ? Promise<void> :
+  A extends 'ack-only' ? Promise<void> :
   A extends 'response' | 'both' | 'auto' ? Promise<T> :
   Promise<T>; // Default case when A is undefined
 
@@ -179,7 +179,6 @@ export interface SendOptions<A extends ResponseMode = ResponseMode> {
    * 
    * Available options:
    * - 'auto': Use the command's default behavior (recommended)
-   * - 'none': Fire-and-forget (fastest, no confirmation)  
    * - 'ack-only': Wait for acknowledgment packet (confirms receipt)
    * - 'response': Wait for response data packet (Get commands)
    * - 'both': Wait for both ack and response (maximum reliability)
@@ -326,7 +325,7 @@ export function Client(options: ClientOptions): ClientInstance {
       if (disposed) throw new DisposedClientError(source);
       
       // Determine response mode
-      let ackMode: 'none' | 'ack-only' | 'response' | 'both';
+      let ackMode: 'ack-only' | 'response' | 'both';
       if (options?.responseMode === 'auto' || !options?.responseMode) {
         // Use command's default response mode
         ackMode = command.defaultResponseMode ?? 'response';
@@ -339,9 +338,6 @@ export function Client(options: ClientOptions): ClientInstance {
       let ackRequired = false;
       
       switch (ackMode) {
-        case 'none':
-          // No flags needed
-          break;
         case 'ack-only':
           ackRequired = true;
           break;

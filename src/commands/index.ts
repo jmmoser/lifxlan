@@ -9,7 +9,7 @@ export interface Command<OutputType> {
   type: number;
   payload?: Uint8Array;
   decode?: Decoder<OutputType>;
-  defaultResponseMode?: 'none' | 'ack-only' | 'response' | 'both';
+  defaultResponseMode?: 'ack-only' | 'response' | 'both';
 }
 
 // Re-export all commands for backwards compatibility
