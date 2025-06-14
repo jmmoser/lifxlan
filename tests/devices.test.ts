@@ -33,7 +33,7 @@ describe('devices', () => {
 
   test('registered device changes address calls onChanged', () => {
     const devicesOptions = {
-      onChanged(device: any) {
+      onChanged(device: Device) {
         expect(device.address).toEqual(sharedDevice.address + '1');
       },
     };
@@ -81,7 +81,7 @@ describe('devices', () => {
 
   test('remove device calls onRemoved', () => {
     const devicesOptions = {
-      onRemoved(device: any) {
+      onRemoved(device: Device) {
         expect(device.address).toEqual(sharedDevice.address);
       },
     };
@@ -236,7 +236,7 @@ describe('devices', () => {
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
     devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
 
-    const iteratedDevices: any[] = [];
+    const iteratedDevices: Device[] = [];
     for (const device of devices) {
       iteratedDevices.push(device);
     }
@@ -249,7 +249,7 @@ describe('devices', () => {
   test('Devices iterator works with empty collection', () => {
     const devices = Devices();
     
-    const iteratedDevices: any[] = [];
+    const iteratedDevices: Device[] = [];
     for (const device of devices) {
       iteratedDevices.push(device);
     }
@@ -260,7 +260,7 @@ describe('devices', () => {
   test('Devices iterator reflects changes when devices are added', () => {
     const devices = Devices();
     
-    let iteratedDevices: any[] = [];
+    let iteratedDevices: Device[] = [];
     for (const device of devices) {
       iteratedDevices.push(device);
     }
@@ -278,7 +278,7 @@ describe('devices', () => {
       iteratedDevices.push(device);
     }
     expect(iteratedDevices).toHaveLength(1);
-    expect(iteratedDevices[0].serialNumber).toBe('device123456');
+    expect(iteratedDevices[0]!.serialNumber).toBe('device123456');
   });
 
   test('Devices iterator reflects changes when devices are removed', () => {
@@ -297,7 +297,7 @@ describe('devices', () => {
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
     devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
 
-    let iteratedDevices: any[] = [];
+    let iteratedDevices: Device[] = [];
     for (const device of devices) {
       iteratedDevices.push(device);
     }
@@ -310,7 +310,7 @@ describe('devices', () => {
       iteratedDevices.push(device);
     }
     expect(iteratedDevices).toHaveLength(1);
-    expect(iteratedDevices[0].serialNumber).toBe('device789012');
+    expect(iteratedDevices[0]!.serialNumber).toBe('device789012');
   });
 
   test('Devices iterator can be used with Array.from', () => {

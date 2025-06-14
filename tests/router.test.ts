@@ -1,8 +1,9 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { Router } from '../src/router.js';
-import { encode } from '../src/encoding.js';
+import { encode, Header } from '../src/encoding.js';
 import { Type } from '../src/constants/index.js';
+import { ValidationError } from '../src/errors.js';
 
 describe('router', () => {
   test('nextSource returns valid source', () => {
@@ -53,9 +54,9 @@ describe('router', () => {
     const source = router.nextSource();
     
     router.register(source, handler1);
-    assert.throws(() => router.register(source, handler2), (error: any) => {
-      return error.name === 'ValidationError' && error.parameter === 'source';
-    });
+    assert.throws(() => router.register(source, handler2), (error) => (
+      error instanceof ValidationError && error.name === 'ValidationError' && error.parameter === 'source'
+    ));
   });
 
   test('deregister throws error for handler mismatch', () => {
@@ -68,9 +69,9 @@ describe('router', () => {
     const source = router.nextSource();
     
     router.register(source, handler1);
-    assert.throws(() => router.deregister(source, handler2), (error: any) => {
-      return error.name === 'ValidationError' && error.parameter === 'messageHandler';
-    });
+    assert.throws(() => router.deregister(source, handler2), (error) => (
+      error instanceof ValidationError && error.name === 'ValidationError' && error.parameter === 'messageHandler'
+    ));
   });
 
   test('send calls onSend with correct parameters', () => {
@@ -122,7 +123,7 @@ describe('router', () => {
       onSend() {},
     });
     
-    const handler = (header: any, payload: Uint8Array, serialNumber: string) => {
+    const handler = (header: Header, payload: Uint8Array, serialNumber: string) => {
       receivedHeader = header;
       receivedPayload = payload;
       receivedSerialNumber = serialNumber;
@@ -235,9 +236,9 @@ describe('router', () => {
         router.register(source, () => {});
         sourceCount++;
       }
-    } catch (error: any) {
+    } catch (error) {
       // This might throw if we run out, which is expected behavior
-      assert.ok(error.message.includes('No available source') || error.message.includes('Source already registered'));
+      assert.ok(Error.isError(error) && (error.message.includes('No available source') || error.message.includes('Source already registered')));
     }
     
     // At minimum we should be able to get some sources
