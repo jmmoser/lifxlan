@@ -102,11 +102,11 @@ for (const device of devices) {
 ### Change light color
 
 ```javascript
-import { SetColorCommand } from 'lifxlan';
+import { SetColorCommand } from 'lifxlan/index.js';
 
 // Set to bright red
 await client.send(
-  SetColorCommand(0, 65535, 65535, 3500), // hue, saturation, brightness, kelvin
+  SetColorCommand(0, 65535, 65535, 3500, 0), // hue, saturation, brightness, kelvin, duration
   device
 );
 
@@ -176,7 +176,7 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan/index.js';
 
 const socket = dgram.createSocket('udp4');
 
@@ -222,7 +222,7 @@ setTimeout(() => {
 ### Deno
 
 ```javascript
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan/index.js';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -291,7 +291,7 @@ try {
 ### Use Without Device Discovery
 
 ```javascript
-import { Client, Device, Router, SetPowerCommand } from 'lifxlan';
+import { Client, Device, Router, SetPowerCommand } from 'lifxlan/index.js';
 
 // ... socket setup ...
 

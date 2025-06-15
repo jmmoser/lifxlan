@@ -15,19 +15,19 @@ This is a TypeScript library for the LIFX LAN protocol that works across Node.js
 
 ### Core Components
 
-- **Router** (`src/router.js`): Message routing system that handles source assignment and message forwarding between clients and the network. Routes response messages back to the originating client using source IDs.
+- **Router** (`src/router.ts`): Message routing system that handles source assignment and message forwarding between clients and the network. Routes response messages back to the originating client using source IDs.
 
-- **Client** (`src/client.js`): High-level interface for device communication. Handles message sending/receiving with timeout and retry logic. Supports both acknowledged and unacknowledged message patterns.
+- **Client** (`src/client.ts`): High-level interface for device communication. Handles message sending/receiving with timeout and retry logic. Supports both acknowledged and unacknowledged message patterns.
 
-- **Devices** (`src/devices.js`): Device registry that tracks discovered LIFX devices on the network, maintaining their network addresses and connection state.
+- **Devices** (`src/devices.ts`): Device registry that tracks discovered LIFX devices on the network, maintaining their network addresses and connection state.
 
-- **Groups** (`src/groups.js`): Organizes devices into logical groups for batch operations.
+- **Groups** (`src/groups.ts`): Organizes devices into logical groups for batch operations.
 
 ### Protocol Layer
 
-- **Commands** (`src/commands.js`): LIFX protocol command definitions with encoding/decoding functions
-- **Encoding** (`src/encoding.js`): Low-level protocol message encoding/decoding utilities
-- **Constants** (`src/constants.js`): Protocol constants, message types, and network configuration
+- **Commands** (`src/commands/index.ts`): LIFX protocol command definitions with encoding/decoding functions
+- **Encoding** (`src/encoding.ts`): Low-level protocol message encoding/decoding utilities
+- **Constants** (`src/constants/index.ts`): Protocol constants, message types, and network configuration
 
 ### Key Patterns
 
