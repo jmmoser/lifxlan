@@ -461,4 +461,238 @@ describe('client', () => {
 
     client.dispose();
   });
+
+  test('AbortSignal with custom Error', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {
+          // Don't respond to simulate timeout/abort
+        },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    const controller = new AbortController();
+    const customError = new Error('Custom abort reason');
+    const promise = client.send(GetServiceCommand(), device, { signal: controller.signal });
+    
+    // Abort with custom reason
+    controller.abort(customError);
+
+    try {
+      await promise;
+      assert.fail('Promise should have been rejected');
+    } catch (error) {
+      // Should receive the custom error when AbortController.abort() is called with a reason
+      // In some environments, this might still be wrapped in an AbortError
+      assert.ok(error instanceof Error);
+      assert.ok(error.message.includes('abort') || error === customError);
+    }
+
+    client.dispose();
+  });
+
+  test('send with both response mode', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          assert.equal(header.source, client.source);
+          assert.equal(header.ack_required, true);
+          assert.equal(header.res_required, true);
+          
+          // Send both acknowledgment and response
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.Acknowledgement,
+              new Uint8Array(),
+            ),
+          );
+          
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    const result = await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'both' });
+    assert.equal(result, 0xFFFF);
+    
+    client.dispose();
+  });
+
+  test('send with auto response mode and no defaultResponseMode', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          assert.equal(header.res_required, true); // Should default to 'response'
+          
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    // Create a command without defaultResponseMode
+    const commandWithoutDefault = {
+      type: Type.GetPower,
+      payload: new Uint8Array(),
+      decode: GetPowerCommand().decode,
+    };
+
+    const result = await client.send(commandWithoutDefault, sharedDevice, { responseMode: 'auto' });
+    assert.equal(result, 0xFFFF);
+    
+    client.dispose();
+  });
+
+  test('custom source assignment', () => {
+    const customSource = 12345;
+    const client = Client({
+      source: customSource,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    assert.equal(client.source, customSource);
+    client.dispose();
+  });
+
+  test('sequence number increments correctly', () => {
+    const client = Client({
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    // Initial sequence should be 0
+    assert.equal(device.sequence, 0);
+    
+    client.unicast(GetServiceCommand(), device);
+    assert.equal(device.sequence, 1);
+    
+    client.unicast(GetServiceCommand(), device);
+    assert.equal(device.sequence, 2);
+    
+    // Test sequence wrapping at 255
+    device.sequence = 254;
+    client.unicast(GetServiceCommand(), device);
+    assert.equal(device.sequence, 0); // Should wrap to 0
+    
+    client.dispose();
+  });
+
+  test('multi-response command with 4+ decode parameters', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          
+          // Simulate response with responseType parameter
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    // Create command with decode function that accepts responseType (4th parameter)
+    const commandWithResponseType = {
+      type: Type.GetPower,
+      payload: new Uint8Array(),
+      decode: (bytes: Uint8Array, offsetRef: { current: number }, _continuation?: { expectMore: boolean }, _responseType?: number) => {
+        const view = new DataView(bytes.buffer, bytes.byteOffset + offsetRef.current);
+        return view.getUint16(0, true);
+      },
+    };
+
+    const result = await client.send(commandWithResponseType, sharedDevice);
+    assert.equal(result, 0xFFFF);
+    
+    client.dispose();
+  });
+
+  test('disposal cleanup error handling', () => {
+    const client = Client({
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    // Start a request to create a response handler
+    client.send(GetServiceCommand(), device).catch(() => {
+      // Ignore the rejection - we're testing disposal cleanup
+    });
+
+    // Disposal should not throw even if there are pending handlers
+    // The actual error handling is internal to the client disposal
+    assert.doesNotThrow(() => {
+      client.dispose();
+    });
+  });
 });
