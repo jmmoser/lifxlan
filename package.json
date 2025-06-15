@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.81",
+  "version": "0.0.82",
   "description": "TypeScript library for controlling LIFX products over LAN",
   "type": "module",
   "main": "./dist/cjs/index.js",
