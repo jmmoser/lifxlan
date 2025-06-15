@@ -18,7 +18,24 @@
   },
   "keywords": [
     "lifx",
-    "lan"
+    "lan",
+    "smart-lights",
+    "iot",
+    "home-automation",
+    "smart-home",
+    "lights",
+    "bulbs",
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "wifi-lights",
+    "color-lights",
+    "led",
+    "protocol",
+    "api",
+    "client",
+    "library"
   ],
   "exports": {
     "./*": {
