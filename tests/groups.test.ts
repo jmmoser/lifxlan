@@ -239,4 +239,74 @@ describe('groups', () => {
     expect(group.devices).toContain(device3);
     expect(group.devices).not.toContain(device2);
   });
+
+  test('Groups can be iterated with for...of loop', () => {
+    const groupData2 = {
+      group: 'another-group-uuid-123456789',
+      label: 'Bedroom',
+      updated_at: new Date('2023-01-03T00:00:00Z'),
+    };
+
+    const groups = Groups();
+    groups.register(device1, groupData);
+    groups.register(device2, groupData2);
+
+    const groupArray = [];
+    for (const group of groups) {
+      groupArray.push(group);
+    }
+
+    expect(groupArray.length).toBe(2);
+    expect(groupArray.some(g => g.uuid === groupData.group)).toBe(true);
+    expect(groupArray.some(g => g.uuid === groupData2.group)).toBe(true);
+  });
+
+  test('Groups iterator works with empty collection', () => {
+    const groups = Groups();
+    const groupArray = Array.from(groups);
+    expect(groupArray.length).toBe(0);
+  });
+
+  test('Groups iterator reflects changes when groups are added', () => {
+    const groups = Groups();
+    
+    let groupArray = Array.from(groups);
+    expect(groupArray.length).toBe(0);
+
+    groups.register(device1, groupData);
+    groupArray = Array.from(groups);
+    expect(groupArray.length).toBe(1);
+    expect(groupArray[0]?.uuid).toBe(groupData.group);
+  });
+
+  test('Groups iterator reflects changes when groups are removed', () => {
+    const groups = Groups();
+    groups.register(device1, groupData);
+    
+    let groupArray = Array.from(groups);
+    expect(groupArray.length).toBe(1);
+
+    groups.remove(groupData.group);
+    groupArray = Array.from(groups);
+    expect(groupArray.length).toBe(0);
+  });
+
+  test('Groups iterator can be used with Array.from', () => {
+    const groups = Groups();
+    groups.register(device1, groupData);
+    
+    const groupArray = Array.from(groups);
+    expect(groupArray.length).toBe(1);
+    expect(groupArray[0]?.uuid).toBe(groupData.group);
+    expect(groupArray[0]?.label).toBe(groupData.label);
+  });
+
+  test('Groups iterator can be used with destructuring', () => {
+    const groups = Groups();
+    groups.register(device1, groupData);
+    
+    const [firstGroup] = groups;
+    expect(firstGroup?.uuid).toBe(groupData.group);
+    expect(firstGroup?.label).toBe(groupData.label);
+  });
 });

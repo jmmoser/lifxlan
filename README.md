@@ -381,11 +381,13 @@ const devices = Devices({
 });
 
 // Send command to all devices in a group
-await Promise.all(
-  group.devices.map(device => 
-    client.send(GetLabelCommand(), device)
-  )
-);
+for (const group of groups) {
+  await Promise.all(
+    group.devices.map(device => 
+      client.send(GetLabelCommand(), device)
+    )
+  );
+}
 ```
 
 ### Party Mode (Animated Colors)

@@ -18,6 +18,7 @@ export interface GroupsInstance {
   register(device: Device, group: StateGroup): void;
   remove(uuid: string): void;
   removeDevice(device: Device): void;
+  [Symbol.iterator](): Iterator<Group>;
 }
 
 export function Groups(options: GroupsOptions = {}): GroupsInstance {
@@ -87,6 +88,9 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
     },
     get registered() {
       return knownGroups;
+    },
+    [Symbol.iterator](): Iterator<Group> {
+      return knownGroups.values();
     },
   };
 }
