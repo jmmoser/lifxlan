@@ -44,3 +44,7 @@ The project is written in TypeScript with full type safety. TypeScript declarati
 ```
 bun run lint && npx tsc && bun run test
 ```
+
+## Rules
+
+- Do not use typescript's `any` or `as`
