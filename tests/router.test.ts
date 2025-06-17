@@ -117,7 +117,7 @@ describe('router', () => {
   });
 
   test('receive routes message to registered handler', () => {
-    let receivedHeader: any, receivedPayload: Uint8Array | undefined, receivedSerialNumber: string | undefined;
+    let receivedHeader: Header | undefined, receivedPayload: Uint8Array | undefined, receivedSerialNumber: string | undefined;
     
     const router = Router({
       onSend() {},
