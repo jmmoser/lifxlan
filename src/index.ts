@@ -8,3 +8,5 @@ export * from './commands/index.js';
 export * from './encoding.js';
 export * from './utils/core.js';
 export * from './utils/color.js';
+export * from './scenes.js';
+export * from './animations.js';
