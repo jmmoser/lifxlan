@@ -109,9 +109,9 @@ function identifyDeviceType(product: number): 'light' | 'tile' | 'multizone' | '
 
 describe('LIFX Integration Tests', () => {
   test('should discover devices, select one with good signal, and run comprehensive tests', async () => {
-    const MAX_DISCOVERY_TIMEOUT = 800; // Maximum 10 seconds fallback
+    const MAX_DISCOVERY_TIMEOUT = 400; // Maximum 400ms for discovery
     const OPERATION_TIMEOUT = 5000;  // 5 seconds for each operation
-    const SCAN_INTERVAL = 500;      // Scan every second during discovery
+    const SCAN_INTERVAL = 200;      // Scan every 200ms during discovery
 
     const socket = dgram.createSocket('udp4');
     
@@ -133,8 +133,18 @@ describe('LIFX Integration Tests', () => {
         onAdded: async (device) => {
           console.log(`🔍 Discovered LIFX device: ${device.serialNumber} at ${device.address}:${device.port}`);
           
-          // Don't check this device if we already found a suitable one
-          if (selectedDevice) return;
+          // Don't check this device if we already found suitable devices
+          if (selectedDevice && selectedTileDevice) return;
+          if (selectedDevice && !selectedTileDevice) {
+            // Only check if this might be a tile device
+            try {
+              const versionInfo = await client.send(GetVersionCommand(), device);
+              const deviceType = identifyDeviceType(versionInfo.product);
+              if (deviceType !== 'tile') return;
+            } catch {
+              return;
+            }
+          }
           
           try {
             // Get WiFi info to check signal strength
@@ -304,7 +314,7 @@ describe('LIFX Integration Tests', () => {
       await client.send(SetPowerCommand(newPowerState), selectedDevice!);
       
       // Wait a bit for the change to take effect
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       const verifyPowerState = await client.send(GetPowerCommand(), selectedDevice!);
       const verifyPowerOn = verifyPowerState > 0;
@@ -313,7 +323,7 @@ describe('LIFX Integration Tests', () => {
 
       // Restore original power state
       await client.send(SetPowerCommand(initialPowerOn), selectedDevice!);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       const restoredPowerState = await client.send(GetPowerCommand(), selectedDevice!);
       const restoredPowerOn = restoredPowerState > 0;
@@ -348,7 +358,7 @@ describe('LIFX Integration Tests', () => {
           await client.send(SetColorCommand(testHue, testSaturation, testBrightness, testKelvin, duration), selectedDevice!);
           
           // Wait for transition to complete
-          await new Promise(resolve => setTimeout(resolve, duration + 500));
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           const newColorState = await client.send(GetColorCommand(), selectedDevice!);
           console.log(`  New color - H:${newColorState.hue} S:${newColorState.saturation} B:${newColorState.brightness} K:${newColorState.kelvin}`);
@@ -420,7 +430,7 @@ describe('LIFX Integration Tests', () => {
           ), selectedDevice!);
           
           // Wait for transition to complete
-          await new Promise(resolve => setTimeout(resolve, duration + 500));
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           // Verify restoration
           const restoredColorState = await client.send(GetColorCommand(), selectedDevice!);
@@ -485,7 +495,7 @@ describe('LIFX Integration Tests', () => {
           console.log('  Applied test colors to tiles');
           
           // Wait for color change
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           // Test tile effect
           console.log('  Testing tile effect...');
@@ -507,7 +517,7 @@ describe('LIFX Integration Tests', () => {
           console.log('  Applied test effect to tiles');
           
           // Wait for effect to run
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Restore original tile state
           console.log('  Restoring original tile state...');
@@ -525,7 +535,7 @@ describe('LIFX Integration Tests', () => {
           ), selectedTileDevice!);
           
           // Wait for effect to stop
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           // Restore original colors
           if (originalTileStates && originalTileStates.length > 0) {
@@ -535,7 +545,7 @@ describe('LIFX Integration Tests', () => {
               console.log('  Restored original tile colors');
               
               // Wait for restoration to complete
-              await new Promise(resolve => setTimeout(resolve, 1500));
+              await new Promise(resolve => setTimeout(resolve, 300));
             }
           }
           

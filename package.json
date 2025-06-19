@@ -7,7 +7,7 @@
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "scripts": {
-    "test": "bun test --coverage",
+    "test": "bun test --coverage --timeout 30000",
     "test:integration": "bun test tests/integration.test.ts --timeout 30000",
     "build": "bun run build:esm && bun run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
