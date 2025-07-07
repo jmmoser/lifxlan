@@ -60,10 +60,10 @@
   "author": "Justin Moser",
   "license": "MIT",
   "devDependencies": {
-    "@types/bun": "^1.2.2",
-    "@types/node": "^22.13.0",
+    "@types/bun": "^1.2.18",
+    "@types/node": "^24.0.10",
     "mitata": "^1.0.34",
-    "oxlint": "^0.18.0",
+    "oxlint": "^1.5.0",
     "typescript": "^5.7.3"
   }
 }
