@@ -8,10 +8,11 @@ import { encode, decodeHeader } from '../src/encoding.js';
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
 import { Devices, Device } from '../src/devices.js';
-import { GetColorCommand, SetColorCommand, GetServiceCommand, SetPowerCommand } from '../src/commands.js';
+import { GetColorCommand, SetColorCommand, GetServiceCommand, SetPowerCommand, GetPowerCommand } from '../src/commands.js';
 import { NO_TARGET } from '../src/constants/core.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber } from '../src/utils/index.js';
 import { hsbToRgb, rgbToHsb } from '../src/utils/color.js';
+import { Type } from '../src/constants/types.js';
 
 group('Protocol Operations', () => {
   bench('Message Encoding (SetColor)', () => {
@@ -111,5 +112,41 @@ group('Additional Commands', () => {
     SetPowerCommand(65535);
   });
 });
+
+group('Client', () => {
+  bench('send', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(messsage) {
+          const header = decodeHeader(messsage);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    await client.send(GetPowerCommand(), device);
+  });
+})
 
 await run();

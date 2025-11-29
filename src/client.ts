@@ -62,13 +62,13 @@ function registerHandler<T>(
   sequence: number,
   decode: Decoder<T> | undefined,
   defaultTimeoutMs: number,
-  responseHandlerMap: Map<string, (type: number, bytes: Uint8Array, ref: { current: number }) => void>,
+  responseHandlerMap: Map<ReturnType<typeof getResponseKey>, (type: number, bytes: Uint8Array, ref: { current: number }) => void>,
   signal?: AbortSignal
 ): Promise<T | void> {
   const key = getResponseKey(serialNumber, sequence);
 
   if (responseHandlerMap.has(key)) {
-    throw new MessageConflictError(key, sequence);
+    throw new MessageConflictError(key + '', sequence);
   }
 
   const { resolve, reject, promise } = PromiseWithResolvers<T | void>();
@@ -230,7 +230,7 @@ export function Client(options: ClientOptions): ClientInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const { router } = options;
 
-  const responseHandlerMap = new Map<string, (type: number, bytes: Uint8Array, ref: { current: number }) => void>();
+  const responseHandlerMap = new Map<ReturnType<typeof getResponseKey>, (type: number, bytes: Uint8Array, ref: { current: number }) => void>();
 
   let disposed = false;
 
