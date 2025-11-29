@@ -85,7 +85,7 @@ group('Device Management', () => {
     convertSerialNumberToTarget('d073d5123456');
   });
 
-  const target = new Uint8Array([0xd0, 0x73, 0xd5, 0x12, 0x34, 0x56, 0x00, 0x00]);
+  const target = new Uint8Array([0xd0, 0x73, 0xd5, 0x12, 0x34, 0x56]);
 
   bench('Target to Serial Number Conversion', () => {
     convertTargetToSerialNumber(target);

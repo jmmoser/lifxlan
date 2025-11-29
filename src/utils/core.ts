@@ -43,6 +43,9 @@ export function convertSignalToRssi(signal: number): number {
 }
 
 export function convertTargetToSerialNumber(slice: Uint8Array): string {
+  if (slice.toHex) {
+    return slice.toHex();
+  }
   let str = '';
   const { length } = slice;
   for (let i = 0; i < length; i++) {
