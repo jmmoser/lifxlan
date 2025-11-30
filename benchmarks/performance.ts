@@ -114,39 +114,70 @@ group('Additional Commands', () => {
 });
 
 group('Client', () => {
-  bench('send', async () => {
-    const client = Client({
-      defaultTimeoutMs: 0,
-      router: Router({
-        onSend(messsage) {
-          const header = decodeHeader(messsage);
-          const payload = new Uint8Array(2);
-          new DataView(payload.buffer).setUint16(0, 65535, true);
+  const payload = new Uint8Array(2);
+  new DataView(payload.buffer).setUint16(0, 65535, true);
 
-          client.router.receive(
-            encode(
-              header.tagged,
-              header.source,
-              header.target,
-              false,
-              false,
-              header.sequence,
-              Type.StatePower,
-              payload,
-            ),
-          );
-        },
-      }),
-    });
+  const client = Client({
+    defaultTimeoutMs: 0,
+    router: Router({
+      onSend(messsage) {
+        const header = decodeHeader(messsage);
 
-    const device = Device({
-      serialNumber: 'abcdef123456',
-      port: 1234,
-      address: '1.2.3.4',
-    });
-
-    await client.send(GetPowerCommand(), device);
+        client.router.receive(
+          encode(
+            header.tagged,
+            header.source,
+            header.target,
+            false,
+            false,
+            header.sequence,
+            Type.StatePower,
+            payload,
+          ),
+        );
+      },
+    }),
   });
-})
+
+  const device = Device({
+    serialNumber: 'abcdef123456',
+    port: 1234,
+    address: '1.2.3.4',
+  });
+  
+  const cmd = GetPowerCommand();
+
+  // 128ns
+  bench('encode', () => {
+    encode(
+      false,
+      1,
+      device.target,
+      true,
+      false,
+      device.sequence,
+      cmd.type,
+      undefined,
+    );
+  });
+
+  const message = encode(true, 12345, NO_TARGET, true, true, 42, 102, new Uint8Array(13));
+
+  // 125ns
+  bench('decodeHeader', () => {
+    decodeHeader(message);
+  });
+
+  // 226ns
+  bench('router receive', () => {
+    client.router.receive(message);
+  });
+
+  // 1100ns
+  bench('send', async () => {
+    await client.send(cmd, device);
+  });
+  // }).gc('inner');
+});
 
 await run();
