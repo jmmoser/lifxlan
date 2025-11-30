@@ -56,6 +56,8 @@ function incrementSequence(sequence?: number): number {
   return sequence == null ? 0 : (sequence + 1) % 0xFF;
 }
 
+const continuation = { expectMore: false };
+
 function registerHandler<T>(
   ackMode: 'ack-only' | 'response' | 'both',
   serialNumber: string,
@@ -140,13 +142,8 @@ function registerHandler<T>(
     }
     
     if (decode) {
-      // Support both single-response and multi-response commands
-      const continuation = { expectMore: false };
-      
-      // Check if this is a multi-response command that accepts responseType parameter
-      const result = decode.length >= 4 
-        ? decode(bytes, offsetRef, continuation, type)
-        : decode(bytes, offsetRef, continuation);
+      continuation.expectMore = false;
+      const result = decode(bytes, offsetRef, continuation, type);
       
       if (continuation.expectMore) {
         // Don't cleanup or resolve yet - wait for more responses
@@ -210,11 +207,11 @@ export interface ClientInstance {
 
 /**
  * Creates a high-level client for communicating with LIFX devices.
- * 
+ *
  * The Client provides methods for sending commands to devices with automatic
  * timeout handling, retry logic, and response correlation. It uses the Router
  * for message routing and supports both acknowledged and unacknowledged messaging patterns.
- * 
+ *
  * @param options Configuration options
  * @returns A new client instance
  * @example
