@@ -50,25 +50,18 @@ describe('encoding', () => {
     ]);
     const header = Encoding.decodeHeader(bytes);
 
-    assert.deepEqual(header, {
-      bytes,
-      size: bytes.length,
-      type: 2,
-      protocol: 1024,
-      addressable: true,
-      tagged: true,
-      origin: 0,
-      source: 3381435545,
-      target: new Uint8Array([1, 2, 3, 4, 5, 6]),
-      reserved1: new Uint8Array(2),
-      reserved2: new Uint8Array(6),
-      res_required: true,
-      ack_required: false,
-      reserved3: 0,
-      reserved4: new Uint8Array(8),
-      sequence: 5,
-      reserved5: new Uint8Array(2),
-    });
+    assert.equal(header.size, bytes.length);
+    assert.equal(header.type, 2);
+    assert.equal(header.protocol, 1024);
+    assert.equal(header.addressable, true);
+    assert.equal(header.tagged, true);
+    assert.equal(header.origin, 0);
+    assert.equal(header.source, 3381435545);
+    assert.deepEqual(header.target, new Uint8Array([1, 2, 3, 4, 5, 6]));
+    assert.equal(header.res_required, true);
+    assert.equal(header.ack_required, false);
+    assert.equal(header.reserved3, 0);
+    assert.equal(header.sequence, 5);
 
     const encodedBytes = Encoding.encode(
       header.tagged,

@@ -158,7 +158,11 @@ function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
 const textDecoder = new TextDecoder();
 
 function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
-  const value = textDecoder.decode(bytes.subarray(offsetRef.current, offsetRef.current + maxLength));
+  let end = offsetRef.current;
+  while (end < offsetRef.current + maxLength && bytes[end] !== 0) {
+    end++;
+  }
+  const value = textDecoder.decode(bytes.subarray(offsetRef.current, end));
   offsetRef.current += maxLength;
   return value;
 }
