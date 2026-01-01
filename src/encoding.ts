@@ -974,8 +974,8 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   const target = getHeaderTarget(bytes, offset);
 
   // last 2 bytes of target are reserved
-  const reserved1 = bytes.subarray(offset + 14, offset + 16);
-  const reserved2 = bytes.subarray(offset + 16, offset + 22);
+  const reserved1 = () => bytes.subarray(offset + 14, offset + 16);
+  const reserved2 = () => bytes.subarray(offset + 16, offset + 22);
 
   const responseFlags = getHeaderResponseFlags(view, offset);
   const res_required = getHeaderResponseRequired(responseFlags);
@@ -985,14 +985,13 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   const sequence = getHeaderSequence(view, offset);
 
   /** Protocol Header */
-  const reserved4 = bytes.subarray(offset + 24, offset + 32);
+  const reserved4 = () => bytes.subarray(offset + 24, offset + 32);
 
   const type = getHeaderType(view, offset);
 
-  const reserved5 = bytes.subarray(offset + 34, offset + 36);
+  const reserved5 = () => bytes.subarray(offset + 34, offset + 36);
 
   return {
-    bytes: bytes.subarray(0, 36),
     size,
     protocol,
     addressable,
