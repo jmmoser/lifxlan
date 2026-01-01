@@ -130,7 +130,6 @@ export function encodeUuidTo(bytes: Uint8Array, offset: number, uuid: string): v
   }
 }
 
-// Reuse TextEncoder instance for performance - avoid repeated allocations
 const textEncoder = new TextEncoder();
 
 export function encodeStringTo(bytes: Uint8Array, offset: number, value: string, byteLength: number): void {
@@ -159,11 +158,7 @@ function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
 const textDecoder = new TextDecoder();
 
 function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
-  const foundIndex = bytes
-    .subarray(offsetRef.current, offsetRef.current + maxLength)
-    .findIndex((value) => value === 0);
-  const length = foundIndex >= 0 ? foundIndex : maxLength;
-  const value = textDecoder.decode(bytes.subarray(offsetRef.current, offsetRef.current + length));
+  const value = textDecoder.decode(bytes.subarray(offsetRef.current, offsetRef.current + maxLength));
   offsetRef.current += maxLength;
   return value;
 }
