@@ -133,7 +133,7 @@ export function encodeUuidTo(bytes: Uint8Array, offset: number, uuid: string): v
 const textEncoder = new TextEncoder();
 
 export function encodeStringTo(bytes: Uint8Array, offset: number, value: string, byteLength: number): void {
-  textEncoder.encodeInto(value, bytes.subarray(offset));
+  textEncoder.encodeInto(value, offset > 0 ? bytes.subarray(offset) : bytes);
   if (value.length < byteLength) {
     bytes[offset + value.length] = 0;
   }
