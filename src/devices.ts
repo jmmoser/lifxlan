@@ -142,7 +142,10 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
       } else {
-        timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
+        // Avoid creating a closure over the surrounding scope to prevent memory leaks.
+        // Using `.bind()` only retains a reference to onAbort and the bound argument.
+        const timeoutError = new Error('Timeout');
+        timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
       }
 
       const resolver = (device: Device) => {

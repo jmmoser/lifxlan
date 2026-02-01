@@ -93,7 +93,10 @@ function registerHandler<T>(
   if (signal) {
     signal.addEventListener('abort', onAbort, { once: true });
   } else if (defaultTimeoutMs > 0) {
-    timeout = setTimeout(() => onAbort(new TimeoutError(defaultTimeoutMs, 'device response')), defaultTimeoutMs);
+    // Avoid creating a closure over the surrounding scope to prevent memory leaks.
+    // Using `.bind()` only retains a reference to onAbort and the bound argument.
+    const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');
+    timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
   }
 
   function cleanupOnResponse() {
