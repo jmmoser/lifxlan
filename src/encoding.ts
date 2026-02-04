@@ -46,7 +46,6 @@ export type StateHevCycleConfiguration = ReturnType<typeof decodeStateHevCycleCo
 
 export type StateRPower = ReturnType<typeof decodeStateRPower>;
 
-
 export type StateDeviceChain = ReturnType<typeof decodeStateDeviceChain>;
 export type DeviceChainDevice = StateDeviceChain['devices'][0];
 

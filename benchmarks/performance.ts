@@ -14,111 +14,111 @@ import { convertSerialNumberToTarget, convertTargetToSerialNumber } from '../src
 import { hsbToRgb, rgbToHsb } from '../src/utils/color.js';
 import { Type } from '../src/constants/types.js';
 
-group('Protocol Operations', () => {
-  bench('Message Encoding (SetColor)', () => {
-    encode(true, 12345, NO_TARGET, true, true, 42, 102, new Uint8Array(13));
-  });
+// group('Protocol Operations', () => {
+//   bench('Message Encoding (SetColor)', () => {
+//     encode(true, 12345, NO_TARGET, true, true, 42, 102, new Uint8Array(13));
+//   });
 
-  const message = encode(true, 12345, NO_TARGET, true, true, 42, 102, new Uint8Array(13));
+//   const message = encode(true, 12345, NO_TARGET, true, true, 42, 102, new Uint8Array(13));
 
-  bench('Header Decoding', () => {
-    decodeHeader(message);
-  });
-});
+//   bench('Header Decoding', () => {
+//     decodeHeader(message);
+//   });
+// });
 
-group('Command Creation', () => {
-  bench('GetColorCommand Creation', () => {
-    GetColorCommand();
-  });
+// group('Command Creation', () => {
+//   bench('GetColorCommand Creation', () => {
+//     GetColorCommand();
+//   });
 
-  bench('SetColorCommand Creation', () => {
-    SetColorCommand(32768, 65535, 32768, 3500, 1000);
-  });
-});
+//   bench('SetColorCommand Creation', () => {
+//     SetColorCommand(32768, 65535, 32768, 3500, 1000);
+//   });
+// });
 
-group('decodeStateLabel', () => {
-  const bytes = new Uint8Array([0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x00]);
-  bench('decodeStateLabel', () => {
-    decodeStateLabel(bytes, { current: 0 })
-  });
-})
+// group('decodeStateLabel', () => {
+//   const bytes = new Uint8Array([0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x00]);
+//   bench('decodeStateLabel', () => {
+//     decodeStateLabel(bytes, { current: 0 })
+//   });
+// })
 
-group('Router Operations', () => {
-  const router = Router({
-    onSend() { /* no-op for benchmarking */ }
-  });
+// group('Router Operations', () => {
+//   const router = Router({
+//     onSend() { /* no-op for benchmarking */ }
+//   });
 
-  const handler = () => { };
+//   const handler = () => { };
 
-  bench('Router Source Assignment', () => {
-    const source = router.nextSource();
-    router.register(source, handler);
-    router.deregister(source, handler);
-  });
-});
+//   bench('Router Source Assignment', () => {
+//     const source = router.nextSource();
+//     router.register(source, handler);
+//     router.deregister(source, handler);
+//   });
+// });
 
-group('Client Operations', () => {
-  const router = Router({
-    onSend() { /* no-op for benchmarking */ }
-  });
+// group('Client Operations', () => {
+//   const router = Router({
+//     onSend() { /* no-op for benchmarking */ }
+//   });
 
-  const client = Client({ router });
+//   const client = Client({ router });
 
-  bench('Client Broadcast Command', () => {
-    const command = GetServiceCommand();
-    // Benchmark just the command creation and encoding setup
-    client.broadcast(command);
-  });
+//   bench('Client Broadcast Command', () => {
+//     const command = GetServiceCommand();
+//     // Benchmark just the command creation and encoding setup
+//     client.broadcast(command);
+//   });
 
-  bench('Client Unicast Setup', () => {
-    const device = Device({
-      address: '192.168.1.100',
-      serialNumber: 'd073d5123456'
-    });
+//   bench('Client Unicast Setup', () => {
+//     const device = Device({
+//       address: '192.168.1.100',
+//       serialNumber: 'd073d5123456'
+//     });
     
-    const command = GetColorCommand();
-    // Benchmark the message preparation (without network I/O)
-    client.unicast(command, device);
-  });
-});
+//     const command = GetColorCommand();
+//     // Benchmark the message preparation (without network I/O)
+//     client.unicast(command, device);
+//   });
+// });
 
-group('Device Management', () => {
-  const devices = Devices();
+// group('Device Management', () => {
+//   const devices = Devices();
 
-  bench('Device Registration', () => {
-    devices.register('d073d5123456', 56700, '192.168.1.100');
-  });
+//   bench('Device Registration', () => {
+//     devices.register('d073d5123456', 56700, '192.168.1.100');
+//   });
 
-  bench('Serial Number to Target Conversion', () => {
-    convertSerialNumberToTarget('d073d5123456');
-  });
+//   bench('Serial Number to Target Conversion', () => {
+//     convertSerialNumberToTarget('d073d5123456');
+//   });
 
-  const target = new Uint8Array([0xd0, 0x73, 0xd5, 0x12, 0x34, 0x56]);
+//   const target = new Uint8Array([0xd0, 0x73, 0xd5, 0x12, 0x34, 0x56]);
 
-  bench('Target to Serial Number Conversion', () => {
-    convertTargetToSerialNumber(target);
-  });
-});
+//   bench('Target to Serial Number Conversion', () => {
+//     convertTargetToSerialNumber(target);
+//   });
+// });
 
-group('Color Utilities', () => {
-  bench('HSB to RGB Conversion', () => {
-    hsbToRgb(21845, 65535, 32768);
-  });
+// group('Color Utilities', () => {
+//   bench('HSB to RGB Conversion', () => {
+//     hsbToRgb(21845, 65535, 32768);
+//   });
 
-  bench('RGB to HSB Conversion', () => {
-    rgbToHsb(255, 128, 0);
-  });
-});
+//   bench('RGB to HSB Conversion', () => {
+//     rgbToHsb(255, 128, 0);
+//   });
+// });
 
-group('Additional Commands', () => {
-  bench('GetServiceCommand Creation', () => {
-    GetServiceCommand();
-  });
+// group('Additional Commands', () => {
+//   bench('GetServiceCommand Creation', () => {
+//     GetServiceCommand();
+//   });
 
-  bench('SetPowerCommand Creation', () => {
-    SetPowerCommand(65535);
-  });
-});
+//   bench('SetPowerCommand Creation', () => {
+//     SetPowerCommand(65535);
+//   });
+// });
 
 group('Client', () => {
   const payload = new Uint8Array(2);

@@ -14,7 +14,7 @@
     "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
-    "benchmark": "bun run benchmarks/performance.js"
+    "bench": "bun run benchmarks/performance.js"
   },
   "keywords": [
     "lifx",
