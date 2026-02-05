@@ -1,6 +1,6 @@
 import { NO_TARGET, PORT } from './constants/index.js';
 import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils/index.js';
-import { AbortError, ValidationError } from './errors.js';
+import { AbortError, TimeoutError, ValidationError } from './errors.js';
 
 export interface Device {
   address: string;
@@ -142,7 +142,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
       } else {
-        timeout = setTimeout(() => onAbort(new Error('Timeout')), defaultTimeoutMs);
+        const timeoutError = new TimeoutError(defaultTimeoutMs, 'device discovery');
+        timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
       }
 
       const resolver = (device: Device) => {

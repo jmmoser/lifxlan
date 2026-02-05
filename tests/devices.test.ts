@@ -126,7 +126,7 @@ describe('devices', () => {
     
     // Get device without registering it, should timeout
     const promise = devices.get('nonexistent');
-    await expect(promise).rejects.toThrow('Timeout');
+    await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
   test('Device factory with default port and target', () => {

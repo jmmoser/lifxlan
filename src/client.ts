@@ -93,7 +93,8 @@ function registerHandler<T>(
   if (signal) {
     signal.addEventListener('abort', onAbort, { once: true });
   } else if (defaultTimeoutMs > 0) {
-    timeout = setTimeout(() => onAbort(new TimeoutError(defaultTimeoutMs, 'device response')), defaultTimeoutMs);
+    const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');
+    timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
   }
 
   function cleanupOnResponse() {
