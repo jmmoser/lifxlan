@@ -186,6 +186,23 @@ describe('devices', () => {
     expect(removed).toBe(false);
   });
 
+  test('remove() drops the resolver set so a later register does not satisfy the dropped promise', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    const c = new AbortController();
+    const p = devices.get('abcdef123456', c.signal);
+
+    // remove() before registration: drop the pending resolver state.
+    devices.remove('abcdef123456'); // returns false but should clear deviceResolvers entry
+
+    // Registering now must NOT resolve the dropped promise; the caller's
+    // abort/timeout is still the only thing that will settle it.
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+
+    c.abort();
+    await assert.rejects(p, /aborted/);
+  });
+
   test('aborted get does not block subsequent get for same serial number', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 

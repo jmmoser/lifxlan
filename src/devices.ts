@@ -117,6 +117,13 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     remove(serialNumber: string): boolean {
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
+      // Pending get() promises for this serial would otherwise hang
+      // until their abort/timeout fires. Drop their resolvers; the abort
+      // listeners and timeouts they own remain in place and will reject
+      // the awaiting caller with an AbortError or TimeoutError, but the
+      // resolver Set must be cleared so they aren't accidentally
+      // resolved by a future re-registration.
+      deviceResolvers.delete(serialNumber);
       if (device && onRemoved) {
         try { onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
       }
