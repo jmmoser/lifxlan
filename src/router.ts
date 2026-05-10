@@ -105,7 +105,11 @@ export function Router(options: RouterOptions): RouterInstance {
         serialNumber = convertTargetToSerialNumber(header.target);
       } catch (err) {
         if (options.onError) {
-          options.onError(err, message);
+          try {
+            options.onError(err, message);
+          } catch {
+            // A buggy onError callback must not crash receive().
+          }
         }
         return undefined;
       }

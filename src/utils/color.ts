@@ -13,7 +13,7 @@ export function hsbToRgb(h: number, s: number, b: number): [number, number, numb
 
   const sector = Math.floor(scaled);
   const f = scaled - sector;
-  const i = ((sector % 6) + 6) % 6;
+  const i = sector % 6;
   const p = b * (1 - s);
   const q = b * (1 - s * f);
   const t = b * (1 - s * (1 - f));

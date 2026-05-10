@@ -89,7 +89,7 @@ export function encode(
   const size = 36 + (payload != null ? payload.byteLength : 0);
 
   const bytes = new Uint8Array(size);
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   /** Frame Header */
 
@@ -180,14 +180,14 @@ export function encodeTimestampTo(view: DataView, offset: number, date: Date): v
 }
 
 function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const time = new Date(Number(view.getBigUint64(offsetRef.current, true) / 1000000n));
   offsetRef.current += 8;
   return time;
 }
 
 export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const service = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const port = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   return {
@@ -197,7 +197,7 @@ export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const build = decodeTimestamp(bytes, offsetRef);
   const reserved = decodeBytes(bytes, offsetRef, 8);
   const version_minor = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
@@ -211,7 +211,7 @@ export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
 }
 
 export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const signal = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
   const reserved6 = decodeBytes(bytes, offsetRef, 4);
   const reserved7 = decodeBytes(bytes, offsetRef, 4);
@@ -240,7 +240,7 @@ export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
 }
 
 export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return power;
 }
@@ -250,7 +250,7 @@ export function decodeStateLabel(bytes: Uint8Array, offsetRef: OffsetRef): strin
 }
 
 export function decodeStateVersion(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const vendor = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   const product = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   return {
@@ -299,13 +299,13 @@ export function decodeEchoResponse(bytes: Uint8Array, offsetRef: OffsetRef): Uin
 }
 
 export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: OffsetRef): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const type = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return type;
 }
 
 export function decodeSetColor(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const reserved = decodeBytes(bytes, offsetRef, 1);
   const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
@@ -636,7 +636,7 @@ export function encodeSetTileEffect(instanceid: number, effectType: TileEffectTy
 }
 
 export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const saturation = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
@@ -659,19 +659,19 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: OffsetRef): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const level = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return level;
 }
 
 export function decodeStateInfrared(bytes: Uint8Array, offsetRef: OffsetRef): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const brightness = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return brightness;
 }
 
 export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const duration_s = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   const remaining_s = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   const last_power = !!view.getUint8(offsetRef.current); offsetRef.current += 1;
@@ -683,7 +683,7 @@ export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const indication = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const duration_s = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   return {
@@ -698,7 +698,7 @@ export function decodeStateLastHevCycleResult(bytes: Uint8Array, offsetRef: Offs
 }
 
 export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const relay_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const level = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   return {
@@ -708,7 +708,7 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const start_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const devices: Array<{
     accel_meas_x: number;
@@ -781,7 +781,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
   const x = bytes[offsetRef.current]!; offsetRef.current += 1;
   const y = bytes[offsetRef.current]!; offsetRef.current += 1;
   const width = bytes[offsetRef.current]!; offsetRef.current += 1;
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const colors: Color[] = [];
   for (let i = 0; i < 64; i++) {
     const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
@@ -806,7 +806,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const zones_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const zone_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const hue = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
@@ -824,7 +824,7 @@ export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const zones_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const zone_index = view.getUint8(offsetRef.current); offsetRef.current += 1;
 
@@ -845,7 +845,7 @@ export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const instanceid = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   const type = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const reserved6 = decodeBytes(bytes, offsetRef, 2);
@@ -867,7 +867,7 @@ export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetR
 }
 
 export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const zones_count = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const zone_index = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
   const colors_count = view.getUint8(offsetRef.current); offsetRef.current += 1;
@@ -890,7 +890,7 @@ export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: Offs
 }
 
 export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const reserved0 = view.getUint8(offsetRef.current); offsetRef.current += 1;
   const instanceid = view.getUint32(offsetRef.current, true); offsetRef.current += 4;
   const type = view.getUint8(offsetRef.current); offsetRef.current += 1;
@@ -935,7 +935,7 @@ export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const lux = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
   return {
     lux,
@@ -970,7 +970,7 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   if (offset < 0 || bytes.byteLength - offset < 36) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }
-  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   /** Frame Header */
   const size = getHeaderSize(view, offset);

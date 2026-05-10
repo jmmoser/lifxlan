@@ -1352,4 +1352,25 @@ describe('encoding', () => {
     new DataView(message.buffer).setUint16(0, 1000, true);
     assert.throws(() => Encoding.decodeHeader(message), /header size field is out of range/);
   });
+
+  test('decodeHeader rejects oversized declared size when bytes is a subarray of a larger buffer', () => {
+    // Hostile case: bytes is a 36-byte subarray of a 1000-byte buffer.
+    // Without DataView bounded by byteLength, the size check could pass and
+    // downstream reads would access bytes past the subarray.
+    const big = new Uint8Array(1000);
+    const view = new DataView(big.buffer);
+    view.setUint16(0, 500, true); // claim size = 500 bytes
+    const subarray = big.subarray(0, 36);
+    assert.throws(() => Encoding.decodeHeader(subarray), /header size field is out of range/);
+  });
+
+  test('encodeStringTo with multi-byte UTF-8 string that exactly fills byteLength does not write null terminator', () => {
+    const bytes = new Uint8Array(10);
+    bytes.fill(0xff);
+    // 'café' is 5 bytes in UTF-8 — exactly fills the 5-byte field
+    Encoding.encodeStringTo(bytes, 0, 'café', 5);
+    assert.deepEqual(bytes.subarray(0, 5), new Uint8Array([0x63, 0x61, 0x66, 0xc3, 0xa9]));
+    // Byte at index 5 must remain 0xff (no null terminator since written === byteLength)
+    assert.equal(bytes[5], 0xff);
+  });
 });
