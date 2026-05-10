@@ -170,6 +170,20 @@ describe('client', () => {
     client.dispose();
   });
 
+  test('dispose rejects pending send promises with DisposedClientError', async () => {
+    const client = Client({
+      defaultTimeoutMs: 60000,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const pending = client.send(GetPowerCommand(), sharedDevice);
+    client.dispose();
+
+    await assert.rejects(pending, (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError');
+  });
+
   test('max number of inflight ack-only requests', async () => {
     const client = Client({
       router: Router({

@@ -14,7 +14,7 @@ export interface GroupsOptions {
 }
 
 export interface GroupsInstance {
-  readonly registered: Map<string, Group>;
+  readonly registered: ReadonlyMap<string, Group>;
   register(device: Device, group: StateGroup): void;
   remove(uuid: string): void;
   removeDevice(device: Device): void;
@@ -73,7 +73,8 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
       removeGroup(uuid);
     },
     removeDevice(device: Device) {
-      knownGroups.forEach((group) => {
+      const groups = Array.from(knownGroups.values());
+      for (const group of groups) {
         const index = indexOfDevice(group, device);
         if (index >= 0) {
           group.devices[index] = group.devices[group.devices.length - 1]!;
@@ -84,7 +85,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
             onChanged(group);
           }
         }
-      });
+      }
     },
     get registered() {
       return knownGroups;

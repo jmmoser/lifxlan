@@ -1,5 +1,5 @@
 import { NO_TARGET, PORT } from './constants/index.js';
-import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils/index.js';
+import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
 import { AbortError, TimeoutError, ValidationError } from './errors.js';
 
 export interface Device {
@@ -22,20 +22,25 @@ export function Device(config: DeviceConfig): Device {
   if (!config.address) {
     throw new ValidationError('address', config.address, 'is required');
   }
-  
+
   if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
-  
+
   if (config.sequence !== undefined && (config.sequence < 0 || config.sequence > 254)) {
     throw new ValidationError('sequence', config.sequence, 'must be between 0 and 254');
   }
-  
-  const device = config as Device;
-  device.port ??= PORT;
-  device.target ??= config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET;
-  device.sequence = config.sequence ?? 0;
-  return device;
+
+  const target = config.target ?? (config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET);
+  const serialNumber = config.serialNumber ?? convertTargetToSerialNumber(target);
+
+  return {
+    address: config.address,
+    port: config.port ?? PORT,
+    target,
+    serialNumber,
+    sequence: config.sequence ?? 0,
+  };
 }
 
 export interface DevicesOptions {
@@ -46,7 +51,7 @@ export interface DevicesOptions {
 }
 
 export interface DevicesInstance {
-  readonly registered: Map<string, Device>;
+  readonly registered: ReadonlyMap<string, Device>;
   register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
   remove(serialNumber: string): boolean;
   get(serialNumber: string, signal?: AbortSignal): Promise<Device>;

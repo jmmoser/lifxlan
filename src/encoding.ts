@@ -1,11 +1,14 @@
-import type { 
-  Waveform, 
-  MultiZoneApplicationRequest, 
-  MultiZoneEffectType, 
-  MultiZoneExtendedApplicationRequest, 
-  TileEffectType, 
-  TileEffectSkyType 
+import type {
+  Waveform,
+  MultiZoneApplicationRequest,
+  MultiZoneEffectType,
+  MultiZoneExtendedApplicationRequest,
+  TileEffectType,
+  TileEffectSkyType
 } from './constants/index.js';
+import { ValidationError } from './errors.js';
+
+const HEX_CHARS = /^[0-9a-fA-F]+$/;
 
 export interface Color {
   hue: number;
@@ -124,6 +127,9 @@ export function encode(
  */
 export function encodeUuidTo(bytes: Uint8Array, offset: number, uuid: string): void {
   const hex = uuid.replace(/-/g, '');
+  if (hex.length !== 32 || !HEX_CHARS.test(hex)) {
+    throw new ValidationError('uuid', uuid, 'must be a 32-character hex string with optional dashes');
+  }
   for (let i = 0, j = 0; i < hex.length; i += 2, j++) {
     bytes[offset + j] = parseInt(hex.slice(i, i + 2), 16);
   }
@@ -132,9 +138,10 @@ export function encodeUuidTo(bytes: Uint8Array, offset: number, uuid: string): v
 const textEncoder = new TextEncoder();
 
 export function encodeStringTo(bytes: Uint8Array, offset: number, value: string, byteLength: number): void {
-  textEncoder.encodeInto(value, offset > 0 ? bytes.subarray(offset) : bytes);
-  if (value.length < byteLength) {
-    bytes[offset + value.length] = 0;
+  const target = bytes.subarray(offset, offset + byteLength);
+  const { written } = textEncoder.encodeInto(value, target);
+  if (written < byteLength) {
+    bytes[offset + written] = 0;
   }
 }
 
@@ -157,11 +164,13 @@ function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
 const textDecoder = new TextDecoder();
 
 function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
-  let end = offsetRef.current;
-  while (end < offsetRef.current + maxLength && bytes[end] !== 0) {
+  const start = offsetRef.current;
+  const limit = Math.min(start + maxLength, bytes.length);
+  let end = start;
+  while (end < limit && bytes[end] !== 0) {
     end++;
   }
-  const value = textDecoder.decode(bytes.subarray(offsetRef.current, end));
+  const value = textDecoder.decode(bytes.subarray(start, end));
   offsetRef.current += maxLength;
   return value;
 }
@@ -953,13 +962,21 @@ export const getHeaderType = (view: DataView, offset = 0): number => view.getUin
 
 export const getHeaderSequence = (view: DataView, offset = 0): number => view.getUint8(offset + 23);
 
-export const getPayload = (bytes: Uint8Array, offset = 0): Uint8Array => bytes.subarray(offset + 36);
+export const getPayload = (bytes: Uint8Array, offset = 0, size?: number): Uint8Array => (
+  size != null ? bytes.subarray(offset + 36, offset + size) : bytes.subarray(offset + 36)
+);
 
 export function decodeHeader(bytes: Uint8Array, offset = 0) {
+  if (offset < 0 || bytes.byteLength - offset < 36) {
+    throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
+  }
   const view = new DataView(bytes.buffer, bytes.byteOffset);
 
   /** Frame Header */
   const size = getHeaderSize(view, offset);
+  if (size < 36 || size > bytes.byteLength - offset) {
+    throw new ValidationError('size', size, `header size field is out of range (buffer has ${bytes.byteLength - offset} bytes available)`);
+  }
   const flags = getHeaderFlags(view, offset);
   const protocol = flags & 0xFFF;
   const addressable = !!((flags >> 12) & 0b1);

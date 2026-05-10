@@ -144,14 +144,15 @@ describe('router', () => {
     );
     
     const result = router.receive(message);
-    
+    if (!result) throw new Error('expected receive to decode message');
+
     assert.ok(receivedHeader);
     assert.equal(receivedHeader.source, source);
     assert.equal(receivedHeader.sequence, 10);
     assert.equal(receivedHeader.type, Type.StatePower);
     assert.deepEqual(receivedPayload, new Uint8Array([0xff, 0xff]));
     assert.equal(receivedSerialNumber, '010203040506');
-    
+
     assert.deepEqual(result.header, receivedHeader);
     assert.deepEqual(result.payload, receivedPayload);
     assert.equal(result.serialNumber, receivedSerialNumber);
@@ -208,7 +209,8 @@ describe('router', () => {
     
     // Should not throw an error
     const result = router.receive(message);
-    
+    if (!result) throw new Error('expected receive to decode message');
+
     assert.ok(result.header);
     assert.equal(result.header.source, 99999);
     assert.equal(result.serialNumber, '010203040506');
@@ -340,6 +342,54 @@ describe('router', () => {
     
     router.register(0xFFFFFFFF, handler);
     router.deregister(0xFFFFFFFF, handler);
+  });
+
+  test('receive does not throw on malformed packet and reports via onError', () => {
+    let errorMessage: Uint8Array | undefined;
+    let errorObj: unknown;
+    const router = Router({
+      onSend() {},
+      onError(err, message) {
+        errorObj = err;
+        errorMessage = message;
+      },
+    });
+
+    const tooShort = new Uint8Array(10);
+    const result = router.receive(tooShort);
+
+    assert.equal(result, undefined);
+    assert.ok(errorObj);
+    assert.deepEqual(errorMessage, tooShort);
+  });
+
+  test('receive silently swallows malformed packet when no onError provided', () => {
+    const router = Router({
+      onSend() {},
+    });
+
+    const tooShort = new Uint8Array(10);
+    const result = router.receive(tooShort);
+
+    assert.equal(result, undefined);
+  });
+
+  test('receive rejects packet whose declared size exceeds buffer', () => {
+    let errorObj: unknown;
+    const router = Router({
+      onSend() {},
+      onError(err) {
+        errorObj = err;
+      },
+    });
+
+    // Build a 36-byte header but claim size = 1000
+    const message = new Uint8Array(36);
+    new DataView(message.buffer).setUint16(0, 1000, true);
+
+    const result = router.receive(message);
+    assert.equal(result, undefined);
+    assert.ok(errorObj);
   });
 
   test('sourceCounter wraps around correctly', () => {

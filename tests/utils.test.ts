@@ -68,6 +68,14 @@ describe('utils', () => {
     assert.equal(b, 0);
   });
 
+  test('hsbToRgb wraps maximum hue back to red', () => {
+    // Without wrap, h=65535 falls into the case-5 branch and produces magenta (255, 0, 255)
+    const [r, g, b] = Utils.hsbToRgb(65535, 65535, 65535);
+    assert.equal(r, 255);
+    assert.equal(g, 0);
+    assert.equal(b, 0);
+  });
+
   test('rgbToHsb converts RGB to HSB - red', () => {
     const [h, s, b] = Utils.rgbToHsb(255, 0, 0);
     assert.equal(h, 0);
@@ -176,6 +184,12 @@ describe('utils', () => {
     assert.throws(() => Utils.convertSerialNumberToTarget('12345'), /Invalid serial number/);
     assert.throws(() => Utils.convertSerialNumberToTarget('1234567890123'), /Invalid serial number/);
     assert.throws(() => Utils.convertSerialNumberToTarget(''), /Invalid serial number/);
+  });
+
+  test('convertSerialNumberToTarget throws error for non-hex characters', () => {
+    assert.throws(() => Utils.convertSerialNumberToTarget('zzzzzzzzzzzz'), /Invalid serial number/);
+    assert.throws(() => Utils.convertSerialNumberToTarget('deadbeefcafX'), /Invalid serial number/);
+    assert.throws(() => Utils.convertSerialNumberToTarget('device123456'), /Invalid serial number/);
   });
 
   test('round trip conversion: target to serial number and back', () => {

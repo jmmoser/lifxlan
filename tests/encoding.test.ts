@@ -1313,8 +1313,43 @@ describe('encoding', () => {
 
   test('encodeString with exact length match', () => {
     const bytes = Encoding.encodeString('hello', 5);
-    
+
     // Should not have null terminator since string exactly fills buffer
     assert.deepEqual(bytes, new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f])); // 'hello'
+  });
+
+  test('encodeString with multi-byte UTF-8 characters places null terminator after bytes, not code units', () => {
+    // 'café' is 4 code units in UTF-16 but 5 bytes in UTF-8 (c=0x63, a=0x61, f=0x66, é=0xc3 0xa9)
+    const bytes = Encoding.encodeString('café', 8);
+    assert.deepEqual(bytes.subarray(0, 5), new Uint8Array([0x63, 0x61, 0x66, 0xc3, 0xa9]));
+    // Null terminator should follow the encoded bytes, not the code-unit length
+    assert.equal(bytes[5], 0);
+  });
+
+  test('encodeString does not write past byteLength when input is too long', () => {
+    // 'hello world' is 11 bytes; field is only 5 bytes
+    const bytes = new Uint8Array(10);
+    bytes.fill(0xff);
+    Encoding.encodeStringTo(bytes, 0, 'hello world', 5);
+    // First 5 bytes should be 'hello'; bytes 5+ should be untouched (still 0xff)
+    assert.deepEqual(bytes.subarray(0, 5), new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f]));
+    assert.deepEqual(bytes.subarray(5), new Uint8Array(5).fill(0xff));
+  });
+
+  test('encodeUuidTo rejects malformed UUIDs', () => {
+    const bytes = new Uint8Array(16);
+    assert.throws(() => Encoding.encodeUuidTo(bytes, 0, '4e0352bf-XXXX-4ff2-b425-1c4455479f33'), /Invalid uuid/);
+    assert.throws(() => Encoding.encodeUuidTo(bytes, 0, 'too-short'), /Invalid uuid/);
+  });
+
+  test('decodeHeader throws on packet shorter than 36 bytes', () => {
+    const tooShort = new Uint8Array(20);
+    assert.throws(() => Encoding.decodeHeader(tooShort), /must be at least 36 bytes/);
+  });
+
+  test('decodeHeader throws when declared size exceeds buffer', () => {
+    const message = new Uint8Array(36);
+    new DataView(message.buffer).setUint16(0, 1000, true);
+    assert.throws(() => Encoding.decodeHeader(message), /header size field is out of range/);
   });
 });

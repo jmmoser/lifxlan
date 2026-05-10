@@ -56,7 +56,10 @@ function incrementSequence(sequence?: number): number {
   return sequence == null ? 0 : (sequence + 1) % 0xFF;
 }
 
-const continuation = { expectMore: false };
+interface PendingHandler {
+  handle(type: number, bytes: Uint8Array, ref: { current: number }): void;
+  cancel(reason: Error): void;
+}
 
 function registerHandler<T>(
   ackMode: 'ack-only' | 'response' | 'both',
@@ -64,7 +67,7 @@ function registerHandler<T>(
   sequence: number,
   decode: Decoder<T> | undefined,
   defaultTimeoutMs: number,
-  responseHandlerMap: Map<ReturnType<typeof getResponseKey>, (type: number, bytes: Uint8Array, ref: { current: number }) => void>,
+  responseHandlerMap: Map<ReturnType<typeof getResponseKey>, PendingHandler>,
   signal?: AbortSignal
 ): Promise<T | void> {
   const key = getResponseKey(serialNumber, sequence);
@@ -74,30 +77,15 @@ function registerHandler<T>(
   }
 
   const { resolve, reject, promise } = PromiseWithResolvers<T | void>();
+  const continuation = { expectMore: false };
 
   let receivedAck = false;
   let receivedResponse = false;
   let responseResult: T | undefined;
-
-  function onAbort(errOrEvent: Error | Event) {
-    responseHandlerMap.delete(key);
-    if (errOrEvent instanceof Error) {
-      reject(errOrEvent);
-    } else {
-      reject(new AbortError('device response'));
-    }
-  }
-
+  let settled = false;
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
-  if (signal) {
-    signal.addEventListener('abort', onAbort, { once: true });
-  } else if (defaultTimeoutMs > 0) {
-    const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');
-    timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
-  }
-
-  function cleanupOnResponse() {
+  function cleanup() {
     if (signal) {
       signal.removeEventListener('abort', onAbort);
     } else if (timeout) {
@@ -106,56 +94,72 @@ function registerHandler<T>(
     responseHandlerMap.delete(key);
   }
 
+  function onAbort(errOrEvent: Error | Event) {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    reject(errOrEvent instanceof Error ? errOrEvent : new AbortError('device response'));
+  }
+
+  if (signal) {
+    signal.addEventListener('abort', onAbort, { once: true });
+  } else if (defaultTimeoutMs > 0) {
+    const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');
+    timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
+  }
+
   function checkForCompletion() {
-    if (ackMode === 'ack-only' && receivedAck) {
-      cleanupOnResponse();
-      resolve(undefined);
+    if (settled) return true;
+    if (
+      (ackMode === 'ack-only' && receivedAck) ||
+      (ackMode === 'response' && receivedResponse) ||
+      (ackMode === 'both' && receivedAck && receivedResponse)
+    ) {
+      settled = true;
+      cleanup();
+      resolve(ackMode === 'ack-only' ? undefined : responseResult);
       return true;
     }
-    
-    if (ackMode === 'response' && receivedResponse) {
-      cleanupOnResponse();
-      resolve(responseResult);
-      return true;
-    }
-    
-    if (ackMode === 'both' && receivedAck && receivedResponse) {
-      cleanupOnResponse();
-      resolve(responseResult);
-      return true;
-    }
-    
     return false;
   }
 
-  responseHandlerMap.set(key, (type, bytes, offsetRef) => {
-    if (type === Type.Acknowledgement) {
-      receivedAck = true;
-      checkForCompletion();
-      return;
-    }
-    
-    if (type === Type.StateUnhandled) {
-      cleanupOnResponse();
-      const requestType = decodeStateUnhandled(bytes, offsetRef);
-      reject(new UnhandledCommandError(requestType, serialNumber));
-      return;
-    }
-    
-    if (decode) {
-      continuation.expectMore = false;
-      const result = decode(bytes, offsetRef, continuation, type);
-      
-      if (continuation.expectMore) {
-        // Don't cleanup or resolve yet - wait for more responses
+  responseHandlerMap.set(key, {
+    handle(type, bytes, offsetRef) {
+      if (settled) return;
+
+      if (type === Type.Acknowledgement) {
+        receivedAck = true;
+        checkForCompletion();
         return;
-      } else {
-        // This is the final response or a single-response command
+      }
+
+      if (type === Type.StateUnhandled) {
+        settled = true;
+        cleanup();
+        const requestType = decodeStateUnhandled(bytes, offsetRef);
+        reject(new UnhandledCommandError(requestType, serialNumber));
+        return;
+      }
+
+      if (decode) {
+        continuation.expectMore = false;
+        const result = decode(bytes, offsetRef, continuation, type);
+
+        if (continuation.expectMore) {
+          return;
+        }
+
         receivedResponse = true;
         responseResult = result;
         checkForCompletion();
       }
-    }
+    },
+    cancel(reason) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(reason);
+    },
   });
 
   return promise;
@@ -228,7 +232,7 @@ export function Client(options: ClientOptions): ClientInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const { router } = options;
 
-  const responseHandlerMap = new Map<ReturnType<typeof getResponseKey>, (type: number, bytes: Uint8Array, ref: { current: number }) => void>();
+  const responseHandlerMap = new Map<ReturnType<typeof getResponseKey>, PendingHandler>();
 
   let disposed = false;
 
@@ -263,17 +267,18 @@ export function Client(options: ClientOptions): ClientInstance {
     dispose() {
       if (disposed) return;
       disposed = true;
-      
-      // Clear all pending response handlers
-      for (const handler of responseHandlerMap.values()) {
+
+      const error = new DisposedClientError(source);
+      const entries = Array.from(responseHandlerMap.values());
+      responseHandlerMap.clear();
+      for (const entry of entries) {
         try {
-          handler(0, new Uint8Array(), { current: 0 });
+          entry.cancel(error);
         } catch {
           // Ignore errors during disposal cleanup
         }
       }
-      responseHandlerMap.clear();
-      
+
       router.deregister(source, client.onMessage);
     },
     /**
@@ -348,20 +353,21 @@ export function Client(options: ClientOptions): ClientInstance {
           break;
       }
       
+      const sequence = device.sequence;
+      device.sequence = incrementSequence(sequence);
+
       const bytes = encode(
         false,
         source,
         device.target,
         resRequired,
         ackRequired,
-        device.sequence,
+        sequence,
         command.type,
         command.payload,
       );
 
-      const promise = registerHandler(ackMode, device.serialNumber, device.sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal);
-
-      device.sequence = incrementSequence(device.sequence);
+      const promise = registerHandler(ackMode, device.serialNumber, sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal);
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 
@@ -377,7 +383,7 @@ export function Client(options: ClientOptions): ClientInstance {
       );
 
       if (responseHandlerEntry) {
-        responseHandlerEntry(header.type, payload, { current: 0 });
+        responseHandlerEntry.handle(header.type, payload, { current: 0 });
       }
     },
   };
