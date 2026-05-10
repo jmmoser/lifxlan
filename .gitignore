@@ -1,6 +1,7 @@
 node_modules
 package-lock.json
 bun.lockb
+bun.lock
 playground
 TODO.md
 dist
