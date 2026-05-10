@@ -1,4 +1,5 @@
 import { describe, test, spyOn, expect } from 'bun:test';
+import assert from 'node:assert';
 import { Devices, Device } from '../src/devices.js';
 
 describe('devices', () => {
@@ -129,6 +130,29 @@ describe('devices', () => {
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
+  test('Devices.register tolerates a throwing onAdded callback', () => {
+    const devices = Devices({
+      onAdded() { throw new Error('user bug'); },
+    });
+
+    // Must not throw
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+    expect(devices.registered.size).toBe(1);
+  });
+
+  test('Devices.register tolerates a throwing onChanged callback', () => {
+    let added: Device | undefined;
+    const devices = Devices({
+      onAdded(d) { added = d; },
+      onChanged() { throw new Error('user bug'); },
+    });
+
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+    expect(() => devices.register('abcdef123456', 56700, '5.6.7.8')).not.toThrow();
+    expect(added).toBeDefined();
+    expect(added!.address).toBe('5.6.7.8');
+  });
+
   test('Device factory with default port and target', () => {
     const device = Device({
       address: '192.168.1.100',
@@ -160,6 +184,41 @@ describe('devices', () => {
     
     const removed = devices.remove('nonexistent');
     expect(removed).toBe(false);
+  });
+
+  test('remove() drops the resolver set so a later register does not satisfy the dropped promise', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    const c = new AbortController();
+    const p = devices.get('abcdef123456', c.signal);
+
+    // remove() before registration: drop the pending resolver state.
+    devices.remove('abcdef123456'); // returns false but should clear deviceResolvers entry
+
+    // Registering now must NOT resolve the dropped promise; the caller's
+    // abort/timeout is still the only thing that will settle it.
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+
+    c.abort();
+    await assert.rejects(p, /aborted/);
+  });
+
+  test('aborted get does not block subsequent get for same serial number', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    const c1 = new AbortController();
+    const c2 = new AbortController();
+    const p1 = devices.get('abcdef123456', c1.signal);
+    const p2 = devices.get('abcdef123456', c2.signal);
+
+    c1.abort();
+    await assert.rejects(p1, /aborted/);
+
+    // p2 must still resolve when the device registers — the c1 abort must
+    // only have removed its own resolver, not p2's.
+    devices.register('abcdef123456', 56700, '192.168.1.1');
+    const device = await p2;
+    expect(device.serialNumber).toBe('abcdef123456');
   });
 
   test('get device with AbortError', async () => {
@@ -225,12 +284,12 @@ describe('devices', () => {
     
     const device1 = Device({
       address: '192.168.1.1',
-      serialNumber: 'device123456'
+      serialNumber: 'deadbeef1234'
     });
     
     const device2 = Device({
       address: '192.168.1.2', 
-      serialNumber: 'device789012'
+      serialNumber: 'cafebabe5678'
     });
 
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
@@ -242,8 +301,8 @@ describe('devices', () => {
     }
 
     expect(iteratedDevices).toHaveLength(2);
-    expect(iteratedDevices.some(d => d.serialNumber === 'device123456')).toBe(true);
-    expect(iteratedDevices.some(d => d.serialNumber === 'device789012')).toBe(true);
+    expect(iteratedDevices.some(d => d.serialNumber === 'deadbeef1234')).toBe(true);
+    expect(iteratedDevices.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
 
   test('Devices iterator works with empty collection', () => {
@@ -268,7 +327,7 @@ describe('devices', () => {
 
     const device1 = Device({
       address: '192.168.1.1',
-      serialNumber: 'device123456'
+      serialNumber: 'deadbeef1234'
     });
 
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
@@ -278,7 +337,7 @@ describe('devices', () => {
       iteratedDevices.push(device);
     }
     expect(iteratedDevices).toHaveLength(1);
-    expect(iteratedDevices[0]!.serialNumber).toBe('device123456');
+    expect(iteratedDevices[0]!.serialNumber).toBe('deadbeef1234');
   });
 
   test('Devices iterator reflects changes when devices are removed', () => {
@@ -286,12 +345,12 @@ describe('devices', () => {
     
     const device1 = Device({
       address: '192.168.1.1',
-      serialNumber: 'device123456'
+      serialNumber: 'deadbeef1234'
     });
     
     const device2 = Device({
       address: '192.168.1.2',
-      serialNumber: 'device789012'  
+      serialNumber: 'cafebabe5678'  
     });
 
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
@@ -303,14 +362,14 @@ describe('devices', () => {
     }
     expect(iteratedDevices).toHaveLength(2);
 
-    devices.remove('device123456');
+    devices.remove('deadbeef1234');
 
     iteratedDevices = [];
     for (const device of devices) {
       iteratedDevices.push(device);
     }
     expect(iteratedDevices).toHaveLength(1);
-    expect(iteratedDevices[0]!.serialNumber).toBe('device789012');
+    expect(iteratedDevices[0]!.serialNumber).toBe('cafebabe5678');
   });
 
   test('Devices iterator can be used with Array.from', () => {
@@ -318,12 +377,12 @@ describe('devices', () => {
     
     const device1 = Device({
       address: '192.168.1.1',
-      serialNumber: 'device123456'
+      serialNumber: 'deadbeef1234'
     });
     
     const device2 = Device({
       address: '192.168.1.2',
-      serialNumber: 'device789012'
+      serialNumber: 'cafebabe5678'
     });
 
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
@@ -331,8 +390,8 @@ describe('devices', () => {
 
     const deviceArray = Array.from(devices);
     expect(deviceArray).toHaveLength(2);
-    expect(deviceArray.some(d => d.serialNumber === 'device123456')).toBe(true);
-    expect(deviceArray.some(d => d.serialNumber === 'device789012')).toBe(true);
+    expect(deviceArray.some(d => d.serialNumber === 'deadbeef1234')).toBe(true);
+    expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
 
   test('Devices iterator can be used with destructuring', () => {
@@ -340,12 +399,12 @@ describe('devices', () => {
     
     const device1 = Device({
       address: '192.168.1.1',
-      serialNumber: 'device123456'
+      serialNumber: 'deadbeef1234'
     });
     
     const device2 = Device({
       address: '192.168.1.2',
-      serialNumber: 'device789012'
+      serialNumber: 'cafebabe5678'
     });
 
     devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
@@ -353,7 +412,7 @@ describe('devices', () => {
 
     const [...deviceArray] = devices;
     expect(deviceArray).toHaveLength(2);
-    expect(deviceArray.some(d => d.serialNumber === 'device123456')).toBe(true);
-    expect(deviceArray.some(d => d.serialNumber === 'device789012')).toBe(true);
+    expect(deviceArray.some(d => d.serialNumber === 'deadbeef1234')).toBe(true);
+    expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
 });

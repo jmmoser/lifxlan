@@ -18,6 +18,12 @@ const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 export interface RouterOptions {
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
   onMessage?: MessageHandler;
+  /**
+   * Called when an inbound message cannot be decoded (e.g. truncated or
+   * malformed packet). If not provided, malformed packets are silently
+   * discarded so a hostile sender cannot crash the host process.
+   */
+  onError?: (error: unknown, message: Uint8Array) => void;
   handlers?: Map<number, MessageHandler>;
 }
 
@@ -30,7 +36,7 @@ export interface RouterInstance {
     header: Header;
     payload: Uint8Array;
     serialNumber: string;
-  };
+  } | undefined;
 }
 
 /**
@@ -90,10 +96,23 @@ export function Router(options: RouterOptions): RouterInstance {
       options.onSend(message, port, address, serialNumber);
     },
     receive(message: Uint8Array) {
-      const header = decodeHeader(message);
-      const payload = getPayload(message);
-
-      const serialNumber = convertTargetToSerialNumber(header.target);
+      let header: Header;
+      let payload: Uint8Array;
+      let serialNumber: string;
+      try {
+        header = decodeHeader(message);
+        payload = getPayload(message, 0, header.size);
+        serialNumber = convertTargetToSerialNumber(header.target);
+      } catch (err) {
+        if (options.onError) {
+          try {
+            options.onError(err, message);
+          } catch {
+            // A buggy onError callback must not crash receive().
+          }
+        }
+        return undefined;
+      }
 
       const handler = handlers.get(header.source);
 

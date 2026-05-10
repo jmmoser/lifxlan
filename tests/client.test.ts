@@ -170,6 +170,47 @@ describe('client', () => {
     client.dispose();
   });
 
+  test('send rejects when decoder throws', async () => {
+    const client = Client({
+      defaultTimeoutMs: 60000,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          // Echo back StatePower with a 1-byte payload so the StatePower
+          // decoder reads past the buffer and throws.
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              new Uint8Array(1),
+            ),
+          );
+        },
+      }),
+    });
+
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice));
+  });
+
+  test('dispose rejects pending send promises with DisposedClientError', async () => {
+    const client = Client({
+      defaultTimeoutMs: 60000,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const pending = client.send(GetPowerCommand(), sharedDevice);
+    client.dispose();
+
+    await assert.rejects(pending, (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError');
+  });
+
   test('max number of inflight ack-only requests', async () => {
     const client = Client({
       router: Router({

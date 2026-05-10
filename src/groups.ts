@@ -14,7 +14,7 @@ export interface GroupsOptions {
 }
 
 export interface GroupsInstance {
-  readonly registered: Map<string, Group>;
+  readonly registered: ReadonlyMap<string, Group>;
   register(device: Device, group: StateGroup): void;
   remove(uuid: string): void;
   removeDevice(device: Device): void;
@@ -33,7 +33,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
     if (group) {
       knownGroups.delete(uuid);
       if (onRemoved) {
-        onRemoved(group);
+        try { onRemoved(group); } catch { /* user callback errors must not corrupt state */ }
       }
     }
   }
@@ -51,11 +51,17 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
     register(device: Device, group: StateGroup) {
       const existingGroup = knownGroups.get(group.group);
       if (existingGroup) {
+        let changed = false;
         if (indexOfDevice(existingGroup, device) < 0) {
           existingGroup.devices.push(device);
-          if (onChanged) {
-            onChanged(existingGroup);
-          }
+          changed = true;
+        }
+        if (existingGroup.label !== group.label) {
+          existingGroup.label = group.label;
+          changed = true;
+        }
+        if (changed && onChanged) {
+          try { onChanged(existingGroup); } catch { /* user callback errors must not corrupt state */ }
         }
       } else {
         const newGroup: Group = {
@@ -65,7 +71,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
         };
         knownGroups.set(group.group, newGroup);
         if (onAdded) {
-          onAdded(newGroup);
+          try { onAdded(newGroup); } catch { /* user callback errors must not corrupt state */ }
         }
       }
     },
@@ -73,7 +79,8 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
       removeGroup(uuid);
     },
     removeDevice(device: Device) {
-      knownGroups.forEach((group) => {
+      const groups = Array.from(knownGroups.values());
+      for (const group of groups) {
         const index = indexOfDevice(group, device);
         if (index >= 0) {
           group.devices[index] = group.devices[group.devices.length - 1]!;
@@ -81,10 +88,10 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
           if (group.devices.length === 0) {
             removeGroup(group.uuid);
           } else if (onChanged) {
-            onChanged(group);
+            try { onChanged(group); } catch { /* user callback errors must not corrupt state */ }
           }
         }
-      });
+      }
     },
     get registered() {
       return knownGroups;

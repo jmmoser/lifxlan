@@ -41,8 +41,10 @@ const devices = Devices();
 
 // Handle incoming messages
 socket.on('message', (message, remote) => {
-  const { header, serialNumber } = router.receive(message);
-  devices.register(serialNumber, remote.port, remote.address, header.target);
+  const result = router.receive(message);
+  if (result) {
+    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
+  }
 });
 
 // Start the socket
@@ -197,10 +199,12 @@ const devices = Devices({
 });
 
 socket.on('message', (message, remote) => {
-  // Forward received messages to the router
-  const { header, serialNumber } = router.receive(message);
-  // Forward the message to devices so it can keep track
-  devices.register(serialNumber, remote.port, remote.address, header.target);
+  // Forward received messages to the router. Returns undefined for
+  // malformed packets, which we silently ignore.
+  const result = router.receive(message);
+  if (result) {
+    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
+  }
 });
 
 // Client handles communication with devices
@@ -251,8 +255,10 @@ setTimeout(() => {
 }, 1000);
 
 for await (const [message, remote] of socket) {
-  const { header, serialNumber } = router.receive(message);
-  devices.register(serialNumber, remote.port, remote.hostname, header.target);
+  const result = router.receive(message);
+  if (result) {
+    devices.register(result.serialNumber, remote.port, remote.hostname, result.header.target);
+  }
 }
 ```
 

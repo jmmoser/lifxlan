@@ -1,5 +1,5 @@
 import { NO_TARGET, PORT } from './constants/index.js';
-import { convertSerialNumberToTarget, PromiseWithResolvers } from './utils/index.js';
+import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
 import { AbortError, TimeoutError, ValidationError } from './errors.js';
 
 export interface Device {
@@ -22,20 +22,25 @@ export function Device(config: DeviceConfig): Device {
   if (!config.address) {
     throw new ValidationError('address', config.address, 'is required');
   }
-  
+
   if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
-  
+
   if (config.sequence !== undefined && (config.sequence < 0 || config.sequence > 254)) {
     throw new ValidationError('sequence', config.sequence, 'must be between 0 and 254');
   }
-  
-  const device = config as Device;
-  device.port ??= PORT;
-  device.target ??= config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET;
-  device.sequence = config.sequence ?? 0;
-  return device;
+
+  const target = config.target ?? (config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET);
+  const serialNumber = config.serialNumber ?? convertTargetToSerialNumber(target);
+
+  return {
+    address: config.address,
+    port: config.port ?? PORT,
+    target,
+    serialNumber,
+    sequence: config.sequence ?? 0,
+  };
 }
 
 export interface DevicesOptions {
@@ -46,7 +51,7 @@ export interface DevicesOptions {
 }
 
 export interface DevicesInstance {
-  readonly registered: Map<string, Device>;
+  readonly registered: ReadonlyMap<string, Device>;
   register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
   remove(serialNumber: string): boolean;
   get(serialNumber: string, signal?: AbortSignal): Promise<Device>;
@@ -70,7 +75,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         existingDevice.port = port;
         existingDevice.address = address;
         if (onChanged) {
-          onChanged(existingDevice);
+          try { onChanged(existingDevice); } catch { /* user callback errors must not corrupt state */ }
         }
       }
       return existingDevice;
@@ -82,7 +87,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     });
     knownDevices.set(serialNumber, device);
     if (onAdded) {
-      onAdded(device);
+      try { onAdded(device); } catch { /* user callback errors must not corrupt state */ }
     }
     return device;
   }
@@ -103,7 +108,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       if (resolvers) {
         deviceResolvers.delete(serialNumber);
         resolvers.forEach((resolver) => {
-          resolver(device);
+          try { resolver(device); } catch { /* one resolver throwing must not block others */ }
         });
       }
 
@@ -112,8 +117,15 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     remove(serialNumber: string): boolean {
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
+      // Pending get() promises for this serial would otherwise hang
+      // until their abort/timeout fires. Drop their resolvers; the abort
+      // listeners and timeouts they own remain in place and will reject
+      // the awaiting caller with an AbortError or TimeoutError, but the
+      // resolver Set must be cleared so they aren't accidentally
+      // resolved by a future re-registration.
+      deviceResolvers.delete(serialNumber);
       if (device && onRemoved) {
-        onRemoved(device);
+        try { onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
       }
       return removed;
     },
@@ -125,11 +137,22 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+
+      function cleanup() {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        } else if (timeout) {
+          clearTimeout(timeout);
+        }
+      }
+
       function onAbort(errOrEvent: Error | Event) {
+        cleanup();
         const resolvers = deviceResolvers.get(serialNumber);
         if (resolvers) {
           if (resolvers.size > 1) {
-            resolvers.delete(resolve);
+            resolvers.delete(resolver);
           } else {
             deviceResolvers.delete(serialNumber);
           }
@@ -137,7 +160,10 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         reject(errOrEvent instanceof Error ? errOrEvent : new AbortError('device lookup'));
       }
 
-      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const resolver = (device: Device) => {
+        cleanup();
+        resolve(device);
+      };
 
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
@@ -145,15 +171,6 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         const timeoutError = new TimeoutError(defaultTimeoutMs, 'device discovery');
         timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
       }
-
-      const resolver = (device: Device) => {
-        if (signal) {
-          signal.removeEventListener('abort', onAbort);
-        } else if (timeout) {
-          clearTimeout(timeout);
-        }
-        resolve(device);
-      };
 
       const resolvers = deviceResolvers.get(serialNumber);
       if (!resolvers) {

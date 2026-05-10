@@ -7,12 +7,13 @@
  * @returns RGB values [0-255]
  */
 export function hsbToRgb(h: number, s: number, b: number): [number, number, number] {
-  h = (h * 6) / 65535;
+  const scaled = (h * 6) / 65535;
   s = s / 65535;
   b = b * 255 / 65535;
 
-  const i = Math.floor(h);
-  const f = h - i;
+  const sector = Math.floor(scaled);
+  const f = scaled - sector;
+  const i = sector % 6;
   const p = b * (1 - s);
   const q = b * (1 - s * f);
   const t = b * (1 - s * (1 - f));

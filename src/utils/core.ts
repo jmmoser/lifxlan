@@ -1,3 +1,7 @@
+import { ValidationError } from '../errors.js';
+
+const HEX_CHARS = /^[0-9a-fA-F]+$/;
+
 export const NOOP = (_value: unknown) => {};
 
 export function PromiseWithResolvers<T>(): {
@@ -5,8 +9,8 @@ export function PromiseWithResolvers<T>(): {
   reject: (reason?: unknown) => void;
   promise: Promise<T>;
 } {
-  let resolve = NOOP as (value: T) => void;
-  let reject = NOOP as (reason?: unknown) => void;
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
@@ -60,8 +64,8 @@ export function convertTargetToSerialNumber(slice: Uint8Array): string {
 }
 
 export function convertSerialNumberToTarget(serialNumber: string): Uint8Array {
-  if (serialNumber.length !== 12) {
-    throw new Error('Invalid serial number');
+  if (serialNumber.length !== 12 || !HEX_CHARS.test(serialNumber)) {
+    throw new ValidationError('serialNumber', serialNumber, 'Invalid serial number: must be a 12-character hex string');
   }
   const target = new Uint8Array(6);
   for (let i = 0; i < 6; i++) {
