@@ -9,8 +9,8 @@ export function PromiseWithResolvers<T>(): {
   reject: (reason?: unknown) => void;
   promise: Promise<T>;
 } {
-  let resolve = NOOP as (value: T) => void;
-  let reject = NOOP as (reason?: unknown) => void;
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;

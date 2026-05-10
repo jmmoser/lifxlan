@@ -142,8 +142,16 @@ function registerHandler<T>(
       }
 
       if (decode) {
-        continuation.expectMore = false;
-        const result = decode(bytes, offsetRef, continuation, type);
+        let result: T;
+        try {
+          continuation.expectMore = false;
+          result = decode(bytes, offsetRef, continuation, type);
+        } catch (err) {
+          settled = true;
+          cleanup();
+          reject(err instanceof Error ? err : new Error(String(err)));
+          return;
+        }
 
         if (continuation.expectMore) {
           return;
@@ -268,6 +276,10 @@ export function Client(options: ClientOptions): ClientInstance {
       if (disposed) return;
       disposed = true;
 
+      // Deregister first so any in-flight messages routed to this client
+      // are dropped before we tear down its pending handlers.
+      router.deregister(source, client.onMessage);
+
       const error = new DisposedClientError(source);
       const entries = Array.from(responseHandlerMap.values());
       responseHandlerMap.clear();
@@ -278,8 +290,6 @@ export function Client(options: ClientOptions): ClientInstance {
           // Ignore errors during disposal cleanup
         }
       }
-
-      router.deregister(source, client.onMessage);
     },
     /**
      * Broadcast a command to the local network.

@@ -33,7 +33,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
     if (group) {
       knownGroups.delete(uuid);
       if (onRemoved) {
-        onRemoved(group);
+        try { onRemoved(group); } catch { /* user callback errors must not corrupt state */ }
       }
     }
   }
@@ -54,7 +54,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
         if (indexOfDevice(existingGroup, device) < 0) {
           existingGroup.devices.push(device);
           if (onChanged) {
-            onChanged(existingGroup);
+            try { onChanged(existingGroup); } catch { /* user callback errors must not corrupt state */ }
           }
         }
       } else {
@@ -65,7 +65,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
         };
         knownGroups.set(group.group, newGroup);
         if (onAdded) {
-          onAdded(newGroup);
+          try { onAdded(newGroup); } catch { /* user callback errors must not corrupt state */ }
         }
       }
     },
@@ -82,7 +82,7 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
           if (group.devices.length === 0) {
             removeGroup(group.uuid);
           } else if (onChanged) {
-            onChanged(group);
+            try { onChanged(group); } catch { /* user callback errors must not corrupt state */ }
           }
         }
       }

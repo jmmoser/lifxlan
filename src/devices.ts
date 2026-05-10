@@ -75,7 +75,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         existingDevice.port = port;
         existingDevice.address = address;
         if (onChanged) {
-          onChanged(existingDevice);
+          try { onChanged(existingDevice); } catch { /* user callback errors must not corrupt state */ }
         }
       }
       return existingDevice;
@@ -87,7 +87,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     });
     knownDevices.set(serialNumber, device);
     if (onAdded) {
-      onAdded(device);
+      try { onAdded(device); } catch { /* user callback errors must not corrupt state */ }
     }
     return device;
   }
@@ -108,7 +108,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       if (resolvers) {
         deviceResolvers.delete(serialNumber);
         resolvers.forEach((resolver) => {
-          resolver(device);
+          try { resolver(device); } catch { /* one resolver throwing must not block others */ }
         });
       }
 
@@ -118,7 +118,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
       if (device && onRemoved) {
-        onRemoved(device);
+        try { onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
       }
       return removed;
     },

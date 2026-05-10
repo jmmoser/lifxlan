@@ -129,6 +129,29 @@ describe('devices', () => {
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
+  test('Devices.register tolerates a throwing onAdded callback', () => {
+    const devices = Devices({
+      onAdded() { throw new Error('user bug'); },
+    });
+
+    // Must not throw
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+    expect(devices.registered.size).toBe(1);
+  });
+
+  test('Devices.register tolerates a throwing onChanged callback', () => {
+    let added: Device | undefined;
+    const devices = Devices({
+      onAdded(d) { added = d; },
+      onChanged() { throw new Error('user bug'); },
+    });
+
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+    expect(() => devices.register('abcdef123456', 56700, '5.6.7.8')).not.toThrow();
+    expect(added).toBeDefined();
+    expect(added!.address).toBe('5.6.7.8');
+  });
+
   test('Device factory with default port and target', () => {
     const device = Device({
       address: '192.168.1.100',
