@@ -152,6 +152,9 @@ export function encodeString(value: string, byteLength: number): Uint8Array {
 }
 
 function decodeBytes(bytes: Uint8Array, offsetRef: OffsetRef, byteLength: number): Uint8Array {
+  if (offsetRef.current + byteLength > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${byteLength} bytes at offset ${offsetRef.current}, only ${bytes.length - offsetRef.current} available`);
+  }
   const subarray = bytes.subarray(offsetRef.current, offsetRef.current + byteLength);
   offsetRef.current += byteLength;
   return subarray;

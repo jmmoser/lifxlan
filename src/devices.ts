@@ -130,11 +130,22 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+
+      function cleanup() {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        } else if (timeout) {
+          clearTimeout(timeout);
+        }
+      }
+
       function onAbort(errOrEvent: Error | Event) {
+        cleanup();
         const resolvers = deviceResolvers.get(serialNumber);
         if (resolvers) {
           if (resolvers.size > 1) {
-            resolvers.delete(resolve);
+            resolvers.delete(resolver);
           } else {
             deviceResolvers.delete(serialNumber);
           }
@@ -142,7 +153,10 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         reject(errOrEvent instanceof Error ? errOrEvent : new AbortError('device lookup'));
       }
 
-      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const resolver = (device: Device) => {
+        cleanup();
+        resolve(device);
+      };
 
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
@@ -150,15 +164,6 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         const timeoutError = new TimeoutError(defaultTimeoutMs, 'device discovery');
         timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
       }
-
-      const resolver = (device: Device) => {
-        if (signal) {
-          signal.removeEventListener('abort', onAbort);
-        } else if (timeout) {
-          clearTimeout(timeout);
-        }
-        resolve(device);
-      };
 
       const resolvers = deviceResolvers.get(serialNumber);
       if (!resolvers) {

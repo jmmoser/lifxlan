@@ -1,4 +1,5 @@
 import { describe, test, spyOn, expect } from 'bun:test';
+import assert from 'node:assert';
 import { Devices, Device } from '../src/devices.js';
 
 describe('devices', () => {
@@ -183,6 +184,24 @@ describe('devices', () => {
     
     const removed = devices.remove('nonexistent');
     expect(removed).toBe(false);
+  });
+
+  test('aborted get does not block subsequent get for same serial number', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    const c1 = new AbortController();
+    const c2 = new AbortController();
+    const p1 = devices.get('abcdef123456', c1.signal);
+    const p2 = devices.get('abcdef123456', c2.signal);
+
+    c1.abort();
+    await assert.rejects(p1, /aborted/);
+
+    // p2 must still resolve when the device registers — the c1 abort must
+    // only have removed its own resolver, not p2's.
+    devices.register('abcdef123456', 56700, '192.168.1.1');
+    const device = await p2;
+    expect(device.serialNumber).toBe('abcdef123456');
   });
 
   test('get device with AbortError', async () => {

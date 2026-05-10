@@ -51,11 +51,17 @@ export function Groups(options: GroupsOptions = {}): GroupsInstance {
     register(device: Device, group: StateGroup) {
       const existingGroup = knownGroups.get(group.group);
       if (existingGroup) {
+        let changed = false;
         if (indexOfDevice(existingGroup, device) < 0) {
           existingGroup.devices.push(device);
-          if (onChanged) {
-            try { onChanged(existingGroup); } catch { /* user callback errors must not corrupt state */ }
-          }
+          changed = true;
+        }
+        if (existingGroup.label !== group.label) {
+          existingGroup.label = group.label;
+          changed = true;
+        }
+        if (changed && onChanged) {
+          try { onChanged(existingGroup); } catch { /* user callback errors must not corrupt state */ }
         }
       } else {
         const newGroup: Group = {
