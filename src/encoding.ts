@@ -170,6 +170,45 @@ function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
   return Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+const readUint16 = (bytes: Uint8Array, offset: number): number =>
+  bytes[offset]! | (bytes[offset + 1]! << 8);
+
+const readUint32 = (bytes: Uint8Array, offset: number): number =>
+  (bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16) | (bytes[offset + 3]! << 24)) >>> 0;
+
+const readInt16 = (bytes: Uint8Array, offset: number): number =>
+  (readUint16(bytes, offset) << 16) >> 16;
+
+const readColor = (bytes: Uint8Array, offset: number): Color => ({
+  hue: readUint16(bytes, offset),
+  saturation: readUint16(bytes, offset + 2),
+  brightness: readUint16(bytes, offset + 4),
+  kelvin: readUint16(bytes, offset + 6),
+});
+
+/**
+ * Float32 and BigUint64 cannot be assembled with plain integer math, so they
+ * read through a single module-level scratch view. The scratch DataView is
+ * allocated once and reused, so these reads remain allocation-free per call.
+ */
+const scratch = new DataView(new ArrayBuffer(8));
+const scratchBytes = new Uint8Array(scratch.buffer);
+
+const readFloat32 = (bytes: Uint8Array, offset: number): number => {
+  scratchBytes[0] = bytes[offset]!;
+  scratchBytes[1] = bytes[offset + 1]!;
+  scratchBytes[2] = bytes[offset + 2]!;
+  scratchBytes[3] = bytes[offset + 3]!;
+  return scratch.getFloat32(0, true);
+};
+
+const readBigUint64 = (bytes: Uint8Array, offset: number): bigint => {
+  for (let i = 0; i < 8; i++) {
+    scratchBytes[i] = bytes[offset + i]!;
+  }
+  return scratch.getBigUint64(0, true);
+};
+
 const textDecoder = new TextDecoder();
 
 function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
@@ -189,8 +228,7 @@ export function encodeTimestampTo(view: DataView, offset: number, date: Date): v
 }
 
 function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const time = new Date(Number(view.getBigUint64(offsetRef.current, true) / 1000000n));
+  const time = new Date(Number(readBigUint64(bytes, offsetRef.current) / 1000000n));
   offsetRef.current += 8;
   return time;
 }
@@ -198,7 +236,7 @@ function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
 export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   const service = bytes[o]!;
-  const port = (bytes[o + 1]! | (bytes[o + 2]! << 8) | (bytes[o + 3]! << 16) | (bytes[o + 4]! << 24)) >>> 0;
+  const port = readUint32(bytes, o + 1);
   offsetRef.current = o + 5;
   return {
     service,
@@ -210,8 +248,8 @@ export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
   const build = decodeTimestamp(bytes, offsetRef);
   const reserved = decodeBytes(bytes, offsetRef, 8);
   const o = offsetRef.current;
-  const version_minor = bytes[o]! | (bytes[o + 1]! << 8);
-  const version_major = bytes[o + 2]! | (bytes[o + 3]! << 8);
+  const version_minor = readUint16(bytes, o);
+  const version_major = readUint16(bytes, o + 2);
   offsetRef.current = o + 4;
   return {
     build,
@@ -222,8 +260,7 @@ export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
 }
 
 export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const signal = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
+  const signal = readFloat32(bytes, offsetRef.current); offsetRef.current += 4;
   const reserved6 = decodeBytes(bytes, offsetRef, 4);
   const reserved7 = decodeBytes(bytes, offsetRef, 4);
   const reserved8 = decodeBytes(bytes, offsetRef, 2);
@@ -240,8 +277,8 @@ export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
   const build = decodeTimestamp(bytes, offsetRef);
   const reserved6 = decodeBytes(bytes, offsetRef, 8);
   const o = offsetRef.current;
-  const version_minor = bytes[o]! | (bytes[o + 1]! << 8);
-  const version_major = bytes[o + 2]! | (bytes[o + 3]! << 8);
+  const version_minor = readUint16(bytes, o);
+  const version_major = readUint16(bytes, o + 2);
   offsetRef.current = o + 4;
   return {
     build,
@@ -256,7 +293,7 @@ export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): numbe
   if (offset + 2 > bytes.length) {
     throw new ValidationError('payload', bytes.length, `expected 2 bytes at offset ${offset}, only ${bytes.length - offset} available`);
   }
-  const power = bytes[offset]! | (bytes[offset + 1]! << 8);
+  const power = readUint16(bytes, offset);
   offsetRef.current += 2;
   return power;
 }
@@ -267,8 +304,8 @@ export function decodeStateLabel(bytes: Uint8Array, offsetRef: OffsetRef): strin
 
 export function decodeStateVersion(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
-  const vendor = (bytes[o]! | (bytes[o + 1]! << 8) | (bytes[o + 2]! << 16) | (bytes[o + 3]! << 24)) >>> 0;
-  const product = (bytes[o + 4]! | (bytes[o + 5]! << 8) | (bytes[o + 6]! << 16) | (bytes[o + 7]! << 24)) >>> 0;
+  const vendor = readUint32(bytes, o);
+  const product = readUint32(bytes, o + 4);
   offsetRef.current = o + 8;
   return {
     vendor,
@@ -317,7 +354,7 @@ export function decodeEchoResponse(bytes: Uint8Array, offsetRef: OffsetRef): Uin
 
 export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const o = offsetRef.current;
-  const type = bytes[o]! | (bytes[o + 1]! << 8);
+  const type = readUint16(bytes, o);
   offsetRef.current = o + 2;
   return type;
 }
@@ -325,18 +362,15 @@ export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: OffsetRef): n
 export function decodeSetColor(bytes: Uint8Array, offsetRef: OffsetRef) {
   const reserved = decodeBytes(bytes, offsetRef, 1);
   const o = offsetRef.current;
-  const hue = bytes[o]! | (bytes[o + 1]! << 8);
-  const saturation = bytes[o + 2]! | (bytes[o + 3]! << 8);
-  const brightness = bytes[o + 4]! | (bytes[o + 5]! << 8);
-  const kelvin = bytes[o + 6]! | (bytes[o + 7]! << 8);
-  const duration = (bytes[o + 8]! | (bytes[o + 9]! << 8) | (bytes[o + 10]! << 16) | (bytes[o + 11]! << 24)) >>> 0;
+  const color = readColor(bytes, o);
+  const duration = readUint32(bytes, o + 8);
   offsetRef.current = o + 12;
   return {
     reserved,
-    hue,
-    saturation,
-    brightness,
-    kelvin,
+    hue: color.hue,
+    saturation: color.saturation,
+    brightness: color.brightness,
+    kelvin: color.kelvin,
     duration,
   };
 }
@@ -659,23 +693,20 @@ export function encodeSetTileEffect(instanceid: number, effectType: TileEffectTy
 
 export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
-  const hue = bytes[o]! | (bytes[o + 1]! << 8);
-  const saturation = bytes[o + 2]! | (bytes[o + 3]! << 8);
-  const brightness = bytes[o + 4]! | (bytes[o + 5]! << 8);
-  const kelvin = bytes[o + 6]! | (bytes[o + 7]! << 8);
+  const color = readColor(bytes, o);
   offsetRef.current = o + 8;
   const reserved2 = decodeBytes(bytes, offsetRef, 2);
   const o2 = offsetRef.current;
-  const power = bytes[o2]! | (bytes[o2 + 1]! << 8);
+  const power = readUint16(bytes, o2);
   offsetRef.current = o2 + 2;
   const label = decodeString(bytes, offsetRef, 32);
   const reserved8 = decodeBytes(bytes, offsetRef, 8);
 
   return {
-    hue,
-    saturation,
-    brightness,
-    kelvin,
+    hue: color.hue,
+    saturation: color.saturation,
+    brightness: color.brightness,
+    kelvin: color.kelvin,
     power,
     label,
     reserved2,
@@ -685,22 +716,22 @@ export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef) {
 
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const o = offsetRef.current;
-  const level = bytes[o]! | (bytes[o + 1]! << 8);
+  const level = readUint16(bytes, o);
   offsetRef.current = o + 2;
   return level;
 }
 
 export function decodeStateInfrared(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const o = offsetRef.current;
-  const brightness = bytes[o]! | (bytes[o + 1]! << 8);
+  const brightness = readUint16(bytes, o);
   offsetRef.current = o + 2;
   return brightness;
 }
 
 export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
-  const duration_s = (bytes[o]! | (bytes[o + 1]! << 8) | (bytes[o + 2]! << 16) | (bytes[o + 3]! << 24)) >>> 0;
-  const remaining_s = (bytes[o + 4]! | (bytes[o + 5]! << 8) | (bytes[o + 6]! << 16) | (bytes[o + 7]! << 24)) >>> 0;
+  const duration_s = readUint32(bytes, o);
+  const remaining_s = readUint32(bytes, o + 4);
   const last_power = !!bytes[o + 8]!;
   offsetRef.current = o + 9;
   return {
@@ -713,7 +744,7 @@ export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
 export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   const indication = bytes[o]!;
-  const duration_s = (bytes[o + 1]! | (bytes[o + 2]! << 8) | (bytes[o + 3]! << 16) | (bytes[o + 4]! << 24)) >>> 0;
+  const duration_s = readUint32(bytes, o + 1);
   offsetRef.current = o + 5;
   return {
     indication,
@@ -729,7 +760,7 @@ export function decodeStateLastHevCycleResult(bytes: Uint8Array, offsetRef: Offs
 export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   const relay_index = bytes[o]!;
-  const level = bytes[o + 1]! | (bytes[o + 2]! << 8);
+  const level = readUint16(bytes, o + 1);
   offsetRef.current = o + 3;
   return {
     relay_index,
@@ -738,7 +769,6 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const start_index = bytes[offsetRef.current]!; offsetRef.current += 1;
   const devices: Array<{
     accel_meas_x: number;
@@ -760,25 +790,29 @@ export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) 
     reserved10: Uint8Array;
   }> = new Array(16);
   for (let i = 0; i < 16; i++) {
-    const accel_meas_x = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
-    const accel_meas_y = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
-    const accel_meas_z = view.getInt16(offsetRef.current, true); offsetRef.current += 2;
+    const ao = offsetRef.current;
+    const accel_meas_x = readInt16(bytes, ao);
+    const accel_meas_y = readInt16(bytes, ao + 2);
+    const accel_meas_z = readInt16(bytes, ao + 4);
+    offsetRef.current = ao + 6;
     const reserved6 = decodeBytes(bytes, offsetRef, 2);
-    const user_x = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
-    const user_y = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
-    const width = bytes[offsetRef.current]!; offsetRef.current += 1;
-    const height = bytes[offsetRef.current]!; offsetRef.current += 1;
+    const uo = offsetRef.current;
+    const user_x = readFloat32(bytes, uo);
+    const user_y = readFloat32(bytes, uo + 4);
+    const width = bytes[uo + 8]!;
+    const height = bytes[uo + 9]!;
+    offsetRef.current = uo + 10;
     const reserved7 = decodeBytes(bytes, offsetRef, 1);
     const o = offsetRef.current;
-    const device_version_vendor = (bytes[o]! | (bytes[o + 1]! << 8) | (bytes[o + 2]! << 16) | (bytes[o + 3]! << 24)) >>> 0;
-    const device_version_product = (bytes[o + 4]! | (bytes[o + 5]! << 8) | (bytes[o + 6]! << 16) | (bytes[o + 7]! << 24)) >>> 0;
+    const device_version_vendor = readUint32(bytes, o);
+    const device_version_product = readUint32(bytes, o + 4);
     offsetRef.current = o + 8;
     const reserved8 = decodeBytes(bytes, offsetRef, 4);
     const firmware_build = decodeTimestamp(bytes, offsetRef);
     const reserved9 = decodeBytes(bytes, offsetRef, 8);
     const o2 = offsetRef.current;
-    const firmware_version_minor = bytes[o2]! | (bytes[o2 + 1]! << 8);
-    const firmware_version_major = bytes[o2 + 2]! | (bytes[o2 + 3]! << 8);
+    const firmware_version_minor = readUint16(bytes, o2);
+    const firmware_version_major = readUint16(bytes, o2 + 2);
     offsetRef.current = o2 + 4;
     const reserved10 = decodeBytes(bytes, offsetRef, 4);
     devices[i] = {
@@ -818,12 +852,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
   const colors: Color[] = new Array(64);
   let o = offsetRef.current;
   for (let i = 0; i < 64; i++) {
-    colors[i] = {
-      hue: bytes[o]! | (bytes[o + 1]! << 8),
-      saturation: bytes[o + 2]! | (bytes[o + 3]! << 8),
-      brightness: bytes[o + 4]! | (bytes[o + 5]! << 8),
-      kelvin: bytes[o + 6]! | (bytes[o + 7]! << 8),
-    };
+    colors[i] = readColor(bytes, o);
     o += 8;
   }
   offsetRef.current = o;
@@ -841,18 +870,15 @@ export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   const zones_count = bytes[o]!;
   const zone_index = bytes[o + 1]!;
-  const hue = bytes[o + 2]! | (bytes[o + 3]! << 8);
-  const saturation = bytes[o + 4]! | (bytes[o + 5]! << 8);
-  const brightness = bytes[o + 6]! | (bytes[o + 7]! << 8);
-  const kelvin = bytes[o + 8]! | (bytes[o + 9]! << 8);
+  const color = readColor(bytes, o + 2);
   offsetRef.current = o + 10;
   return {
     zones_count,
     zone_index,
-    hue,
-    saturation,
-    brightness,
-    kelvin,
+    hue: color.hue,
+    saturation: color.saturation,
+    brightness: color.brightness,
+    kelvin: color.kelvin,
   };
 }
 
@@ -864,12 +890,7 @@ export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
 
   const colors: Color[] = new Array(8);
   for (let i = 0; i < 8; i++) {
-    colors[i] = {
-      hue: bytes[o]! | (bytes[o + 1]! << 8),
-      saturation: bytes[o + 2]! | (bytes[o + 3]! << 8),
-      brightness: bytes[o + 4]! | (bytes[o + 5]! << 8),
-      kelvin: bytes[o + 6]! | (bytes[o + 7]! << 8),
-    };
+    colors[i] = readColor(bytes, o);
     o += 8;
   }
   offsetRef.current = o;
@@ -883,15 +904,14 @@ export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
 
 export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
-  const instanceid = (bytes[o]! | (bytes[o + 1]! << 8) | (bytes[o + 2]! << 16) | (bytes[o + 3]! << 24)) >>> 0;
+  const instanceid = readUint32(bytes, o);
   const type = bytes[o + 4]!;
   offsetRef.current = o + 5;
   const reserved6 = decodeBytes(bytes, offsetRef, 2);
   const o2 = offsetRef.current;
-  const speed = (bytes[o2]! | (bytes[o2 + 1]! << 8) | (bytes[o2 + 2]! << 16) | (bytes[o2 + 3]! << 24)) >>> 0;
+  const speed = readUint32(bytes, o2);
   offsetRef.current = o2 + 4;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const duration = view.getBigUint64(offsetRef.current, true); offsetRef.current += 8;
+  const duration = readBigUint64(bytes, offsetRef.current); offsetRef.current += 8;
   const reserved7 = decodeBytes(bytes, offsetRef, 4);
   const reserved8 = decodeBytes(bytes, offsetRef, 4);
   const parameters = decodeBytes(bytes, offsetRef, 32);
@@ -909,19 +929,14 @@ export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetR
 
 export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: OffsetRef) {
   let o = offsetRef.current;
-  const zones_count = bytes[o]! | (bytes[o + 1]! << 8);
-  const zone_index = bytes[o + 2]! | (bytes[o + 3]! << 8);
+  const zones_count = readUint16(bytes, o);
+  const zone_index = readUint16(bytes, o + 2);
   const colors_count = bytes[o + 4]!;
   o += 5;
 
   const colors: Color[] = new Array(82);
   for (let i = 0; i < 82; i++) {
-    colors[i] = {
-      hue: bytes[o]! | (bytes[o + 1]! << 8),
-      saturation: bytes[o + 2]! | (bytes[o + 3]! << 8),
-      brightness: bytes[o + 4]! | (bytes[o + 5]! << 8),
-      kelvin: bytes[o + 6]! | (bytes[o + 7]! << 8),
-    };
+    colors[i] = readColor(bytes, o);
     o += 8;
   }
   offsetRef.current = o;
@@ -937,12 +952,11 @@ export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: Offs
 export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   const reserved0 = bytes[o]!;
-  const instanceid = (bytes[o + 1]! | (bytes[o + 2]! << 8) | (bytes[o + 3]! << 16) | (bytes[o + 4]! << 24)) >>> 0;
+  const instanceid = readUint32(bytes, o + 1);
   const type = bytes[o + 5]!;
-  const speed = (bytes[o + 6]! | (bytes[o + 7]! << 8) | (bytes[o + 8]! << 16) | (bytes[o + 9]! << 24)) >>> 0;
+  const speed = readUint32(bytes, o + 6);
   offsetRef.current = o + 10;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const duration = view.getBigUint64(offsetRef.current, true); offsetRef.current += 8;
+  const duration = readBigUint64(bytes, offsetRef.current); offsetRef.current += 8;
   const reserved1 = decodeBytes(bytes, offsetRef, 4);
   const reserved2 = decodeBytes(bytes, offsetRef, 4);
   const skyType = bytes[offsetRef.current]!; offsetRef.current += 1;
@@ -956,12 +970,7 @@ export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
   const palette: Color[] = new Array(16);
   let po = offsetRef.current;
   for (let i = 0; i < 16; i++) {
-    palette[i] = {
-      hue: bytes[po]! | (bytes[po + 1]! << 8),
-      saturation: bytes[po + 2]! | (bytes[po + 3]! << 8),
-      brightness: bytes[po + 4]! | (bytes[po + 5]! << 8),
-      kelvin: bytes[po + 6]! | (bytes[po + 7]! << 8),
-    };
+    palette[i] = readColor(bytes, po);
     po += 8;
   }
   offsetRef.current = po;
@@ -986,20 +995,19 @@ export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const lux = view.getFloat32(offsetRef.current, true); offsetRef.current += 4;
+  const lux = readFloat32(bytes, offsetRef.current); offsetRef.current += 4;
   return {
     lux,
   };
 }
 
-export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => bytes[offset]! | (bytes[offset + 1]! << 8);
+export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => readUint16(bytes, offset);
 
-export const getHeaderFlags = (bytes: Uint8Array, offset = 0): number => bytes[offset + 2]! | (bytes[offset + 3]! << 8);
+export const getHeaderFlags = (bytes: Uint8Array, offset = 0): number => readUint16(bytes, offset + 2);
 
 export const getHeaderTagged = (bytes: Uint8Array, offset = 0): boolean => !!((getHeaderFlags(bytes, offset) >> 12) & 0b1);
 
-export const getHeaderSource = (bytes: Uint8Array, offset = 0): number => (bytes[offset + 4]! | (bytes[offset + 5]! << 8) | (bytes[offset + 6]! << 16) | (bytes[offset + 7]! << 24)) >>> 0;
+export const getHeaderSource = (bytes: Uint8Array, offset = 0): number => readUint32(bytes, offset + 4);
 
 export const getHeaderTarget = (bytes: Uint8Array, offset = 0): Uint8Array => bytes.subarray(offset + 8, offset + 14);
 
@@ -1009,7 +1017,7 @@ export const getHeaderResponseRequired = (responseFlags: number): boolean => (re
 
 export const getHeaderAcknowledgeRequired = (responseFlags: number): boolean => (responseFlags & 0b10) > 0;
 
-export const getHeaderType = (bytes: Uint8Array, offset = 0): number => bytes[offset + 32]! | (bytes[offset + 33]! << 8);
+export const getHeaderType = (bytes: Uint8Array, offset = 0): number => readUint16(bytes, offset + 32);
 
 export const getHeaderSequence = (bytes: Uint8Array, offset = 0): number => bytes[offset + 23]!;
 
