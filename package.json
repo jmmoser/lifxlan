@@ -9,9 +9,10 @@
   "scripts": {
     "test": "bun test --coverage",
     "test:integration": "bun test ./tests/integration.ts --timeout 30000",
-    "build": "bun run build:esm && bun run build:cjs",
+    "build": "bun run build:esm && bun run build:cjs && bun run build:minify",
     "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
     "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
+    "build:minify": "bun run scripts/minify.mjs",
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
     "bench": "bun run benchmarks/performance.js"
@@ -62,6 +63,7 @@
   "devDependencies": {
     "@types/bun": "^1.3.3",
     "@types/node": "^24.10.1",
+    "esbuild": "^0.28.0",
     "mitata": "^1.0.34",
     "oxlint": "^1.30.0",
     "typescript": "^5.9.3"
