@@ -90,10 +90,6 @@ export function encode(
 
   const bytes = new Uint8Array(size);
 
-  // Write the header fields directly as little-endian bytes. Avoiding a
-  // DataView allocation here is a large win because encode() is on the
-  // hot path for every outbound message (see benchmarks/performance.ts).
-
   /** Frame Header */
 
   bytes[0] = size & 0xFF;
@@ -959,10 +955,6 @@ export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: Offs
   };
 }
 
-// Header field accessors read directly from the message bytes as
-// little-endian values. They intentionally avoid a DataView so callers on the
-// hot path (e.g. decodeHeader) don't pay for a DataView allocation per message.
-
 export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => bytes[offset]! | (bytes[offset + 1]! << 8);
 
 export const getHeaderFlags = (bytes: Uint8Array, offset = 0): number => bytes[offset + 2]! | (bytes[offset + 3]! << 8);
@@ -991,10 +983,6 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   if (offset < 0 || bytes.byteLength - offset < 36) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }
-
-  // The getHeader* accessors read little-endian values directly from the
-  // message bytes, so decodeHeader never allocates a DataView on the hot path
-  // (see benchmarks/performance.ts).
 
   /** Frame Header */
   const size = getHeaderSize(bytes, offset);
