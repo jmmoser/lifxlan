@@ -144,31 +144,27 @@ describe('encoding', () => {
 
   test('getHeaderSize', () => {
     const bytes = new Uint8Array([0x24, 0x00]);
-    const view = new DataView(bytes.buffer);
-    assert.equal(Encoding.getHeaderSize(view), 0x24);
+    assert.equal(Encoding.getHeaderSize(bytes), 0x24);
   });
 
   test('getHeaderFlags', () => {
     const bytes = new Uint8Array([0x00, 0x00, 0x34, 0x20]);
-    const view = new DataView(bytes.buffer);
-    assert.equal(Encoding.getHeaderFlags(view), 0x2034);
+    assert.equal(Encoding.getHeaderFlags(bytes), 0x2034);
   });
 
   test('getHeaderTagged', () => {
     const bytes1 = new Uint8Array([0x00, 0x00, 0x00, 0x10]); // tagged = 1 (bit 12 = 1, 0x1000)
-    const view1 = new DataView(bytes1.buffer);
-    assert.equal(Encoding.getHeaderTagged(view1), true);
-    
+    assert.equal(Encoding.getHeaderTagged(bytes1), true);
+
     const bytes2 = new Uint8Array([0x00, 0x00, 0x00, 0x00]); // tagged = 0 (bit 12 = 0)
-    const view2 = new DataView(bytes2.buffer);
-    assert.equal(Encoding.getHeaderTagged(view2), false);
+    assert.equal(Encoding.getHeaderTagged(bytes2), false);
   });
 
   test('getHeaderSource', () => {
     const bytes = new Uint8Array(8);
     const view = new DataView(bytes.buffer);
     view.setUint32(4, 0x12345678, true);
-    assert.equal(Encoding.getHeaderSource(view), 0x12345678);
+    assert.equal(Encoding.getHeaderSource(bytes), 0x12345678);
   });
 
   test('getHeaderTarget', () => {
@@ -182,7 +178,7 @@ describe('encoding', () => {
     const bytes = new Uint8Array(25);
     const view = new DataView(bytes.buffer);
     view.setUint8(22, 0b11);
-    assert.equal(Encoding.getHeaderResponseFlags(view), 0b11);
+    assert.equal(Encoding.getHeaderResponseFlags(bytes), 0b11);
   });
 
   test('getHeaderResponseRequired', () => {
@@ -203,14 +199,14 @@ describe('encoding', () => {
     const bytes = new Uint8Array(40);
     const view = new DataView(bytes.buffer);
     view.setUint16(32, 0x1234, true);
-    assert.equal(Encoding.getHeaderType(view), 0x1234);
+    assert.equal(Encoding.getHeaderType(bytes), 0x1234);
   });
 
   test('getHeaderSequence', () => {
     const bytes = new Uint8Array(30);
     const view = new DataView(bytes.buffer);
     view.setUint8(23, 42);
-    assert.equal(Encoding.getHeaderSequence(view), 42);
+    assert.equal(Encoding.getHeaderSequence(bytes), 42);
   });
 
   test('getPayload', () => {

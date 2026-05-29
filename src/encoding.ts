@@ -89,28 +89,34 @@ export function encode(
   const size = 36 + (payload != null ? payload.byteLength : 0);
 
   const bytes = new Uint8Array(size);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   /** Frame Header */
 
-  view.setUint16(0, size, true);
+  bytes[0] = size & 0xFF;
+  bytes[1] = (size >>> 8) & 0xFF;
 
-  view.setUint16(2, protocol | (addressable << 12) | (+tagged << 13) | (origin << 14), true);
+  const flags = protocol | (addressable << 12) | (+tagged << 13) | (origin << 14);
+  bytes[2] = flags & 0xFF;
+  bytes[3] = (flags >>> 8) & 0xFF;
 
-  view.setUint32(4, source, true);
+  bytes[4] = source & 0xFF;
+  bytes[5] = (source >>> 8) & 0xFF;
+  bytes[6] = (source >>> 16) & 0xFF;
+  bytes[7] = (source >>> 24) & 0xFF;
 
   /** Frame Address */
 
   bytes.set(target, 8);
 
-  view.setUint8(22, ((resRequired ? 1 : 0) << 0) | ((ackRequired ? 1 : 0) << 1));
+  bytes[22] = ((resRequired ? 1 : 0) << 0) | ((ackRequired ? 1 : 0) << 1);
 
-  view.setUint8(23, sequence);
+  bytes[23] = sequence;
 
   /** Protocol Header */
 
   // type
-  view.setUint16(32, type, true);
+  bytes[32] = type & 0xFF;
+  bytes[33] = (type >>> 8) & 0xFF;
 
   if (payload) {
     bytes.set(payload, 36);
@@ -243,8 +249,12 @@ export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
 }
 
 export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const offset = offsetRef.current;
+  if (offset + 2 > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected 2 bytes at offset ${offset}, only ${bytes.length - offset} available`);
+  }
+  const power = bytes[offset]! | (bytes[offset + 1]! << 8);
+  offsetRef.current += 2;
   return power;
 }
 
@@ -945,25 +955,25 @@ export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: Offs
   };
 }
 
-export const getHeaderSize = (view: DataView, offset = 0): number => view.getUint16(offset, true);
+export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => bytes[offset]! | (bytes[offset + 1]! << 8);
 
-export const getHeaderFlags = (view: DataView, offset = 0): number => view.getUint16(offset + 2, true);
+export const getHeaderFlags = (bytes: Uint8Array, offset = 0): number => bytes[offset + 2]! | (bytes[offset + 3]! << 8);
 
-export const getHeaderTagged = (view: DataView, offset = 0): boolean => !!((getHeaderFlags(view, offset) >> 12) & 0b1);
+export const getHeaderTagged = (bytes: Uint8Array, offset = 0): boolean => !!((getHeaderFlags(bytes, offset) >> 12) & 0b1);
 
-export const getHeaderSource = (view: DataView, offset = 0): number => view.getUint32(offset + 4, true);
+export const getHeaderSource = (bytes: Uint8Array, offset = 0): number => (bytes[offset + 4]! | (bytes[offset + 5]! << 8) | (bytes[offset + 6]! << 16) | (bytes[offset + 7]! << 24)) >>> 0;
 
 export const getHeaderTarget = (bytes: Uint8Array, offset = 0): Uint8Array => bytes.subarray(offset + 8, offset + 14);
 
-export const getHeaderResponseFlags = (view: DataView, offset = 0): number => view.getUint8(offset + 22);
+export const getHeaderResponseFlags = (bytes: Uint8Array, offset = 0): number => bytes[offset + 22]!;
 
 export const getHeaderResponseRequired = (responseFlags: number): boolean => (responseFlags & 0b1) > 0;
 
 export const getHeaderAcknowledgeRequired = (responseFlags: number): boolean => (responseFlags & 0b10) > 0;
 
-export const getHeaderType = (view: DataView, offset = 0): number => view.getUint16(offset + 32, true);
+export const getHeaderType = (bytes: Uint8Array, offset = 0): number => bytes[offset + 32]! | (bytes[offset + 33]! << 8);
 
-export const getHeaderSequence = (view: DataView, offset = 0): number => view.getUint8(offset + 23);
+export const getHeaderSequence = (bytes: Uint8Array, offset = 0): number => bytes[offset + 23]!;
 
 export const getPayload = (bytes: Uint8Array, offset = 0, size?: number): Uint8Array => (
   size != null ? bytes.subarray(offset + 36, offset + size) : bytes.subarray(offset + 36)
@@ -973,20 +983,19 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   if (offset < 0 || bytes.byteLength - offset < 36) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   /** Frame Header */
-  const size = getHeaderSize(view, offset);
+  const size = getHeaderSize(bytes, offset);
   if (size < 36 || size > bytes.byteLength - offset) {
     throw new ValidationError('size', size, `header size field is out of range (buffer has ${bytes.byteLength - offset} bytes available)`);
   }
-  const flags = getHeaderFlags(view, offset);
+  const flags = getHeaderFlags(bytes, offset);
   const protocol = flags & 0xFFF;
   const addressable = !!((flags >> 12) & 0b1);
   const tagged = !!((flags >> 13) & 0b1);
   const origin = (flags >> 14) & 0b11;
 
-  const source = getHeaderSource(view, offset);
+  const source = getHeaderSource(bytes, offset);
 
   /** Frame Address */
   const target = getHeaderTarget(bytes, offset);
@@ -995,17 +1004,17 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   const reserved1 = () => bytes.subarray(offset + 14, offset + 16);
   const reserved2 = () => bytes.subarray(offset + 16, offset + 22);
 
-  const responseFlags = getHeaderResponseFlags(view, offset);
+  const responseFlags = getHeaderResponseFlags(bytes, offset);
   const res_required = getHeaderResponseRequired(responseFlags);
   const ack_required = getHeaderAcknowledgeRequired(responseFlags);
   const reserved3 = (responseFlags & 0b11111100) >> 2;
 
-  const sequence = getHeaderSequence(view, offset);
+  const sequence = getHeaderSequence(bytes, offset);
 
   /** Protocol Header */
   const reserved4 = () => bytes.subarray(offset + 24, offset + 32);
 
-  const type = getHeaderType(view, offset);
+  const type = getHeaderType(bytes, offset);
 
   const reserved5 = () => bytes.subarray(offset + 34, offset + 36);
 
