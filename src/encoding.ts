@@ -959,25 +959,29 @@ export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: Offs
   };
 }
 
-export const getHeaderSize = (view: DataView, offset = 0): number => view.getUint16(offset, true);
+// Header field accessors read directly from the message bytes as
+// little-endian values. They intentionally avoid a DataView so callers on the
+// hot path (e.g. decodeHeader) don't pay for a DataView allocation per message.
 
-export const getHeaderFlags = (view: DataView, offset = 0): number => view.getUint16(offset + 2, true);
+export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => bytes[offset]! | (bytes[offset + 1]! << 8);
 
-export const getHeaderTagged = (view: DataView, offset = 0): boolean => !!((getHeaderFlags(view, offset) >> 12) & 0b1);
+export const getHeaderFlags = (bytes: Uint8Array, offset = 0): number => bytes[offset + 2]! | (bytes[offset + 3]! << 8);
 
-export const getHeaderSource = (view: DataView, offset = 0): number => view.getUint32(offset + 4, true);
+export const getHeaderTagged = (bytes: Uint8Array, offset = 0): boolean => !!((getHeaderFlags(bytes, offset) >> 12) & 0b1);
+
+export const getHeaderSource = (bytes: Uint8Array, offset = 0): number => (bytes[offset + 4]! | (bytes[offset + 5]! << 8) | (bytes[offset + 6]! << 16) | (bytes[offset + 7]! << 24)) >>> 0;
 
 export const getHeaderTarget = (bytes: Uint8Array, offset = 0): Uint8Array => bytes.subarray(offset + 8, offset + 14);
 
-export const getHeaderResponseFlags = (view: DataView, offset = 0): number => view.getUint8(offset + 22);
+export const getHeaderResponseFlags = (bytes: Uint8Array, offset = 0): number => bytes[offset + 22]!;
 
 export const getHeaderResponseRequired = (responseFlags: number): boolean => (responseFlags & 0b1) > 0;
 
 export const getHeaderAcknowledgeRequired = (responseFlags: number): boolean => (responseFlags & 0b10) > 0;
 
-export const getHeaderType = (view: DataView, offset = 0): number => view.getUint16(offset + 32, true);
+export const getHeaderType = (bytes: Uint8Array, offset = 0): number => bytes[offset + 32]! | (bytes[offset + 33]! << 8);
 
-export const getHeaderSequence = (view: DataView, offset = 0): number => view.getUint8(offset + 23);
+export const getHeaderSequence = (bytes: Uint8Array, offset = 0): number => bytes[offset + 23]!;
 
 export const getPayload = (bytes: Uint8Array, offset = 0, size?: number): Uint8Array => (
   size != null ? bytes.subarray(offset + 36, offset + size) : bytes.subarray(offset + 36)
@@ -988,22 +992,22 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }
 
-  // Read header fields directly as little-endian bytes rather than through a
-  // DataView. Allocating a DataView per call shows up as the dominant cost of
-  // decodeHeader on the hot path (see benchmarks/performance.ts).
+  // The getHeader* accessors read little-endian values directly from the
+  // message bytes, so decodeHeader never allocates a DataView on the hot path
+  // (see benchmarks/performance.ts).
 
   /** Frame Header */
-  const size = bytes[offset]! | (bytes[offset + 1]! << 8);
+  const size = getHeaderSize(bytes, offset);
   if (size < 36 || size > bytes.byteLength - offset) {
     throw new ValidationError('size', size, `header size field is out of range (buffer has ${bytes.byteLength - offset} bytes available)`);
   }
-  const flags = bytes[offset + 2]! | (bytes[offset + 3]! << 8);
+  const flags = getHeaderFlags(bytes, offset);
   const protocol = flags & 0xFFF;
   const addressable = !!((flags >> 12) & 0b1);
   const tagged = !!((flags >> 13) & 0b1);
   const origin = (flags >> 14) & 0b11;
 
-  const source = (bytes[offset + 4]! | (bytes[offset + 5]! << 8) | (bytes[offset + 6]! << 16) | (bytes[offset + 7]! << 24)) >>> 0;
+  const source = getHeaderSource(bytes, offset);
 
   /** Frame Address */
   const target = getHeaderTarget(bytes, offset);
@@ -1012,17 +1016,17 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   const reserved1 = () => bytes.subarray(offset + 14, offset + 16);
   const reserved2 = () => bytes.subarray(offset + 16, offset + 22);
 
-  const responseFlags = bytes[offset + 22]!;
+  const responseFlags = getHeaderResponseFlags(bytes, offset);
   const res_required = getHeaderResponseRequired(responseFlags);
   const ack_required = getHeaderAcknowledgeRequired(responseFlags);
   const reserved3 = (responseFlags & 0b11111100) >> 2;
 
-  const sequence = bytes[offset + 23]!;
+  const sequence = getHeaderSequence(bytes, offset);
 
   /** Protocol Header */
   const reserved4 = () => bytes.subarray(offset + 24, offset + 32);
 
-  const type = bytes[offset + 32]! | (bytes[offset + 33]! << 8);
+  const type = getHeaderType(bytes, offset);
 
   const reserved5 = () => bytes.subarray(offset + 34, offset + 36);
 
