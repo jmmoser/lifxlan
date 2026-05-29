@@ -979,15 +979,6 @@ export const getPayload = (bytes: Uint8Array, offset = 0, size?: number): Uint8A
   size != null ? bytes.subarray(offset + 36, offset + size) : bytes.subarray(offset + 36)
 );
 
-/**
- * Decoded LIFX message header.
- *
- * The rarely-used reserved fields are exposed as methods that lazily slice
- * the backing buffer. Keeping them as prototype methods (rather than
- * per-call closures) means decoding a header — which happens for every
- * inbound packet — allocates only the header object itself, with no
- * closure or subarray allocations on the hot path.
- */
 class DecodedHeader {
   readonly size: number;
   readonly protocol: number;
