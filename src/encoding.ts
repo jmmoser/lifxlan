@@ -89,28 +89,38 @@ export function encode(
   const size = 36 + (payload != null ? payload.byteLength : 0);
 
   const bytes = new Uint8Array(size);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // Write the header fields directly as little-endian bytes. Avoiding a
+  // DataView allocation here is a large win because encode() is on the
+  // hot path for every outbound message (see benchmarks/performance.ts).
 
   /** Frame Header */
 
-  view.setUint16(0, size, true);
+  bytes[0] = size & 0xFF;
+  bytes[1] = (size >>> 8) & 0xFF;
 
-  view.setUint16(2, protocol | (addressable << 12) | (+tagged << 13) | (origin << 14), true);
+  const flags = protocol | (addressable << 12) | (+tagged << 13) | (origin << 14);
+  bytes[2] = flags & 0xFF;
+  bytes[3] = (flags >>> 8) & 0xFF;
 
-  view.setUint32(4, source, true);
+  bytes[4] = source & 0xFF;
+  bytes[5] = (source >>> 8) & 0xFF;
+  bytes[6] = (source >>> 16) & 0xFF;
+  bytes[7] = (source >>> 24) & 0xFF;
 
   /** Frame Address */
 
   bytes.set(target, 8);
 
-  view.setUint8(22, ((resRequired ? 1 : 0) << 0) | ((ackRequired ? 1 : 0) << 1));
+  bytes[22] = ((resRequired ? 1 : 0) << 0) | ((ackRequired ? 1 : 0) << 1);
 
-  view.setUint8(23, sequence);
+  bytes[23] = sequence;
 
   /** Protocol Header */
 
   // type
-  view.setUint16(32, type, true);
+  bytes[32] = type & 0xFF;
+  bytes[33] = (type >>> 8) & 0xFF;
 
   if (payload) {
     bytes.set(payload, 36);
@@ -243,8 +253,12 @@ export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef)
 }
 
 export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const power = view.getUint16(offsetRef.current, true); offsetRef.current += 2;
+  const offset = offsetRef.current;
+  if (offset + 2 > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected 2 bytes at offset ${offset}, only ${bytes.length - offset} available`);
+  }
+  const power = bytes[offset]! | (bytes[offset + 1]! << 8);
+  offsetRef.current += 2;
   return power;
 }
 
@@ -973,20 +987,23 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   if (offset < 0 || bytes.byteLength - offset < 36) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // Read header fields directly as little-endian bytes rather than through a
+  // DataView. Allocating a DataView per call shows up as the dominant cost of
+  // decodeHeader on the hot path (see benchmarks/performance.ts).
 
   /** Frame Header */
-  const size = getHeaderSize(view, offset);
+  const size = bytes[offset]! | (bytes[offset + 1]! << 8);
   if (size < 36 || size > bytes.byteLength - offset) {
     throw new ValidationError('size', size, `header size field is out of range (buffer has ${bytes.byteLength - offset} bytes available)`);
   }
-  const flags = getHeaderFlags(view, offset);
+  const flags = bytes[offset + 2]! | (bytes[offset + 3]! << 8);
   const protocol = flags & 0xFFF;
   const addressable = !!((flags >> 12) & 0b1);
   const tagged = !!((flags >> 13) & 0b1);
   const origin = (flags >> 14) & 0b11;
 
-  const source = getHeaderSource(view, offset);
+  const source = (bytes[offset + 4]! | (bytes[offset + 5]! << 8) | (bytes[offset + 6]! << 16) | (bytes[offset + 7]! << 24)) >>> 0;
 
   /** Frame Address */
   const target = getHeaderTarget(bytes, offset);
@@ -995,17 +1012,17 @@ export function decodeHeader(bytes: Uint8Array, offset = 0) {
   const reserved1 = () => bytes.subarray(offset + 14, offset + 16);
   const reserved2 = () => bytes.subarray(offset + 16, offset + 22);
 
-  const responseFlags = getHeaderResponseFlags(view, offset);
+  const responseFlags = bytes[offset + 22]!;
   const res_required = getHeaderResponseRequired(responseFlags);
   const ack_required = getHeaderAcknowledgeRequired(responseFlags);
   const reserved3 = (responseFlags & 0b11111100) >> 2;
 
-  const sequence = getHeaderSequence(view, offset);
+  const sequence = bytes[offset + 23]!;
 
   /** Protocol Header */
   const reserved4 = () => bytes.subarray(offset + 24, offset + 32);
 
-  const type = getHeaderType(view, offset);
+  const type = bytes[offset + 32]! | (bytes[offset + 33]! << 8);
 
   const reserved5 = () => bytes.subarray(offset + 34, offset + 36);
 
