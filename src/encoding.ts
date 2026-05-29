@@ -979,61 +979,87 @@ export const getPayload = (bytes: Uint8Array, offset = 0, size?: number): Uint8A
   size != null ? bytes.subarray(offset + 36, offset + size) : bytes.subarray(offset + 36)
 );
 
-export function decodeHeader(bytes: Uint8Array, offset = 0) {
+/**
+ * Decoded LIFX message header.
+ *
+ * The rarely-used reserved fields are exposed as methods that lazily slice
+ * the backing buffer. Keeping them as prototype methods (rather than
+ * per-call closures) means decoding a header — which happens for every
+ * inbound packet — allocates only the header object itself, with no
+ * closure or subarray allocations on the hot path.
+ */
+class DecodedHeader {
+  readonly size: number;
+  readonly protocol: number;
+  readonly addressable: boolean;
+  readonly tagged: boolean;
+  readonly origin: number;
+  readonly source: number;
+  readonly target: Uint8Array;
+  readonly res_required: boolean;
+  readonly ack_required: boolean;
+  readonly reserved3: number;
+  readonly sequence: number;
+  readonly type: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    /** Frame Header */
+    this.size = getHeaderSize(bytes, offset);
+    const flags = getHeaderFlags(bytes, offset);
+    this.protocol = flags & 0xFFF;
+    this.addressable = !!((flags >> 12) & 0b1);
+    this.tagged = !!((flags >> 13) & 0b1);
+    this.origin = (flags >> 14) & 0b11;
+
+    this.source = getHeaderSource(bytes, offset);
+
+    /** Frame Address */
+    this.target = getHeaderTarget(bytes, offset);
+
+    const responseFlags = getHeaderResponseFlags(bytes, offset);
+    this.res_required = getHeaderResponseRequired(responseFlags);
+    this.ack_required = getHeaderAcknowledgeRequired(responseFlags);
+    this.reserved3 = (responseFlags & 0b11111100) >> 2;
+
+    this.sequence = getHeaderSequence(bytes, offset);
+
+    /** Protocol Header */
+    this.type = getHeaderType(bytes, offset);
+  }
+
+  // last 2 bytes of target are reserved
+  reserved1(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 14, this.#offset + 16);
+  }
+
+  reserved2(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 16, this.#offset + 22);
+  }
+
+  reserved4(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 24, this.#offset + 32);
+  }
+
+  reserved5(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 34, this.#offset + 36);
+  }
+}
+
+export function decodeHeader(bytes: Uint8Array, offset = 0): DecodedHeader {
   if (offset < 0 || bytes.byteLength - offset < 36) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }
 
-  /** Frame Header */
   const size = getHeaderSize(bytes, offset);
   if (size < 36 || size > bytes.byteLength - offset) {
     throw new ValidationError('size', size, `header size field is out of range (buffer has ${bytes.byteLength - offset} bytes available)`);
   }
-  const flags = getHeaderFlags(bytes, offset);
-  const protocol = flags & 0xFFF;
-  const addressable = !!((flags >> 12) & 0b1);
-  const tagged = !!((flags >> 13) & 0b1);
-  const origin = (flags >> 14) & 0b11;
 
-  const source = getHeaderSource(bytes, offset);
-
-  /** Frame Address */
-  const target = getHeaderTarget(bytes, offset);
-
-  // last 2 bytes of target are reserved
-  const reserved1 = () => bytes.subarray(offset + 14, offset + 16);
-  const reserved2 = () => bytes.subarray(offset + 16, offset + 22);
-
-  const responseFlags = getHeaderResponseFlags(bytes, offset);
-  const res_required = getHeaderResponseRequired(responseFlags);
-  const ack_required = getHeaderAcknowledgeRequired(responseFlags);
-  const reserved3 = (responseFlags & 0b11111100) >> 2;
-
-  const sequence = getHeaderSequence(bytes, offset);
-
-  /** Protocol Header */
-  const reserved4 = () => bytes.subarray(offset + 24, offset + 32);
-
-  const type = getHeaderType(bytes, offset);
-
-  const reserved5 = () => bytes.subarray(offset + 34, offset + 36);
-
-  return {
-    size,
-    protocol,
-    addressable,
-    tagged,
-    origin,
-    source,
-    target,
-    reserved1,
-    reserved2,
-    res_required,
-    ack_required,
-    reserved3,
-    reserved4,
-    sequence,
-    reserved5,
-    type,
-  };
+  return new DecodedHeader(bytes, offset);
 }
