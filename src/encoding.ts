@@ -170,13 +170,6 @@ function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
   return Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Little-endian primitive readers that operate directly on the byte array.
- *
- * These avoid the per-call `new DataView(...)` allocation that previously
- * dominated decode cost, while keeping that performance win in a single shared
- * definition instead of inlining the same byte arithmetic at every call site.
- */
 const readUint16 = (bytes: Uint8Array, offset: number): number =>
   bytes[offset]! | (bytes[offset + 1]! << 8);
 
