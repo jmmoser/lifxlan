@@ -4,7 +4,16 @@
  */
 
 import { bench, group, run } from 'mitata';
-import { encode, decodeHeader, decodeStateLabel } from '../src/encoding.js';
+import {
+  encode,
+  decodeHeader,
+  decodeStateLabel,
+  decodeLightState,
+  decodeStateMultiZone,
+  decodeStateExtendedColorZones,
+  decodeStateTileEffect,
+  decodeStateDeviceChain,
+} from '../src/encoding.js';
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
 import { Devices, Device } from '../src/devices.js';
@@ -185,6 +194,33 @@ group('Client', () => {
     await client.send(cmd, device);
   });
   // }).gc('inner');
+});
+
+group('Payload Decoders', () => {
+  const lightStatePayload = new Uint8Array(52);
+  bench('decodeLightState', () => {
+    decodeLightState(lightStatePayload, { current: 0 });
+  });
+
+  const multiZonePayload = new Uint8Array(66);
+  bench('decodeStateMultiZone (8 colors)', () => {
+    decodeStateMultiZone(multiZonePayload, { current: 0 });
+  });
+
+  const extendedZonesPayload = new Uint8Array(661);
+  bench('decodeStateExtendedColorZones (82 colors)', () => {
+    decodeStateExtendedColorZones(extendedZonesPayload, { current: 0 });
+  });
+
+  const tileEffectPayload = new Uint8Array(188);
+  bench('decodeStateTileEffect (16 palette)', () => {
+    decodeStateTileEffect(tileEffectPayload, { current: 0 });
+  });
+
+  const deviceChainPayload = new Uint8Array(882);
+  bench('decodeStateDeviceChain (16 devices)', () => {
+    decodeStateDeviceChain(deviceChainPayload, { current: 0 });
+  });
 });
 
 await run();
