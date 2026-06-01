@@ -15,7 +15,7 @@
     "build:minify": "bun run scripts/minify.mjs",
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
-    "bench": "bun run benchmarks/performance.js"
+    "bench": "bun run benchmarks/performance.ts"
   },
   "keywords": [
     "lifx",
@@ -39,6 +39,11 @@
     "library"
   ],
   "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
     "./*": {
       "import": "./dist/esm/*",
       "require": "./dist/cjs/*"

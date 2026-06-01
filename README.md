@@ -25,7 +25,7 @@ npm install lifxlan
 
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan/index.js';
+import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -79,7 +79,7 @@ socket.close();
 ### Discover and control all devices
 
 ```javascript
-import { GetServiceCommand, SetPowerCommand } from 'lifxlan/index.js';
+import { GetServiceCommand, SetPowerCommand } from 'lifxlan';
 
 // ... setup code from above ...
 
@@ -104,7 +104,7 @@ for (const device of devices) {
 ### Change light color
 
 ```javascript
-import { SetColorCommand } from 'lifxlan/index.js';
+import { SetColorCommand } from 'lifxlan';
 
 // Set to bright red
 await client.send(
@@ -178,7 +178,7 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan/index.js';
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -226,7 +226,7 @@ setTimeout(() => {
 ### Deno
 
 ```javascript
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan/index.js';
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -297,7 +297,7 @@ try {
 ### Use Without Device Discovery
 
 ```javascript
-import { Client, Device, Router, SetPowerCommand } from 'lifxlan/index.js';
+import { Client, Device, Router, SetPowerCommand } from 'lifxlan';
 
 // ... socket setup ...
 
@@ -368,7 +368,7 @@ console.log('Light is now:', currentState.hue); // ✅ Fully typed, no assertion
 ### Device Groups
 
 ```javascript
-import { Groups, GetGroupCommand } from 'lifxlan/index.js';
+import { Groups, GetGroupCommand } from 'lifxlan';
 
 const groups = Groups({
   onAdded(group) {

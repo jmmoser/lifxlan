@@ -1,6 +1,6 @@
 /**
  * Performance benchmark suite for lifxlan core operations.
- * Run with: bun run benchmarks/performance.js
+ * Run with: bun run benchmarks/performance.ts
  */
 
 import { bench, group, run } from 'mitata';
@@ -17,7 +17,7 @@ import {
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
 import { Devices, Device } from '../src/devices.js';
-import { GetColorCommand, SetColorCommand, GetServiceCommand, SetPowerCommand, GetPowerCommand } from '../src/commands.js';
+import { GetColorCommand, SetColorCommand, GetServiceCommand, SetPowerCommand, GetPowerCommand } from '../src/commands/index.js';
 import { NO_TARGET } from '../src/constants/core.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber } from '../src/utils/index.js';
 import { hsbToRgb, rgbToHsb } from '../src/utils/color.js';
