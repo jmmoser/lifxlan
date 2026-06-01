@@ -15,7 +15,7 @@
     "build:minify": "bun run scripts/minify.mjs",
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
-    "bench": "bun run benchmarks/performance.js"
+    "bench": "bun run benchmarks/performance.ts"
   },
   "keywords": [
     "lifx",

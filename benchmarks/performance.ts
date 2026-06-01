@@ -1,6 +1,6 @@
 /**
  * Performance benchmark suite for lifxlan core operations.
- * Run with: bun run benchmarks/performance.js
+ * Run with: bun run benchmarks/performance.ts
  */
 
 import { bench, group, run } from 'mitata';
