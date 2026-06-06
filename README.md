@@ -126,7 +126,7 @@ await client.send(
 The library uses three main components:
 
 1. **Router** - Handles message routing and correlation between requests/responses
-2. **Client** - High-level interface for sending commands with timeouts and retries  
+2. **Client** - High-level interface for sending commands with timeouts and response correlation  
 3. **Devices** - Registry that tracks discovered LIFX devices on your network
 
 ### Bring Your Own Socket
@@ -143,7 +143,7 @@ The `client.send()` method supports flexible response modes with **full type saf
 ```javascript
 // Use command defaults (recommended)
 const color = await client.send(GetColorCommand(), device);     // Promise<LightState>
-await client.send(SetPowerCommand(true), device);              // Promise<StatePower> (ack-only default)
+await client.send(SetPowerCommand(true), device);              // resolves after ack (Set commands default to ack-only)
 
 // Override response behavior with type-safe returns
 await client.send(command, device, { responseMode: 'ack-only' });  // Promise<void>
@@ -319,7 +319,7 @@ const client1 = Client({ router });
 const client2 = Client({ router });
 
 // Both clients share the same router and can operate independently
-await client1.broadcast(GetServiceCommand());
+client1.broadcast(GetServiceCommand());
 await client2.send(SetPowerCommand(true), device);
 ```
 
@@ -368,7 +368,7 @@ console.log('Light is now:', currentState.hue); // ✅ Fully typed, no assertion
 ### Device Groups
 
 ```javascript
-import { Groups, GetGroupCommand } from 'lifxlan';
+import { Groups, GetGroupCommand, GetLabelCommand } from 'lifxlan';
 
 const groups = Groups({
   onAdded(group) {
