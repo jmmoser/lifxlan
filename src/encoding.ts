@@ -270,48 +270,127 @@ export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
   };
 }
 
-export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const build = decodeTimestamp(bytes, offsetRef);
-  const reserved = decodeBytes(bytes, offsetRef, 8);
-  const o = offsetRef.current;
-  const version_minor = readUint16(bytes, o);
-  const version_major = readUint16(bytes, o + 2);
-  offsetRef.current = o + 4;
-  return {
-    build,
-    reserved,
-    version_minor,
-    version_major,
-  };
+const FIRMWARE_SIZE = 20;
+
+/**
+ * A StateHostFirmware response (20 bytes on the wire). Scalar fields are
+ * decoded eagerly; the reserved padding is exposed as a lazy accessor so the
+ * common path allocates no reserved subarrays. Mirrors the DecodedHeader
+ * pattern.
+ */
+class HostFirmwareMessage {
+  readonly build: Date;
+  readonly version_minor: number;
+  readonly version_major: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.build = readTimestamp(bytes, offset);
+    // reserved: offset + 8 .. offset + 16
+    this.version_minor = readUint16(bytes, offset + 16);
+    this.version_major = readUint16(bytes, offset + 18);
+  }
+
+  reserved(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 16);
+  }
 }
 
-export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const signal = readFloat32(bytes, offsetRef.current); offsetRef.current += 4;
-  const reserved6 = decodeBytes(bytes, offsetRef, 4);
-  const reserved7 = decodeBytes(bytes, offsetRef, 4);
-  const reserved8 = decodeBytes(bytes, offsetRef, 2);
-
-  return {
-    signal,
-    reserved6,
-    reserved7,
-    reserved8,
-  };
+export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef): HostFirmwareMessage {
+  const o = offsetRef.current;
+  if (o + FIRMWARE_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${FIRMWARE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + FIRMWARE_SIZE;
+  return new HostFirmwareMessage(bytes, o);
 }
 
-export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const build = decodeTimestamp(bytes, offsetRef);
-  const reserved6 = decodeBytes(bytes, offsetRef, 8);
+const WIFI_INFO_SIZE = 14;
+
+/**
+ * A StateWifiInfo response (14 bytes on the wire). The `signal` reading is
+ * decoded eagerly; the reserved padding is exposed as lazy accessors so the
+ * common path allocates no reserved subarrays. Mirrors the DecodedHeader
+ * pattern.
+ */
+class WifiInfoMessage {
+  readonly signal: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.signal = readFloat32(bytes, offset);
+    // reserved6: offset + 4 .. offset + 8
+    // reserved7: offset + 8 .. offset + 12
+    // reserved8: offset + 12 .. offset + 14
+  }
+
+  reserved6(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 4, this.#offset + 8);
+  }
+
+  reserved7(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 12);
+  }
+
+  reserved8(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 12, this.#offset + 14);
+  }
+}
+
+export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): WifiInfoMessage {
   const o = offsetRef.current;
-  const version_minor = readUint16(bytes, o);
-  const version_major = readUint16(bytes, o + 2);
-  offsetRef.current = o + 4;
-  return {
-    build,
-    reserved6,
-    version_minor,
-    version_major,
-  };
+  if (o + WIFI_INFO_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${WIFI_INFO_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + WIFI_INFO_SIZE;
+  return new WifiInfoMessage(bytes, o);
+}
+
+/**
+ * A StateWifiFirmware response (20 bytes on the wire). Same layout as
+ * StateHostFirmware. Scalar fields are decoded eagerly; the reserved padding
+ * is exposed as a lazy accessor. Mirrors the DecodedHeader pattern.
+ */
+class WifiFirmwareMessage {
+  readonly build: Date;
+  readonly version_minor: number;
+  readonly version_major: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.build = readTimestamp(bytes, offset);
+    // reserved6: offset + 8 .. offset + 16
+    this.version_minor = readUint16(bytes, offset + 16);
+    this.version_major = readUint16(bytes, offset + 18);
+  }
+
+  reserved6(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 16);
+  }
+}
+
+export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef): WifiFirmwareMessage {
+  const o = offsetRef.current;
+  if (o + FIRMWARE_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${FIRMWARE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + FIRMWARE_SIZE;
+  return new WifiFirmwareMessage(bytes, o);
 }
 
 export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): number {

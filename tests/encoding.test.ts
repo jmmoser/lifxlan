@@ -303,7 +303,7 @@ describe('encoding', () => {
     const result = Encoding.decodeStateHostFirmware(bytes, offsetRef);
     
     assert.equal(result.build.getTime(), Number(timestamp / 1000000n));
-    assert.equal(result.reserved.length, 8);
+    assert.equal(result.reserved().length, 8);
     assert.equal(result.version_minor, 42);
     assert.equal(result.version_major, 1);
     assert.equal(offsetRef.current, 20);
@@ -318,9 +318,9 @@ describe('encoding', () => {
     const result = Encoding.decodeStateWifiInfo(bytes, offsetRef);
     
     assert.equal(result.signal, -50.5);
-    assert.equal(result.reserved6.length, 4);
-    assert.equal(result.reserved7.length, 4);
-    assert.equal(result.reserved8.length, 2);
+    assert.equal(result.reserved6().length, 4);
+    assert.equal(result.reserved7().length, 4);
+    assert.equal(result.reserved8().length, 2);
     assert.equal(offsetRef.current, 14);
   });
 
@@ -342,7 +342,7 @@ describe('encoding', () => {
     const result = Encoding.decodeStateWifiFirmware(bytes, offsetRef);
     
     assert.equal(result.build.getTime(), Number(timestamp / 1000000n));
-    assert.equal(result.reserved6.length, 8);
+    assert.equal(result.reserved6().length, 8);
     assert.equal(result.version_minor, 15);
     assert.equal(result.version_major, 2);
     assert.equal(offsetRef.current, 20);
