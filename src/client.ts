@@ -29,12 +29,11 @@ import type { Decoder, Command } from './commands/index.js';
 
 /**
  * Creates a unique response key for correlating requests with responses.
- * 
+ *
  * @param serialNumber - The device serial number
  * @param sequence - The message sequence number
  * @returns A unique key for this request-response pair
  * @internal
- * @performance Critical path - string concatenation optimized for V8
  */
 function getResponseKey(serialNumber: string, sequence: number): string {
   return `${serialNumber}:${sequence}`;
@@ -49,7 +48,6 @@ function getResponseKey(serialNumber: string, sequence: number): string {
  * @param sequence - Current sequence number, undefined for initial sequence
  * @returns Next sequence number (0-254)
  * @internal
- * @performance Bitwise operations for maximum speed
  */
 function incrementSequence(sequence?: number): number {
   /** Only allow up to 254. We use 255 for broadcast messages. */
@@ -57,7 +55,7 @@ function incrementSequence(sequence?: number): number {
 }
 
 interface PendingHandler {
-  handle(type: number, bytes: Uint8Array, ref: { current: number }): void;
+  handle(type: number, bytes: Uint8Array, offsetRef: { current: number }): void;
   cancel(reason: Error): void;
 }
 
@@ -67,13 +65,13 @@ function registerHandler<T>(
   sequence: number,
   decode: Decoder<T> | undefined,
   defaultTimeoutMs: number,
-  responseHandlerMap: Map<ReturnType<typeof getResponseKey>, PendingHandler>,
+  responseHandlerMap: Map<string, PendingHandler>,
   signal?: AbortSignal
 ): Promise<T | void> {
   const key = getResponseKey(serialNumber, sequence);
 
   if (responseHandlerMap.has(key)) {
-    throw new MessageConflictError(key + '', sequence);
+    throw new MessageConflictError(key, sequence);
   }
 
   const { resolve, reject, promise } = PromiseWithResolvers<T | void>();
@@ -253,7 +251,12 @@ export function Client(options: ClientOptions): ClientInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const { router } = options;
 
-  const responseHandlerMap = new Map<ReturnType<typeof getResponseKey>, PendingHandler>();
+  const responseHandlerMap = new Map<string, PendingHandler>();
+
+  // Reused across inbound messages to avoid allocating a fresh offset ref per
+  // packet. Safe because handle() -> decode() runs fully synchronously and never
+  // re-enters onMessage().
+  const offsetRef = { current: 0 };
 
   let disposed = false;
 
@@ -354,14 +357,13 @@ export function Client(options: ClientOptions): ClientInstance {
     ): ModeReturn<T, ResolveMode<Override, Default>> {
       if (disposed) throw new DisposedClientError(source);
       
-      // Determine response mode
-      let ackMode: 'ack-only' | 'response' | 'both';
-      if (options?.responseMode === 'auto' || !options?.responseMode) {
-        // Use command's default response mode
-        ackMode = command.defaultResponseMode ?? 'response';
-      } else {
-        ackMode = options.responseMode;
-      }
+      // Determine response mode: an explicit, non-'auto' override wins;
+      // otherwise fall back to the command's default mode.
+      const requestedMode = options?.responseMode;
+      const ackMode: 'ack-only' | 'response' | 'both' =
+        !requestedMode || requestedMode === 'auto'
+          ? command.defaultResponseMode ?? 'response'
+          : requestedMode;
 
       // Determine protocol flags based on response mode
       let resRequired = false;
@@ -410,7 +412,8 @@ export function Client(options: ClientOptions): ClientInstance {
       );
 
       if (responseHandlerEntry) {
-        responseHandlerEntry.handle(header.type, payload, { current: 0 });
+        offsetRef.current = 0;
+        responseHandlerEntry.handle(header.type, payload, offsetRef);
       }
     },
   };
