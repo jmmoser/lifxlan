@@ -15,6 +15,7 @@ import {
   decodeStateDeviceChain,
   decodeStateInfo,
   decodeStateGroup,
+  decodeStateMultiZoneEffect,
 } from '../src/encoding.js';
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
@@ -217,6 +218,12 @@ group('Payload Decoders', () => {
   const tileEffectPayload = new Uint8Array(188);
   bench('decodeStateTileEffect (16 palette)', () => {
     decodeStateTileEffect(tileEffectPayload, { current: 0 });
+  });
+
+  // 3 reserved fields + parameters, exercises lazy reserved accessors
+  const multiZoneEffectPayload = new Uint8Array(59);
+  bench('decodeStateMultiZoneEffect', () => {
+    decodeStateMultiZoneEffect(multiZoneEffectPayload, { current: 0 });
   });
 
   const deviceChainPayload = new Uint8Array(882);

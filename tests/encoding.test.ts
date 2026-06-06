@@ -752,11 +752,11 @@ describe('encoding', () => {
     
     assert.equal(result.instanceid, 12345);
     assert.equal(result.type, 2);
-    assert.equal(result.reserved6.length, 2);
+    assert.equal(result.reserved6().length, 2);
     assert.equal(result.speed, 1000);
     assert.equal(result.duration, 5000n);
-    assert.equal(result.reserved7.length, 4);
-    assert.equal(result.reserved8.length, 4);
+    assert.equal(result.reserved7().length, 4);
+    assert.equal(result.reserved8().length, 4);
     assert.equal(result.parameters.length, 32);
     assert.deepEqual(result.parameters.subarray(0, 4), new Uint8Array([1, 2, 3, 4]));
     assert.equal(offsetRef.current, 59);
@@ -829,14 +829,14 @@ describe('encoding', () => {
     assert.equal(result.type, 3);
     assert.equal(result.speed, 2000);
     assert.equal(result.duration, 10000n);
-    assert.equal(result.reserved1.length, 4);
-    assert.equal(result.reserved2.length, 4);
+    assert.equal(result.reserved1().length, 4);
+    assert.equal(result.reserved2().length, 4);
     assert.equal(result.skyType, 1);
-    assert.equal(result.reserved3.length, 3);
+    assert.equal(result.reserved3().length, 3);
     assert.equal(result.cloudSaturationMin, 50);
-    assert.equal(result.reserved4.length, 3);
+    assert.equal(result.reserved4().length, 3);
     assert.equal(result.cloudSaturationMax, 80);
-    assert.equal(result.reserved5.length, 23);
+    assert.equal(result.reserved5().length, 23);
     assert.equal(result.palette_count, 5);
     assert.equal(result.palette.length, 16);
     
