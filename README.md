@@ -143,7 +143,7 @@ The `client.send()` method supports flexible response modes with **full type saf
 ```javascript
 // Use command defaults (recommended)
 const color = await client.send(GetColorCommand(), device);     // Promise<LightState>
-await client.send(SetPowerCommand(true), device);              // resolves after ack (Set commands default to ack-only)
+await client.send(SetPowerCommand(true), device);              // Promise<void> (Set commands default to ack-only)
 
 // Override response behavior with type-safe returns
 await client.send(command, device, { responseMode: 'ack-only' });  // Promise<void>
