@@ -5,7 +5,7 @@ import { Router } from '../src/router.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand } from '../src/commands/index.js';
+import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand, SetPowerCommand } from '../src/commands/index.js';
 import { UnhandledCommandError } from '../src/errors.js';
 
 describe('client', () => {
@@ -77,6 +77,37 @@ describe('client', () => {
     await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only' });
 
     await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only', signal: new AbortController().signal });
+  });
+
+  test('Set command default (ack-only) resolves undefined', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          // A Set command defaults to ack-only: request an ack, not a response.
+          assert.equal(header.ack_required, true);
+          assert.equal(header.res_required, false);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.Acknowledgement,
+            ),
+          );
+        },
+      }),
+    });
+
+    // The static type is Promise<void>; assert the runtime agrees (no payload).
+    const result = await client.send(SetPowerCommand(true), sharedDevice);
+    assert.equal(result, undefined);
+
+    client.dispose();
   });
 
   test('send with ack-only and StateUnhandled response', async () => {
