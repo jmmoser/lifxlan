@@ -13,6 +13,8 @@ import {
   decodeStateExtendedColorZones,
   decodeStateTileEffect,
   decodeStateDeviceChain,
+  decodeStateInfo,
+  decodeStateGroup,
 } from '../src/encoding.js';
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
@@ -220,6 +222,18 @@ group('Payload Decoders', () => {
   const deviceChainPayload = new Uint8Array(882);
   bench('decodeStateDeviceChain (16 devices)', () => {
     decodeStateDeviceChain(deviceChainPayload, { current: 0 });
+  });
+
+  // 3 timestamps, exercises decodeTimestamp
+  const stateInfoPayload = new Uint8Array(24);
+  bench('decodeStateInfo (3 timestamps)', () => {
+    decodeStateInfo(stateInfoPayload, { current: 0 });
+  });
+
+  // UUID + label + timestamp, exercises decodeUuid
+  const stateGroupPayload = new Uint8Array(56);
+  bench('decodeStateGroup (uuid)', () => {
+    decodeStateGroup(stateGroupPayload, { current: 0 });
   });
 });
 

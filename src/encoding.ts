@@ -166,8 +166,19 @@ function decodeBytes(bytes: Uint8Array, offsetRef: OffsetRef, byteLength: number
   return subarray;
 }
 
+const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+
 function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
-  return Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const o = offsetRef.current;
+  if (o + 16 > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected 16 bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  let result = '';
+  for (let i = 0; i < 16; i++) {
+    result += HEX_BYTES[bytes[o + i]!];
+  }
+  offsetRef.current = o + 16;
+  return result;
 }
 
 const readUint16 = (bytes: Uint8Array, offset: number): number =>
@@ -228,9 +239,17 @@ export function encodeTimestampTo(view: DataView, offset: number, date: Date): v
 }
 
 function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
-  const time = new Date(Number(readBigUint64(bytes, offsetRef.current) / 1000000n));
-  offsetRef.current += 8;
-  return time;
+  const o = offsetRef.current;
+  const lo = readUint32(bytes, o);
+  const hi = readUint32(bytes, o + 4);
+  // Nanoseconds since epoch is a 64-bit value (hi * 2**32 + lo). Convert to
+  // milliseconds without BigInt: 2**32 === 4294 * 1e6 + 967296, so
+  // floor(ns / 1e6) === hi * 4294 + floor((hi * 967296 + lo) / 1e6). Both
+  // terms stay below Number.MAX_SAFE_INTEGER, so the result is exact and
+  // matches the previous BigInt computation.
+  const ms = hi * 4294 + Math.floor((hi * 967296 + lo) / 1000000);
+  offsetRef.current = o + 8;
+  return new Date(ms);
 }
 
 export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
