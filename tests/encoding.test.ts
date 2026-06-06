@@ -491,8 +491,8 @@ describe('encoding', () => {
     assert.equal(result.kelvin, 3500);
     assert.equal(result.power, 65535);
     assert.equal(result.label, label);
-    assert.equal(result.reserved2.length, 2);
-    assert.equal(result.reserved8.length, 8);
+    assert.equal(result.reserved2().length, 2);
+    assert.equal(result.reserved8().length, 8);
     assert.equal(offsetRef.current, 52);
   });
 
@@ -589,7 +589,7 @@ describe('encoding', () => {
     view.setInt16(offset, -100, true); offset += 2; // accel_meas_x
     view.setInt16(offset, 200, true); offset += 2;  // accel_meas_y
     view.setInt16(offset, 50, true); offset += 2;   // accel_meas_z
-    offset += 2; // reserved6
+    view.setUint8(offset, 0xab); view.setUint8(offset + 1, 0xcd); offset += 2; // reserved6
     view.setFloat32(offset, 1.5, true); offset += 4; // user_x
     view.setFloat32(offset, 2.5, true); offset += 4; // user_y
     view.setUint8(offset, 8); offset += 1;  // width
@@ -631,7 +631,14 @@ describe('encoding', () => {
     assert.equal(firstDevice.firmware_build.getTime(), Number(timestamp / 1000000n));
     assert.equal(firstDevice.firmware_version_minor, 42);
     assert.equal(firstDevice.firmware_version_major, 3);
-    
+
+    // Reserved fields are exposed as lazy accessors that slice the backing buffer.
+    assert.deepEqual(firstDevice.reserved6(), new Uint8Array([0xab, 0xcd]));
+    assert.equal(firstDevice.reserved7().length, 1);
+    assert.equal(firstDevice.reserved8().length, 4);
+    assert.equal(firstDevice.reserved9().length, 8);
+    assert.equal(firstDevice.reserved10().length, 4);
+
     assert.equal(offsetRef.current, totalSize);
   });
 

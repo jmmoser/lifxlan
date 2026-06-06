@@ -166,8 +166,19 @@ function decodeBytes(bytes: Uint8Array, offsetRef: OffsetRef, byteLength: number
   return subarray;
 }
 
+const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+
 function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
-  return Array.from(decodeBytes(bytes, offsetRef, 16)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const o = offsetRef.current;
+  if (o + 16 > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected 16 bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  let result = '';
+  for (let i = 0; i < 16; i++) {
+    result += HEX_BYTES[bytes[o + i]!];
+  }
+  offsetRef.current = o + 16;
+  return result;
 }
 
 const readUint16 = (bytes: Uint8Array, offset: number): number =>
@@ -211,14 +222,17 @@ const readBigUint64 = (bytes: Uint8Array, offset: number): bigint => {
 
 const textDecoder = new TextDecoder();
 
-function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
-  const start = offsetRef.current;
+function readString(bytes: Uint8Array, start: number, maxLength: number): string {
   const limit = Math.min(start + maxLength, bytes.length);
   let end = start;
   while (end < limit && bytes[end] !== 0) {
     end++;
   }
-  const value = textDecoder.decode(bytes.subarray(start, end));
+  return textDecoder.decode(bytes.subarray(start, end));
+}
+
+function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
+  const value = readString(bytes, offsetRef.current, maxLength);
   offsetRef.current += maxLength;
   return value;
 }
@@ -227,8 +241,20 @@ export function encodeTimestampTo(view: DataView, offset: number, date: Date): v
   view.setBigUint64(offset, BigInt(date.getTime()) * 1000000n, true);
 }
 
+function readTimestamp(bytes: Uint8Array, offset: number): Date {
+  const lo = readUint32(bytes, offset);
+  const hi = readUint32(bytes, offset + 4);
+  // Nanoseconds since epoch is a 64-bit value (hi * 2**32 + lo). Convert to
+  // milliseconds without BigInt: 2**32 === 4294 * 1e6 + 967296, so
+  // floor(ns / 1e6) === hi * 4294 + floor((hi * 967296 + lo) / 1e6). Both
+  // terms stay below Number.MAX_SAFE_INTEGER, so the result is exact and
+  // matches the previous BigInt computation.
+  const ms = hi * 4294 + Math.floor((hi * 967296 + lo) / 1000000);
+  return new Date(ms);
+}
+
 function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
-  const time = new Date(Number(readBigUint64(bytes, offsetRef.current) / 1000000n));
+  const time = readTimestamp(bytes, offsetRef.current);
   offsetRef.current += 8;
   return time;
 }
@@ -691,27 +717,54 @@ export function encodeSetTileEffect(instanceid: number, effectType: TileEffectTy
   return payload;
 }
 
-export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const o = offsetRef.current;
-  const color = readColor(bytes, o);
-  offsetRef.current = o + 8;
-  const reserved2 = decodeBytes(bytes, offsetRef, 2);
-  const o2 = offsetRef.current;
-  const power = readUint16(bytes, o2);
-  offsetRef.current = o2 + 2;
-  const label = decodeString(bytes, offsetRef, 32);
-  const reserved8 = decodeBytes(bytes, offsetRef, 8);
+const LIGHT_STATE_SIZE = 52;
 
-  return {
-    hue: color.hue,
-    saturation: color.saturation,
-    brightness: color.brightness,
-    kelvin: color.kelvin,
-    power,
-    label,
-    reserved2,
-    reserved8,
-  };
+/**
+ * A LightState (GetColor) response. Scalar fields are decoded eagerly; the
+ * reserved padding is exposed as lazy accessors so the common path allocates
+ * no reserved subarrays. Mirrors the DecodedHeader pattern.
+ */
+class LightStateMessage {
+  readonly hue: number;
+  readonly saturation: number;
+  readonly brightness: number;
+  readonly kelvin: number;
+  readonly power: number;
+  readonly label: string;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.hue = readUint16(bytes, offset);
+    this.saturation = readUint16(bytes, offset + 2);
+    this.brightness = readUint16(bytes, offset + 4);
+    this.kelvin = readUint16(bytes, offset + 6);
+    // reserved2: offset + 8 .. offset + 10
+    this.power = readUint16(bytes, offset + 10);
+    this.label = readString(bytes, offset + 12, 32);
+    // reserved8: offset + 44 .. offset + 52
+  }
+
+  reserved2(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 10);
+  }
+
+  reserved8(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 44, this.#offset + 52);
+  }
+}
+
+export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef): LightStateMessage {
+  const o = offsetRef.current;
+  if (o + LIGHT_STATE_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${LIGHT_STATE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + LIGHT_STATE_SIZE;
+  return new LightStateMessage(bytes, o);
 }
 
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: OffsetRef): number {
@@ -768,72 +821,87 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
   };
 }
 
+/**
+ * A single entry in a StateDeviceChain response (55 bytes on the wire).
+ *
+ * Scalar fields are decoded eagerly in the constructor. The reserved padding
+ * fields are exposed as lazy accessors that slice the backing buffer on
+ * demand, so decoding a 16-tile chain allocates no reserved subarrays in the
+ * common path where they are never read. Mirrors the DecodedHeader pattern.
+ */
+const DEVICE_CHAIN_DEVICE_SIZE = 55;
+
+class DeviceChainEntry {
+  readonly accel_meas_x: number;
+  readonly accel_meas_y: number;
+  readonly accel_meas_z: number;
+  readonly user_x: number;
+  readonly user_y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly device_version_vendor: number;
+  readonly device_version_product: number;
+  readonly firmware_build: Date;
+  readonly firmware_version_minor: number;
+  readonly firmware_version_major: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.accel_meas_x = readInt16(bytes, offset);
+    this.accel_meas_y = readInt16(bytes, offset + 2);
+    this.accel_meas_z = readInt16(bytes, offset + 4);
+    // reserved6: offset + 6 .. offset + 8
+    this.user_x = readFloat32(bytes, offset + 8);
+    this.user_y = readFloat32(bytes, offset + 12);
+    this.width = bytes[offset + 16]!;
+    this.height = bytes[offset + 17]!;
+    // reserved7: offset + 18 .. offset + 19
+    this.device_version_vendor = readUint32(bytes, offset + 19);
+    this.device_version_product = readUint32(bytes, offset + 23);
+    // reserved8: offset + 27 .. offset + 31
+    this.firmware_build = readTimestamp(bytes, offset + 31);
+    // reserved9: offset + 39 .. offset + 47
+    this.firmware_version_minor = readUint16(bytes, offset + 47);
+    this.firmware_version_major = readUint16(bytes, offset + 49);
+    // reserved10: offset + 51 .. offset + 55
+  }
+
+  reserved6(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 6, this.#offset + 8);
+  }
+
+  reserved7(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 18, this.#offset + 19);
+  }
+
+  reserved8(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 27, this.#offset + 31);
+  }
+
+  reserved9(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 39, this.#offset + 47);
+  }
+
+  reserved10(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 51, this.#offset + 55);
+  }
+}
+
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
   const start_index = bytes[offsetRef.current]!; offsetRef.current += 1;
-  const devices: Array<{
-    accel_meas_x: number;
-    accel_meas_y: number;
-    accel_meas_z: number;
-    reserved6: Uint8Array;
-    user_x: number;
-    user_y: number;
-    width: number;
-    height: number;
-    reserved7: Uint8Array;
-    device_version_vendor: number;
-    device_version_product: number;
-    reserved8: Uint8Array;
-    firmware_build: Date;
-    reserved9: Uint8Array;
-    firmware_version_minor: number;
-    firmware_version_major: number;
-    reserved10: Uint8Array;
-  }> = new Array(16);
+  const devices: DeviceChainEntry[] = new Array(16);
   for (let i = 0; i < 16; i++) {
-    const ao = offsetRef.current;
-    const accel_meas_x = readInt16(bytes, ao);
-    const accel_meas_y = readInt16(bytes, ao + 2);
-    const accel_meas_z = readInt16(bytes, ao + 4);
-    offsetRef.current = ao + 6;
-    const reserved6 = decodeBytes(bytes, offsetRef, 2);
-    const uo = offsetRef.current;
-    const user_x = readFloat32(bytes, uo);
-    const user_y = readFloat32(bytes, uo + 4);
-    const width = bytes[uo + 8]!;
-    const height = bytes[uo + 9]!;
-    offsetRef.current = uo + 10;
-    const reserved7 = decodeBytes(bytes, offsetRef, 1);
     const o = offsetRef.current;
-    const device_version_vendor = readUint32(bytes, o);
-    const device_version_product = readUint32(bytes, o + 4);
-    offsetRef.current = o + 8;
-    const reserved8 = decodeBytes(bytes, offsetRef, 4);
-    const firmware_build = decodeTimestamp(bytes, offsetRef);
-    const reserved9 = decodeBytes(bytes, offsetRef, 8);
-    const o2 = offsetRef.current;
-    const firmware_version_minor = readUint16(bytes, o2);
-    const firmware_version_major = readUint16(bytes, o2 + 2);
-    offsetRef.current = o2 + 4;
-    const reserved10 = decodeBytes(bytes, offsetRef, 4);
-    devices[i] = {
-      accel_meas_x,
-      accel_meas_y,
-      accel_meas_z,
-      reserved6,
-      user_x,
-      user_y,
-      width,
-      height,
-      reserved7,
-      device_version_vendor,
-      device_version_product,
-      reserved8,
-      firmware_build,
-      reserved9,
-      firmware_version_minor,
-      firmware_version_major,
-      reserved10,
-    };
+    if (o + DEVICE_CHAIN_DEVICE_SIZE > bytes.length) {
+      throw new ValidationError('payload', bytes.length, `expected ${DEVICE_CHAIN_DEVICE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+    }
+    devices[i] = new DeviceChainEntry(bytes, o);
+    offsetRef.current = o + DEVICE_CHAIN_DEVICE_SIZE;
   }
   const tile_devices_count = bytes[offsetRef.current]!; offsetRef.current += 1;
   return {
