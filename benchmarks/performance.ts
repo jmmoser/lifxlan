@@ -15,6 +15,9 @@ import {
   decodeStateDeviceChain,
   decodeStateInfo,
   decodeStateGroup,
+  decodeStateMultiZoneEffect,
+  decodeStateHostFirmware,
+  decodeStateWifiInfo,
 } from '../src/encoding.js';
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
@@ -219,6 +222,12 @@ group('Payload Decoders', () => {
     decodeStateTileEffect(tileEffectPayload, { current: 0 });
   });
 
+  // 3 reserved fields + parameters, exercises lazy reserved accessors
+  const multiZoneEffectPayload = new Uint8Array(59);
+  bench('decodeStateMultiZoneEffect', () => {
+    decodeStateMultiZoneEffect(multiZoneEffectPayload, { current: 0 });
+  });
+
   const deviceChainPayload = new Uint8Array(882);
   bench('decodeStateDeviceChain (16 devices)', () => {
     decodeStateDeviceChain(deviceChainPayload, { current: 0 });
@@ -234,6 +243,18 @@ group('Payload Decoders', () => {
   const stateGroupPayload = new Uint8Array(56);
   bench('decodeStateGroup (uuid)', () => {
     decodeStateGroup(stateGroupPayload, { current: 0 });
+  });
+
+  // timestamp + reserved + version, exercises lazy reserved accessor
+  const hostFirmwarePayload = new Uint8Array(20);
+  bench('decodeStateHostFirmware', () => {
+    decodeStateHostFirmware(hostFirmwarePayload, { current: 0 });
+  });
+
+  // float32 + 3 reserved fields, exercises lazy reserved accessors
+  const wifiInfoPayload = new Uint8Array(14);
+  bench('decodeStateWifiInfo', () => {
+    decodeStateWifiInfo(wifiInfoPayload, { current: 0 });
   });
 });
 

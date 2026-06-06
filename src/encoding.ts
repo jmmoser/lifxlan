@@ -270,48 +270,127 @@ export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
   };
 }
 
-export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const build = decodeTimestamp(bytes, offsetRef);
-  const reserved = decodeBytes(bytes, offsetRef, 8);
-  const o = offsetRef.current;
-  const version_minor = readUint16(bytes, o);
-  const version_major = readUint16(bytes, o + 2);
-  offsetRef.current = o + 4;
-  return {
-    build,
-    reserved,
-    version_minor,
-    version_major,
-  };
+const FIRMWARE_SIZE = 20;
+
+/**
+ * A StateHostFirmware response (20 bytes on the wire). Scalar fields are
+ * decoded eagerly; the reserved padding is exposed as a lazy accessor so the
+ * common path allocates no reserved subarrays. Mirrors the DecodedHeader
+ * pattern.
+ */
+class HostFirmwareMessage {
+  readonly build: Date;
+  readonly version_minor: number;
+  readonly version_major: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.build = readTimestamp(bytes, offset);
+    // reserved: offset + 8 .. offset + 16
+    this.version_minor = readUint16(bytes, offset + 16);
+    this.version_major = readUint16(bytes, offset + 18);
+  }
+
+  reserved(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 16);
+  }
 }
 
-export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const signal = readFloat32(bytes, offsetRef.current); offsetRef.current += 4;
-  const reserved6 = decodeBytes(bytes, offsetRef, 4);
-  const reserved7 = decodeBytes(bytes, offsetRef, 4);
-  const reserved8 = decodeBytes(bytes, offsetRef, 2);
-
-  return {
-    signal,
-    reserved6,
-    reserved7,
-    reserved8,
-  };
+export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef): HostFirmwareMessage {
+  const o = offsetRef.current;
+  if (o + FIRMWARE_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${FIRMWARE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + FIRMWARE_SIZE;
+  return new HostFirmwareMessage(bytes, o);
 }
 
-export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const build = decodeTimestamp(bytes, offsetRef);
-  const reserved6 = decodeBytes(bytes, offsetRef, 8);
+const WIFI_INFO_SIZE = 14;
+
+/**
+ * A StateWifiInfo response (14 bytes on the wire). The `signal` reading is
+ * decoded eagerly; the reserved padding is exposed as lazy accessors so the
+ * common path allocates no reserved subarrays. Mirrors the DecodedHeader
+ * pattern.
+ */
+class WifiInfoMessage {
+  readonly signal: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.signal = readFloat32(bytes, offset);
+    // reserved6: offset + 4 .. offset + 8
+    // reserved7: offset + 8 .. offset + 12
+    // reserved8: offset + 12 .. offset + 14
+  }
+
+  reserved6(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 4, this.#offset + 8);
+  }
+
+  reserved7(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 12);
+  }
+
+  reserved8(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 12, this.#offset + 14);
+  }
+}
+
+export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): WifiInfoMessage {
   const o = offsetRef.current;
-  const version_minor = readUint16(bytes, o);
-  const version_major = readUint16(bytes, o + 2);
-  offsetRef.current = o + 4;
-  return {
-    build,
-    reserved6,
-    version_minor,
-    version_major,
-  };
+  if (o + WIFI_INFO_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${WIFI_INFO_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + WIFI_INFO_SIZE;
+  return new WifiInfoMessage(bytes, o);
+}
+
+/**
+ * A StateWifiFirmware response (20 bytes on the wire). Same layout as
+ * StateHostFirmware. Scalar fields are decoded eagerly; the reserved padding
+ * is exposed as a lazy accessor. Mirrors the DecodedHeader pattern.
+ */
+class WifiFirmwareMessage {
+  readonly build: Date;
+  readonly version_minor: number;
+  readonly version_major: number;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.build = readTimestamp(bytes, offset);
+    // reserved6: offset + 8 .. offset + 16
+    this.version_minor = readUint16(bytes, offset + 16);
+    this.version_major = readUint16(bytes, offset + 18);
+  }
+
+  reserved6(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 16);
+  }
+}
+
+export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef): WifiFirmwareMessage {
+  const o = offsetRef.current;
+  if (o + FIRMWARE_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${FIRMWARE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + FIRMWARE_SIZE;
+  return new WifiFirmwareMessage(bytes, o);
 }
 
 export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): number {
@@ -970,29 +1049,58 @@ export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   };
 }
 
-export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
+const MULTIZONE_EFFECT_SIZE = 59;
+
+/**
+ * A StateMultiZoneEffect response (59 bytes on the wire). Scalar fields and the
+ * real `parameters` payload are decoded eagerly; the reserved padding is exposed
+ * as lazy accessors so the common path allocates no reserved subarrays. Mirrors
+ * the DecodedHeader pattern.
+ */
+class MultiZoneEffectMessage {
+  readonly instanceid: number;
+  readonly type: number;
+  readonly speed: number;
+  readonly duration: bigint;
+  readonly parameters: Uint8Array;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.instanceid = readUint32(bytes, offset);
+    this.type = bytes[offset + 4]!;
+    // reserved6: offset + 5 .. offset + 7
+    this.speed = readUint32(bytes, offset + 7);
+    this.duration = readBigUint64(bytes, offset + 11);
+    // reserved7: offset + 19 .. offset + 23
+    // reserved8: offset + 23 .. offset + 27
+    this.parameters = bytes.subarray(offset + 27, offset + 59);
+  }
+
+  reserved6(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 5, this.#offset + 7);
+  }
+
+  reserved7(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 19, this.#offset + 23);
+  }
+
+  reserved8(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 23, this.#offset + 27);
+  }
+}
+
+export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef): MultiZoneEffectMessage {
   const o = offsetRef.current;
-  const instanceid = readUint32(bytes, o);
-  const type = bytes[o + 4]!;
-  offsetRef.current = o + 5;
-  const reserved6 = decodeBytes(bytes, offsetRef, 2);
-  const o2 = offsetRef.current;
-  const speed = readUint32(bytes, o2);
-  offsetRef.current = o2 + 4;
-  const duration = readBigUint64(bytes, offsetRef.current); offsetRef.current += 8;
-  const reserved7 = decodeBytes(bytes, offsetRef, 4);
-  const reserved8 = decodeBytes(bytes, offsetRef, 4);
-  const parameters = decodeBytes(bytes, offsetRef, 32);
-  return {
-    instanceid,
-    type,
-    reserved6,
-    speed,
-    duration,
-    reserved7,
-    reserved8,
-    parameters,
-  };
+  if (o + MULTIZONE_EFFECT_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${MULTIZONE_EFFECT_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + MULTIZONE_EFFECT_SIZE;
+  return new MultiZoneEffectMessage(bytes, o);
 }
 
 export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: OffsetRef) {
@@ -1017,49 +1125,89 @@ export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: Offs
   };
 }
 
-export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const o = offsetRef.current;
-  const reserved0 = bytes[o]!;
-  const instanceid = readUint32(bytes, o + 1);
-  const type = bytes[o + 5]!;
-  const speed = readUint32(bytes, o + 6);
-  offsetRef.current = o + 10;
-  const duration = readBigUint64(bytes, offsetRef.current); offsetRef.current += 8;
-  const reserved1 = decodeBytes(bytes, offsetRef, 4);
-  const reserved2 = decodeBytes(bytes, offsetRef, 4);
-  const skyType = bytes[offsetRef.current]!; offsetRef.current += 1;
-  const reserved3 = decodeBytes(bytes, offsetRef, 3);
-  const cloudSaturationMin = bytes[offsetRef.current]!; offsetRef.current += 1;
-  const reserved4 = decodeBytes(bytes, offsetRef, 3);
-  const cloudSaturationMax = bytes[offsetRef.current]!; offsetRef.current += 1;
-  const reserved5 = decodeBytes(bytes, offsetRef, 23);
-  const palette_count = bytes[offsetRef.current]!; offsetRef.current += 1;
+/**
+ * A StateTileEffect response. The fixed header is 59 bytes, followed by a
+ * 16-entry palette (128 bytes), for 187 bytes consumed on the wire.
+ *
+ * Scalar fields and the palette are decoded eagerly; the reserved padding is
+ * exposed as lazy accessors so the common path allocates no reserved subarrays.
+ * Mirrors the DecodedHeader pattern.
+ */
+const TILE_EFFECT_HEADER_SIZE = 59;
+const TILE_EFFECT_PALETTE_COUNT = 16;
+const TILE_EFFECT_SIZE = TILE_EFFECT_HEADER_SIZE + TILE_EFFECT_PALETTE_COUNT * 8;
 
-  const palette: Color[] = new Array(16);
-  let po = offsetRef.current;
-  for (let i = 0; i < 16; i++) {
-    palette[i] = readColor(bytes, po);
-    po += 8;
+class TileEffectMessage {
+  readonly reserved0: number;
+  readonly instanceid: number;
+  readonly type: number;
+  readonly speed: number;
+  readonly duration: bigint;
+  readonly skyType: number;
+  readonly cloudSaturationMin: number;
+  readonly cloudSaturationMax: number;
+  readonly palette_count: number;
+  readonly palette: Color[];
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.reserved0 = bytes[offset]!;
+    this.instanceid = readUint32(bytes, offset + 1);
+    this.type = bytes[offset + 5]!;
+    this.speed = readUint32(bytes, offset + 6);
+    this.duration = readBigUint64(bytes, offset + 10);
+    // reserved1: offset + 18 .. offset + 22
+    // reserved2: offset + 22 .. offset + 26
+    this.skyType = bytes[offset + 26]!;
+    // reserved3: offset + 27 .. offset + 30
+    this.cloudSaturationMin = bytes[offset + 30]!;
+    // reserved4: offset + 31 .. offset + 34
+    this.cloudSaturationMax = bytes[offset + 34]!;
+    // reserved5: offset + 35 .. offset + 58
+    this.palette_count = bytes[offset + 58]!;
+
+    const palette: Color[] = new Array(TILE_EFFECT_PALETTE_COUNT);
+    let po = offset + TILE_EFFECT_HEADER_SIZE;
+    for (let i = 0; i < TILE_EFFECT_PALETTE_COUNT; i++) {
+      palette[i] = readColor(bytes, po);
+      po += 8;
+    }
+    this.palette = palette;
   }
-  offsetRef.current = po;
 
-  return {
-    reserved0,
-    instanceid,
-    type,
-    speed,
-    duration,
-    reserved1,
-    reserved2,
-    skyType,
-    reserved3,
-    cloudSaturationMin,
-    reserved4,
-    cloudSaturationMax,
-    reserved5,
-    palette_count,
-    palette,
-  };
+  reserved1(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 18, this.#offset + 22);
+  }
+
+  reserved2(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 22, this.#offset + 26);
+  }
+
+  reserved3(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 27, this.#offset + 30);
+  }
+
+  reserved4(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 31, this.#offset + 34);
+  }
+
+  reserved5(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 35, this.#offset + 58);
+  }
+}
+
+export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef): TileEffectMessage {
+  const o = offsetRef.current;
+  if (o + TILE_EFFECT_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${TILE_EFFECT_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + TILE_EFFECT_SIZE;
+  return new TileEffectMessage(bytes, o);
 }
 
 export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: OffsetRef) {
