@@ -491,8 +491,8 @@ describe('encoding', () => {
     assert.equal(result.kelvin, 3500);
     assert.equal(result.power, 65535);
     assert.equal(result.label, label);
-    assert.equal(result.reserved2.length, 2);
-    assert.equal(result.reserved8.length, 8);
+    assert.equal(result.reserved2().length, 2);
+    assert.equal(result.reserved8().length, 8);
     assert.equal(offsetRef.current, 52);
   });
 

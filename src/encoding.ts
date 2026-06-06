@@ -222,14 +222,17 @@ const readBigUint64 = (bytes: Uint8Array, offset: number): bigint => {
 
 const textDecoder = new TextDecoder();
 
-function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
-  const start = offsetRef.current;
+function readString(bytes: Uint8Array, start: number, maxLength: number): string {
   const limit = Math.min(start + maxLength, bytes.length);
   let end = start;
   while (end < limit && bytes[end] !== 0) {
     end++;
   }
-  const value = textDecoder.decode(bytes.subarray(start, end));
+  return textDecoder.decode(bytes.subarray(start, end));
+}
+
+function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
+  const value = readString(bytes, offsetRef.current, maxLength);
   offsetRef.current += maxLength;
   return value;
 }
@@ -714,27 +717,54 @@ export function encodeSetTileEffect(instanceid: number, effectType: TileEffectTy
   return payload;
 }
 
-export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const o = offsetRef.current;
-  const color = readColor(bytes, o);
-  offsetRef.current = o + 8;
-  const reserved2 = decodeBytes(bytes, offsetRef, 2);
-  const o2 = offsetRef.current;
-  const power = readUint16(bytes, o2);
-  offsetRef.current = o2 + 2;
-  const label = decodeString(bytes, offsetRef, 32);
-  const reserved8 = decodeBytes(bytes, offsetRef, 8);
+const LIGHT_STATE_SIZE = 52;
 
-  return {
-    hue: color.hue,
-    saturation: color.saturation,
-    brightness: color.brightness,
-    kelvin: color.kelvin,
-    power,
-    label,
-    reserved2,
-    reserved8,
-  };
+/**
+ * A LightState (GetColor) response. Scalar fields are decoded eagerly; the
+ * reserved padding is exposed as lazy accessors so the common path allocates
+ * no reserved subarrays. Mirrors the DecodedHeader pattern.
+ */
+class LightStateMessage {
+  readonly hue: number;
+  readonly saturation: number;
+  readonly brightness: number;
+  readonly kelvin: number;
+  readonly power: number;
+  readonly label: string;
+
+  readonly #bytes: Uint8Array;
+  readonly #offset: number;
+
+  constructor(bytes: Uint8Array, offset: number) {
+    this.#bytes = bytes;
+    this.#offset = offset;
+
+    this.hue = readUint16(bytes, offset);
+    this.saturation = readUint16(bytes, offset + 2);
+    this.brightness = readUint16(bytes, offset + 4);
+    this.kelvin = readUint16(bytes, offset + 6);
+    // reserved2: offset + 8 .. offset + 10
+    this.power = readUint16(bytes, offset + 10);
+    this.label = readString(bytes, offset + 12, 32);
+    // reserved8: offset + 44 .. offset + 52
+  }
+
+  reserved2(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 8, this.#offset + 10);
+  }
+
+  reserved8(): Uint8Array {
+    return this.#bytes.subarray(this.#offset + 44, this.#offset + 52);
+  }
+}
+
+export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef): LightStateMessage {
+  const o = offsetRef.current;
+  if (o + LIGHT_STATE_SIZE > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${LIGHT_STATE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
+  }
+  offsetRef.current = o + LIGHT_STATE_SIZE;
+  return new LightStateMessage(bytes, o);
 }
 
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: OffsetRef): number {
