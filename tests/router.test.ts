@@ -1,20 +1,19 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { Router } from '../src/router.js';
+import { Router, MessageHandler } from '../src/router.js';
 import { encode, Header } from '../src/encoding.js';
 import { Type } from '../src/constants/index.js';
 import { ValidationError } from '../src/errors.js';
 
 describe('router', () => {
-  test('nextSource returns valid source', () => {
+  test('register allocates a distinct source on each call', () => {
     const router = Router({
       onSend() {},
     });
-    
-    const source1 = router.nextSource();
-    router.register(source1, () => {}); // Register it so next call gets different source
-    const source2 = router.nextSource();
-    
+
+    const source1 = router.register(() => {});
+    const source2 = router.register(() => {});
+
     assert.ok(source1 >= 2);
     assert.ok(source2 >= 2);
     assert.notEqual(source1, source2);
@@ -24,37 +23,35 @@ describe('router', () => {
     const router = Router({
       onSend() {},
     });
-    
+
     const handler = () => {};
-    const source = router.nextSource();
-    
-    router.register(source, handler);
+    const source = router.register(handler);
+
     router.deregister(source, handler);
   });
 
-  test('register throws error for invalid source', () => {
+  test('register throws error for invalid explicit source', () => {
     const router = Router({
       onSend() {},
     });
-    
+
     const handler = () => {};
-    
-    assert.throws(() => router.register(0, handler), /Invalid source/);
-    assert.throws(() => router.register(1, handler), /Invalid source/);
-    assert.throws(() => router.register(0x100000000, handler), /Invalid source/);
+
+    assert.throws(() => router.register(handler, 0), /Invalid source/);
+    assert.throws(() => router.register(handler, 1), /Invalid source/);
+    assert.throws(() => router.register(handler, 0x100000000), /Invalid source/);
   });
 
   test('register throws error for already registered source', () => {
     const router = Router({
       onSend() {},
     });
-    
+
     const handler1 = () => {};
     const handler2 = () => {};
-    const source = router.nextSource();
-    
-    router.register(source, handler1);
-    assert.throws(() => router.register(source, handler2), (error) => (
+    const source = router.register(handler1);
+
+    assert.throws(() => router.register(handler2, source), (error) => (
       error instanceof ValidationError && error.name === 'ValidationError' && error.parameter === 'source'
     ));
   });
@@ -63,12 +60,11 @@ describe('router', () => {
     const router = Router({
       onSend() {},
     });
-    
+
     const handler1 = () => {};
     const handler2 = () => {};
-    const source = router.nextSource();
-    
-    router.register(source, handler1);
+    const source = router.register(handler1);
+
     assert.throws(() => router.deregister(source, handler2), (error) => (
       error instanceof ValidationError && error.name === 'ValidationError' && error.parameter === 'messageHandler'
     ));
@@ -130,8 +126,8 @@ describe('router', () => {
     };
     
     const source = 12345;
-    router.register(source, handler);
-    
+    router.register(handler, source);
+
     const message = encode(
       false, // tagged
       source, // source
@@ -216,43 +212,35 @@ describe('router', () => {
     assert.equal(result.serialNumber, '010203040506');
   });
 
-  test('nextSource throws when no sources available', () => {
-    // Create a scenario where we exhaust available sources
-    const handlers = new Map();
-    // Fill many sources to test the error condition
+  test('register keeps allocating distinct sources past a pre-filled range', () => {
+    // Pre-fill sources 2..99 so allocation must skip past them.
+    const handlers = new Map<number, MessageHandler>();
     for (let i = 2; i < 100; i++) {
       handlers.set(i, () => {});
     }
-    
+
     const router = Router({
       onSend() {},
       handlers,
-    } as any);
-    
-    // This test verifies the concept but can't actually test all 4 billion sources
-    // We'll just verify that the router can handle the case when sources are registered
-    let sourceCount = 0;
-    try {
-      for (let i = 0; i < 200; i++) { // Try to get many sources
-        const source = router.nextSource();
-        router.register(source, () => {});
-        sourceCount++;
-      }
-    } catch (error) {
-      // This might throw if we run out, which is expected behavior
-      assert.ok(Error.isError(error) && (error.message.includes('No available source') || error.message.includes('Source already registered')));
+    });
+
+    const allocated = new Set<number>();
+    for (let i = 0; i < 200; i++) {
+      const source = router.register(() => {});
+      assert.ok(source >= 100, 'allocated source should skip the pre-filled range');
+      assert.ok(!allocated.has(source), 'allocated sources must be distinct');
+      allocated.add(source);
     }
-    
-    // At minimum we should be able to get some sources
-    assert.ok(sourceCount > 0);
+
+    assert.equal(allocated.size, 200);
   });
 
-  test('nextSource skips reserved values 0 and 1', () => {
+  test('register skips reserved values 0 and 1', () => {
     const router = Router({
       onSend() {},
     });
-    
-    const source = router.nextSource();
+
+    const source = router.register(() => {});
     assert.ok(source >= 2);
   });
 
@@ -272,8 +260,8 @@ describe('router', () => {
     };
     
     const source = 12345;
-    router.register(source, handler);
-    
+    router.register(handler, source);
+
     const message = encode(
       false, // tagged
       source, // source
@@ -284,63 +272,46 @@ describe('router', () => {
       Type.GetService, // type
       new Uint8Array() // payload
     );
-    
+
     router.receive(message);
-    
+
     assert.ok(handlerCalled);
     assert.ok(onMessageCalled);
   });
 
-  test('sourceCounter wraparound to 0 resets to 2', () => {
-    // Test the specific line: if (sourceCounter <= 1) { sourceCounter = 2; }
-    // We can access the internal state by creating a custom router with handlers map
-    
-    const handlers = new Map();
-    
-    // Fill values 2-100 to force counter to advance
+  test('register advances past a contiguous filled range', () => {
+    const handlers = new Map<number, MessageHandler>();
+
+    // Fill values 2-100 to force the allocator to advance.
     for (let i = 2; i <= 100; i++) {
       handlers.set(i, () => {});
     }
-    
+
     const router = Router({
       onSend() {},
       handlers,
-    } as any);
-    
-    // The router will start with sourceCounter = 2, but since 2-100 are taken,
-    // it will keep incrementing. Eventually it will find an available source
-    // or we can at least verify the router can handle this scenario
-    
-    let foundSource = false;
-    try {
-      const source = router.nextSource();
-      foundSource = source > 100; // Should find something beyond our filled range
-    } catch (error: any) {
-      // If it throws SourceExhaustionError, that's also valid behavior
-      assert.ok(error.message.includes('No more source IDs available'));
-    }
-    
-    // The test succeeds if either we found a valid source or got the expected error
-    assert.ok(foundSource || true, 'Router handled source allocation correctly');
+    });
+
+    const source = router.register(() => {});
+    assert.ok(source > 100, 'allocated source should be beyond the filled range');
   });
 
-  test('router with source exactly at boundary conditions', () => {
-    // Test edge cases for source validation
+  test('register with explicit source validates boundary conditions', () => {
     const router = Router({
       onSend() {},
     });
-    
+
     const handler = () => {};
-    
-    // Test boundaries more thoroughly
-    assert.throws(() => router.register(-1, handler), /Invalid source/);
-    assert.throws(() => router.register(0x100000000, handler), /Invalid source/);
-    
-    // Valid boundary values
-    router.register(2, handler);
+
+    // Invalid explicit sources.
+    assert.throws(() => router.register(handler, -1), /Invalid source/);
+    assert.throws(() => router.register(handler, 0x100000000), /Invalid source/);
+
+    // Valid boundary values.
+    router.register(handler, 2);
     router.deregister(2, handler);
-    
-    router.register(0xFFFFFFFF, handler);
+
+    router.register(handler, 0xFFFFFFFF);
     router.deregister(0xFFFFFFFF, handler);
   });
 
@@ -392,30 +363,19 @@ describe('router', () => {
     assert.ok(errorObj);
   });
 
-  test('sourceCounter wraps around correctly', () => {
-    // Create a router with a custom initial state to test wraparound
-    // We'll fill up many handlers and force the sourceCounter to advance
-    const handlers = new Map();
-    
-    // Fill a large range to force wraparound behavior
+  test('register searches through a large filled range', () => {
+    // Fill a large contiguous range to force the allocator to scan past it.
+    const handlers = new Map<number, MessageHandler>();
     for (let i = 2; i < 1000; i++) {
       handlers.set(i, () => {});
     }
-    
+
     const router = Router({
       onSend() {},
       handlers,
-    } as any);
-    
-    // Try to get a source - this should force the router to search through
-    // the filled range and potentially trigger the wraparound logic
-    let source: number;
-    try {
-      source = router.nextSource();
-      assert.ok(source >= 1000 || source < 2, 'Source should be outside filled range');
-    } catch (error: any) {
-      // SourceExhaustionError is also acceptable
-      assert.ok(error.message.includes('No more source IDs available'));
-    }
+    });
+
+    const source = router.register(() => {});
+    assert.ok(source >= 1000, 'allocated source should be outside the filled range');
   });
 });

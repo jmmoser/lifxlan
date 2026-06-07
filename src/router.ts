@@ -17,6 +17,12 @@ const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 
 export interface RouterOptions {
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+  /**
+   * Global tap invoked for every successfully decoded inbound message,
+   * regardless of which (if any) client it routes to. Use it for
+   * cross-cutting concerns such as device discovery, which needs to observe
+   * messages from sources it did not send (e.g. broadcast StateService).
+   */
   onMessage?: MessageHandler;
   /**
    * Called when an inbound message cannot be decoded (e.g. truncated or
@@ -28,10 +34,29 @@ export interface RouterOptions {
 }
 
 export interface RouterInstance {
-  nextSource(): number;
-  register(source: number, handler: MessageHandler): void;
+  /**
+   * Allocates a free source id, registers `handler` against it, and returns
+   * the source. Allocation and registration happen atomically in this single
+   * call so two registrations can never be handed the same source.
+   *
+   * Pass an explicit `source` to reserve a caller-chosen id instead; it is
+   * validated (2..4294967295) and must not already be registered. This is the
+   * escape hatch for callers that manage their own source ids.
+   */
+  register(handler: MessageHandler, source?: number): number;
   deregister(source: number, handler: MessageHandler): void;
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+  /**
+   * Decodes an inbound message and dispatches it through three channels:
+   *
+   * 1. the per-source `handler` registered for `header.source` (the client
+   *    that sent the originating request), if any;
+   * 2. the router-wide `onMessage` tap, if configured;
+   * 3. the decoded `{ header, payload, serialNumber }` returned to the caller
+   *    for synchronous inspection.
+   *
+   * Returns `undefined` if the message could not be decoded.
+   */
   receive(message: Uint8Array): {
     header: Header;
     payload: Uint8Array;
@@ -59,32 +84,33 @@ export function Router(options: RouterOptions): RouterInstance {
 
   let sourceCounter = 2;
 
+  function allocateSource(): number {
+    for (let i = 0; i < MAX_SOURCE_VALUES; i++) {
+      const candidate = sourceCounter;
+      sourceCounter = sourceCounter + 1 >= 0x100000000 ? 2 : sourceCounter + 1;
+      if (!handlers.has(candidate)) {
+        return candidate;
+      }
+    }
+    throw new SourceExhaustionError();
+  }
+
   return {
-    nextSource() {
-      let source = -1;
-      for (let i = 0; i < MAX_SOURCE_VALUES; i++) {
-        if (!handlers.has(sourceCounter)) {
-          source = sourceCounter;
-          break;
+    register(handler: MessageHandler, source?: number): number {
+      let resolved: number;
+      if (source === undefined) {
+        resolved = allocateSource();
+      } else {
+        if (source <= 1 || source > MAX_SOURCE) {
+          throw new ValidationError('source', source, 'must be between 2 and 4294967295');
         }
-        sourceCounter = (sourceCounter + 1) % 0x100000000;
-        if (sourceCounter <= 1) {
-          sourceCounter = 2;
+        if (handlers.has(source)) {
+          throw new ValidationError('source', source, 'already registered');
         }
+        resolved = source;
       }
-      if (source === -1) {
-        throw new SourceExhaustionError();
-      }
-      return source;
-    },
-    register(source: number, handler: MessageHandler) {
-      if (source <= 1 || source > MAX_SOURCE) {
-        throw new ValidationError('source', source, 'must be between 2 and 4294967295');
-      }
-      if (handlers.has(source)) {
-        throw new ValidationError('source', source, 'already registered');
-      }
-      handlers.set(source, handler);
+      handlers.set(resolved, handler);
+      return resolved;
     },
     deregister(source: number, handler: MessageHandler) {
       if (handlers.get(source) !== handler) {

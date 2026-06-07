@@ -65,8 +65,7 @@ import { Type } from '../src/constants/types.js';
 //   const handler = () => { };
 
 //   bench('Router Source Assignment', () => {
-//     const source = router.nextSource();
-//     router.register(source, handler);
+//     const source = router.register(handler);
 //     router.deregister(source, handler);
 //   });
 // });
@@ -176,7 +175,7 @@ group('Client', () => {
       device.target,
       true,
       false,
-      device.sequence,
+      0,
       cmd.type,
       undefined,
     );

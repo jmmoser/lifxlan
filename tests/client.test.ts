@@ -670,10 +670,13 @@ describe('client', () => {
     client.dispose();
   });
 
-  test('sequence number increments correctly', () => {
+  test('sequence number increments and wraps per serial number', () => {
+    const sequences: number[] = [];
     const client = Client({
       router: Router({
-        onSend() {},
+        onSend(message) {
+          sequences.push(decodeHeader(message).sequence);
+        },
       }),
     });
 
@@ -683,21 +686,51 @@ describe('client', () => {
       address: '1.2.3.4',
     });
 
-    // Initial sequence should be 0
-    assert.equal(device.sequence, 0);
-    
-    client.unicast(GetServiceCommand(), device);
-    assert.equal(device.sequence, 1);
-    
-    client.unicast(GetServiceCommand(), device);
-    assert.equal(device.sequence, 2);
-    
-    // Test sequence wrapping at 255
-    device.sequence = 254;
-    client.unicast(GetServiceCommand(), device);
-    assert.equal(device.sequence, 0); // Should wrap to 0
-    
+    // Send 256 messages to observe increment and wrap (255 is reserved, so
+    // sequences run 0..254 then wrap back to 0).
+    for (let i = 0; i < 256; i++) {
+      client.unicast(GetServiceCommand(), device);
+    }
+
+    assert.equal(sequences[0], 0);
+    assert.equal(sequences[1], 1);
+    assert.equal(sequences[254], 254);
+    assert.equal(sequences[255], 0); // wraps after 254
+
     client.dispose();
+  });
+
+  test('two clients keep independent sequences for the same device', () => {
+    const seen = new Map<number, number[]>();
+    const router = Router({
+      onSend(message) {
+        const header = decodeHeader(message);
+        const list = seen.get(header.source) ?? [];
+        list.push(header.sequence);
+        seen.set(header.source, list);
+      },
+    });
+
+    const a = Client({ router });
+    const b = Client({ router });
+
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+
+    a.unicast(GetServiceCommand(), device);
+    a.unicast(GetServiceCommand(), device);
+    b.unicast(GetServiceCommand(), device);
+
+    // Each client owns its own sequence space; b's counter is not advanced
+    // by a's sends even though they target the same device.
+    assert.deepEqual(seen.get(a.source), [0, 1]);
+    assert.deepEqual(seen.get(b.source), [0]);
+
+    a.dispose();
+    b.dispose();
   });
 
   test('multi-response command with 4+ decode parameters', async () => {
