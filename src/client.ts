@@ -225,16 +225,14 @@ export interface ClientInstance {
     device: Device,
     options?: SendOptions<Override>,
   ): ModeReturn<T, ResolveMode<Override, Default>>;
-  
-  onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
 
 /**
  * Creates a high-level client for communicating with LIFX devices.
  *
  * The Client provides methods for sending commands to devices with automatic
- * timeout handling, retry logic, and response correlation. It uses the Router
- * for message routing and supports both acknowledged and unacknowledged messaging patterns.
+ * timeout handling and response correlation. It uses the Router for message
+ * routing and supports both acknowledged and unacknowledged messaging patterns.
  *
  * @param options Configuration options
  * @returns A new client instance
@@ -246,12 +244,23 @@ export interface ClientInstance {
  * @performance Optimized for high-throughput scenarios with minimal allocations
  */
 export function Client(options: ClientOptions): ClientInstance {
-  const source = options.source ?? options.router.nextSource();
-
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const { router } = options;
 
   const responseHandlerMap = new Map<string, PendingHandler>();
+
+  // Per-(client, device) sequence counters, keyed by device serial number.
+  // Sequence is a property of the conversation between this client and a
+  // device, not of the device itself, so it lives here rather than on the
+  // shared Device object. Two clients talking to the same device therefore
+  // keep independent sequence spaces.
+  const sequences = new Map<string, number>();
+
+  function nextSequence(serialNumber: string): number {
+    const sequence = sequences.get(serialNumber) ?? 0;
+    sequences.set(serialNumber, incrementSequence(sequence));
+    return sequence;
+  }
 
   // Reused across inbound messages to avoid allocating a fresh offset ref per
   // packet. Safe because handle() -> decode() runs fully synchronously and never
@@ -259,6 +268,26 @@ export function Client(options: ClientOptions): ClientInstance {
   const offsetRef = { current: 0 };
 
   let disposed = false;
+
+  // Routes inbound messages addressed to this client's source. Kept as a
+  // private closure (not exposed on ClientInstance) so callers can't bypass
+  // routing by invoking it directly.
+  function onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
+    if (options.onMessage) {
+      options.onMessage(header, payload, serialNumber);
+    }
+
+    const responseHandlerEntry = responseHandlerMap.get(
+      getResponseKey(serialNumber, header.sequence),
+    );
+
+    if (responseHandlerEntry) {
+      offsetRef.current = 0;
+      responseHandlerEntry.handle(header.type, payload, offsetRef);
+    }
+  }
+
+  const source = router.register(onMessage, options.source);
 
   const client: ClientInstance = {
     /**
@@ -294,7 +323,7 @@ export function Client(options: ClientOptions): ClientInstance {
 
       // Deregister first so any in-flight messages routed to this client
       // are dropped before we tear down its pending handlers.
-      router.deregister(source, client.onMessage);
+      router.deregister(source, onMessage);
 
       const error = new DisposedClientError(source);
       const entries = Array.from(responseHandlerMap.values());
@@ -331,21 +360,21 @@ export function Client(options: ClientOptions): ClientInstance {
      */
     unicast<T>(command: Command<T>, device: Device) {
       if (disposed) throw new DisposedClientError(source);
-      
+
+      const sequence = nextSequence(device.serialNumber);
+
       const bytes = encode(
         false,
         source,
         device.target,
         false,
         false,
-        device.sequence,
+        sequence,
         command.type,
         command.payload,
       );
 
       router.send(bytes, device.port, device.address, device.serialNumber);
-
-      device.sequence = incrementSequence(device.sequence);
     },
     /**
      * Send a command to a device with configurable acknowledgment behavior.
@@ -382,8 +411,7 @@ export function Client(options: ClientOptions): ClientInstance {
           break;
       }
       
-      const sequence = device.sequence;
-      device.sequence = incrementSequence(sequence);
+      const sequence = nextSequence(device.serialNumber);
 
       const bytes = encode(
         false,
@@ -402,23 +430,7 @@ export function Client(options: ClientOptions): ClientInstance {
 
       return promise as ModeReturn<T, ResolveMode<Override, Default>>;
     },
-    onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
-      if (options.onMessage) {
-        options.onMessage(header, payload, serialNumber);
-      }
-
-      const responseHandlerEntry = responseHandlerMap.get(
-        getResponseKey(serialNumber, header.sequence),
-      );
-
-      if (responseHandlerEntry) {
-        offsetRef.current = 0;
-        responseHandlerEntry.handle(header.type, payload, offsetRef);
-      }
-    },
   };
-
-  router.register(source, client.onMessage);
 
   return client;
 }

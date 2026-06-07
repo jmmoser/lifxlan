@@ -129,6 +129,8 @@ The library uses three main components:
 2. **Client** - High-level interface for sending commands with timeouts and response correlation  
 3. **Devices** - Registry that tracks discovered LIFX devices on your network
 
+Each `Client` gets a unique **source** id from the `Router` and tracks a per-device **sequence** number internally; together they correlate responses with their requests, so many clients can share one router and socket. Sequence is managed for you; a `Device` is just a network descriptor.
+
 ### Bring Your Own Socket
 
 This library doesn't include UDP socket implementation - you provide it. This makes it work across different server-side JavaScript runtimes:

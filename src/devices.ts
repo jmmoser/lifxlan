@@ -7,7 +7,6 @@ export interface Device {
   port: number;
   target: Uint8Array;
   serialNumber: string;
-  sequence: number;
 }
 
 export interface DeviceConfig {
@@ -15,7 +14,6 @@ export interface DeviceConfig {
   serialNumber?: string;
   port?: number;
   target?: Uint8Array;
-  sequence?: number;
 }
 
 export function Device(config: DeviceConfig): Device {
@@ -27,10 +25,6 @@ export function Device(config: DeviceConfig): Device {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
 
-  if (config.sequence !== undefined && (config.sequence < 0 || config.sequence > 254)) {
-    throw new ValidationError('sequence', config.sequence, 'must be between 0 and 254');
-  }
-
   const target = config.target ?? (config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET);
   const serialNumber = config.serialNumber ?? convertTargetToSerialNumber(target);
 
@@ -39,7 +33,6 @@ export function Device(config: DeviceConfig): Device {
     port: config.port ?? PORT,
     target,
     serialNumber,
-    sequence: config.sequence ?? 0,
   };
 }
 

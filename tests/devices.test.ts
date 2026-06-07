@@ -160,7 +160,6 @@ describe('devices', () => {
     });
 
     expect(device.port).toBe(56700); // Default PORT from constants
-    expect(device.sequence).toBe(0);
     expect(device.target).toBeDefined();
     expect(device.address).toBe('192.168.1.100');
     expect(device.serialNumber).toBe('abcdef123456');
@@ -176,7 +175,6 @@ describe('devices', () => {
 
     expect(device.port).toBe(12345);
     expect(device.target).toBe(customTarget);
-    expect(device.sequence).toBe(0);
   });
 
   test('remove non-existent device returns false', () => {
@@ -253,29 +251,15 @@ describe('devices', () => {
     })).toThrow('Invalid port: -1 (must be between 1 and 65535)');
   });
 
-  test('Device factory validates sequence range', () => {
-    expect(() => Device({ 
-      address: '192.168.1.1', 
-      sequence: -1 
-    })).toThrow('Invalid sequence: -1 (must be between 0 and 254)');
-    
-    expect(() => Device({ 
-      address: '192.168.1.1', 
-      sequence: 255 
-    })).toThrow('Invalid sequence: 255 (must be between 0 and 254)');
-  });
-
   test('Device factory allows valid values', () => {
     const device = Device({
       address: '192.168.1.1',
       port: 56700,
-      sequence: 100,
       serialNumber: 'abcdef123456'
     });
 
     expect(device.address).toBe('192.168.1.1');
     expect(device.port).toBe(56700);
-    expect(device.sequence).toBe(100);
     expect(device.serialNumber).toBe('abcdef123456');
   });
 
