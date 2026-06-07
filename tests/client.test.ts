@@ -768,7 +768,7 @@ describe('client', () => {
     });
   });
 
-  test('unicastMany fans out to every device and advances each sequence', () => {
+  test('unicastEach fans out to every device and advances each sequence', () => {
     const targets: string[] = [];
     const client = Client({
       router: Router({
@@ -790,14 +790,14 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    client.unicast(SetPowerCommand(true), [deviceA, deviceB]);
+    client.unicastEach(SetPowerCommand(true), [deviceA, deviceB]);
 
     assert.deepEqual(targets, ['aaaaaaaaaaaa', 'bbbbbbbbbbbb']);
     assert.equal(deviceA.sequence, 1);
     assert.equal(deviceB.sequence, 1);
   });
 
-  test('sendMany resolves a settled result per device in order', async () => {
+  test('sendEach resolves a device-tagged outcome per device in order', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
@@ -818,16 +818,18 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.send(GetPowerCommand(), [deviceA, deviceB]);
+    const results = await client.sendEach(GetPowerCommand(), [deviceA, deviceB]);
 
     assert.equal(results.length, 2);
-    assert.equal(results[0]!.status, 'fulfilled');
-    assert.equal(results[1]!.status, 'fulfilled');
-    assert.equal((results[0] as PromiseFulfilledResult<number>).value, 0xFFFF);
-    assert.equal((results[1] as PromiseFulfilledResult<number>).value, 0xFFFF);
+    assert.equal(results[0]!.device, deviceA);
+    assert.equal(results[1]!.device, deviceB);
+    assert.equal(results[0]!.ok, true);
+    assert.equal(results[1]!.ok, true);
+    assert.equal(results[0]!.ok && results[0]!.value, 0xFFFF);
+    assert.equal(results[1]!.ok && results[1]!.value, 0xFFFF);
   });
 
-  test('sendMany isolates failures so one unreachable device does not reject the batch', async () => {
+  test('sendEach isolates failures so one unreachable device does not reject the batch', async () => {
     const client = Client({
       defaultTimeoutMs: 50,
       router: Router({
@@ -848,13 +850,16 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.send(GetPowerCommand(), [deviceA, deviceB]);
+    const results = await client.sendEach(GetPowerCommand(), [deviceA, deviceB]);
 
-    assert.equal(results[0]!.status, 'fulfilled');
-    assert.equal(results[1]!.status, 'rejected');
+    assert.equal(results[0]!.ok, true);
+    assert.equal(results[1]!.ok, false);
+    // The failing outcome carries its device and a real error (not `any`).
+    assert.equal(results[1]!.device, deviceB);
+    assert.ok(!results[1]!.ok && results[1]!.error instanceof Error);
   });
 
-  test('sendMany honors ack-only response mode', async () => {
+  test('sendEach honors ack-only response mode', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
@@ -875,14 +880,14 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.send(GetPowerCommand(), [deviceA, deviceB], { responseMode: 'ack-only' });
+    const results = await client.sendEach(GetPowerCommand(), [deviceA, deviceB], { responseMode: 'ack-only' });
 
-    assert.equal(results[0]!.status, 'fulfilled');
-    assert.equal(results[1]!.status, 'fulfilled');
-    assert.equal((results[0] as PromiseFulfilledResult<void>).value, undefined);
+    assert.equal(results[0]!.ok, true);
+    assert.equal(results[1]!.ok, true);
+    assert.equal(results[0]!.ok && results[0]!.value, undefined);
   });
 
-  test('sendMany without onSendMany falls back to per-packet send', async () => {
+  test('sendEach without onSendMany falls back to per-packet send', async () => {
     let sendCount = 0;
     const client = Client({
       defaultTimeoutMs: 0,
@@ -902,14 +907,14 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.send(GetPowerCommand(), [deviceA, deviceB]);
+    const results = await client.sendEach(GetPowerCommand(), [deviceA, deviceB]);
 
     assert.equal(sendCount, 2);
-    assert.equal(results[0]!.status, 'fulfilled');
-    assert.equal(results[1]!.status, 'fulfilled');
+    assert.equal(results[0]!.ok, true);
+    assert.equal(results[1]!.ok, true);
   });
 
-  test('unicastMany and sendMany throw once the client is disposed', () => {
+  test('unicastEach and sendEach throw once the client is disposed', () => {
     const client = Client({
       router: Router({ onSend() {}, onSendMany() {} }),
     });
@@ -917,7 +922,7 @@ describe('client', () => {
 
     client.dispose();
 
-    assert.throws(() => client.unicast(SetPowerCommand(true), [device]), /disposed/i);
-    assert.throws(() => client.send(GetPowerCommand(), [device]), /disposed/i);
+    assert.throws(() => client.unicastEach(SetPowerCommand(true), [device]), /disposed/i);
+    assert.throws(() => client.sendEach(GetPowerCommand(), [device]), /disposed/i);
   });
 });

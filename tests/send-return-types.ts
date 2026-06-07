@@ -12,7 +12,7 @@
  * ack-only-default command was mistyped as resolving its decoder's payload
  * even though it resolves `undefined` at runtime.
  */
-import type { ClientInstance } from '../src/client.js';
+import type { ClientInstance, DeviceResponse } from '../src/client.js';
 import type { Device } from '../src/devices.js';
 import type { LightState } from '../src/encoding.js';
 import { SetPowerCommand, GetColorCommand } from '../src/commands/index.js';
@@ -54,27 +54,27 @@ export type _getColorAckOnlyIsVoid = Expect<Equal<Awaited<ReturnType<typeof getC
 const setPowerAuto = () => client.send(SetPowerCommand(true), device, { responseMode: 'auto' });
 export type _setPowerAutoIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerAuto>>, void>>;
 
-// --- Multi-device overload: an iterable fans out to settled results --------
+// --- Multi-device fan-out: sendEach yields device-tagged outcomes ----------
 
 declare const devices: Iterable<Device>;
 
-// Many devices + a 'response'-default Get → one settled LightState per device.
-const getColorMany = () => client.send(GetColorCommand(), devices);
-export type _getColorManyIsSettledLightState =
-  Expect<Equal<Awaited<ReturnType<typeof getColorMany>>, PromiseSettledResult<LightState>[]>>;
+// Many devices + a 'response'-default Get → one outcome carrying LightState per device.
+const getColorEach = () => client.sendEach(GetColorCommand(), devices);
+export type _getColorEachIsDeviceResponseLightState =
+  Expect<Equal<Awaited<ReturnType<typeof getColorEach>>, DeviceResponse<LightState>[]>>;
 
-// Many devices + an 'ack-only'-default Set → one settled void per device.
-const setPowerMany = () => client.send(SetPowerCommand(true), devices);
-export type _setPowerManyIsSettledVoid =
-  Expect<Equal<Awaited<ReturnType<typeof setPowerMany>>, PromiseSettledResult<void>[]>>;
+// Many devices + an 'ack-only'-default Set → one outcome carrying void per device.
+const setPowerEach = () => client.sendEach(SetPowerCommand(true), devices);
+export type _setPowerEachIsDeviceResponseVoid =
+  Expect<Equal<Awaited<ReturnType<typeof setPowerEach>>, DeviceResponse<void>[]>>;
 
 // Overrides apply per device too: force a response out of a Set command.
-const setPowerManyResponse = () => client.send(SetPowerCommand(true), devices, { responseMode: 'response' });
-export type _setPowerManyResponseIsSettledNumber =
-  Expect<Equal<Awaited<ReturnType<typeof setPowerManyResponse>>, PromiseSettledResult<number>[]>>;
+const setPowerEachResponse = () => client.sendEach(SetPowerCommand(true), devices, { responseMode: 'response' });
+export type _setPowerEachResponseIsDeviceResponseNumber =
+  Expect<Equal<Awaited<ReturnType<typeof setPowerEachResponse>>, DeviceResponse<number>[]>>;
 
-// unicast() returns void for both a single device and an iterable.
+// unicast()/unicastEach() both return void.
 const unicastOne = () => client.unicast(SetPowerCommand(true), device);
 export type _unicastOneIsVoid = Expect<Equal<ReturnType<typeof unicastOne>, void>>;
-const unicastMany = () => client.unicast(SetPowerCommand(true), devices);
-export type _unicastManyIsVoid = Expect<Equal<ReturnType<typeof unicastMany>, void>>;
+const unicastEach = () => client.unicastEach(SetPowerCommand(true), devices);
+export type _unicastEachIsVoid = Expect<Equal<ReturnType<typeof unicastEach>, void>>;
