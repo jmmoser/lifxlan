@@ -22,7 +22,7 @@ import {
   DisposedClientError,
 } from './errors.js';
 
-import type { RouterInstance, MessageHandler, Header } from './router.js';
+import type { RouterInstance, MessageHandler, Header, OutboundPacket } from './router.js';
 
 import type { Device } from './devices.js';
 import type { Decoder, Command } from './commands/index.js';
@@ -184,12 +184,30 @@ type ResolveMode<Override extends ResponseMode, Default extends ResponseMode> =
   Override extends 'auto' ? Default : Override;
 
 /**
- * Maps a resolved response mode to the awaited result of send(): an 'ack-only'
- * exchange resolves with no response data, every other mode resolves the
- * decoded payload. Keeping this aligned with the runtime prevents the static
+ * Maps a resolved response mode to the value send() resolves with: an
+ * 'ack-only' exchange resolves with no response data, every other mode resolves
+ * the decoded payload. Keeping this aligned with the runtime prevents the static
  * type from promising a payload that ack-only calls never deliver.
  */
-type ModeReturn<T, Mode extends ResponseMode> = Mode extends 'ack-only' ? Promise<void> : Promise<T>;
+type ModeResult<T, Mode extends ResponseMode> = Mode extends 'ack-only' ? void : T;
+
+type ModeReturn<T, Mode extends ResponseMode> = Promise<ModeResult<T, Mode>>;
+
+type AckMode = 'ack-only' | 'response' | 'both';
+
+/**
+ * Resolves the concrete ack mode for a call at runtime: an explicit, non-'auto'
+ * override wins; otherwise the command's own default mode is used (falling back
+ * to 'response'). Mirrors the {@link ResolveMode} type-level resolution.
+ */
+function resolveAckMode(defaultResponseMode: ResponseMode | undefined, requestedMode: ResponseMode | undefined): AckMode {
+  if (!requestedMode || requestedMode === 'auto') {
+    return defaultResponseMode != null && defaultResponseMode !== 'auto'
+      ? defaultResponseMode
+      : 'response';
+  }
+  return requestedMode;
+}
 
 export interface SendOptions<A extends ResponseMode = ResponseMode> {
   /**
@@ -219,13 +237,38 @@ export interface ClientInstance {
   dispose(): void;
   broadcast<T>(command: Command<T>): void;
   unicast<T>(command: Command<T>, device: Device): void;
-  
+
+  /**
+   * Send a command to many devices without expecting responses. The whole batch
+   * of datagrams is flushed through {@link RouterInstance.sendMany}, so on
+   * runtimes wired up with a multi-packet send (e.g. Bun's `socket.sendMany`)
+   * every packet leaves in a single syscall. Accepts any iterable of devices,
+   * including a group's `devices` array.
+   */
+  unicastMany<T>(command: Command<T>, devices: Iterable<Device>): void;
+
   send<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
     command: Command<T> & { defaultResponseMode?: Default },
     device: Device,
     options?: SendOptions<Override>,
   ): ModeReturn<T, ResolveMode<Override, Default>>;
-  
+
+  /**
+   * Send a command to many devices and await all of their responses. The
+   * outbound datagrams are flushed together through
+   * {@link RouterInstance.sendMany} (one syscall on runtimes that support it),
+   * then every response is awaited independently.
+   *
+   * Resolves with a {@link PromiseSettledResult} per device, in the same order
+   * the devices were iterated, so a single unreachable device never rejects the
+   * whole batch. An optional `signal` aborts every outstanding request.
+   */
+  sendMany<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
+    command: Command<T> & { defaultResponseMode?: Default },
+    devices: Iterable<Device>,
+    options?: SendOptions<Override>,
+  ): Promise<PromiseSettledResult<ModeResult<T, ResolveMode<Override, Default>>>[]>;
+
   onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
 
@@ -259,6 +302,34 @@ export function Client(options: ClientOptions): ClientInstance {
   const offsetRef = { current: 0 };
 
   let disposed = false;
+
+  /**
+   * Encodes a command targeted at a single device and advances that device's
+   * sequence counter. Shared by the single- and multi-device send paths so the
+   * framing and sequence bookkeeping stay identical.
+   */
+  function encodeForDevice<T>(
+    command: Command<T>,
+    device: Device,
+    resRequired: boolean,
+    ackRequired: boolean,
+  ): { bytes: Uint8Array; sequence: number } {
+    const sequence = device.sequence;
+    device.sequence = incrementSequence(sequence);
+
+    const bytes = encode(
+      false,
+      source,
+      device.target,
+      resRequired,
+      ackRequired,
+      sequence,
+      command.type,
+      command.payload,
+    );
+
+    return { bytes, sequence };
+  }
 
   const client: ClientInstance = {
     /**
@@ -331,21 +402,29 @@ export function Client(options: ClientOptions): ClientInstance {
      */
     unicast<T>(command: Command<T>, device: Device) {
       if (disposed) throw new DisposedClientError(source);
-      
-      const bytes = encode(
-        false,
-        source,
-        device.target,
-        false,
-        false,
-        device.sequence,
-        command.type,
-        command.payload,
-      );
+
+      const { bytes } = encodeForDevice(command, device, false, false);
 
       router.send(bytes, device.port, device.address, device.serialNumber);
+    },
+    /**
+     * Send a command to many devices without expecting responses.
+     */
+    unicastMany<T>(command: Command<T>, devices: Iterable<Device>) {
+      if (disposed) throw new DisposedClientError(source);
 
-      device.sequence = incrementSequence(device.sequence);
+      const packets: OutboundPacket[] = [];
+      for (const device of devices) {
+        const { bytes } = encodeForDevice(command, device, false, false);
+        packets.push({
+          message: bytes,
+          port: device.port,
+          address: device.address,
+          serialNumber: device.serialNumber,
+        });
+      }
+
+      router.sendMany(packets);
     },
     /**
      * Send a command to a device with configurable acknowledgment behavior.
@@ -356,51 +435,55 @@ export function Client(options: ClientOptions): ClientInstance {
       options?: SendOptions<Override>,
     ): ModeReturn<T, ResolveMode<Override, Default>> {
       if (disposed) throw new DisposedClientError(source);
-      
+
       // Determine response mode: an explicit, non-'auto' override wins;
       // otherwise fall back to the command's default mode.
-      const requestedMode = options?.responseMode;
-      const ackMode: 'ack-only' | 'response' | 'both' =
-        !requestedMode || requestedMode === 'auto'
-          ? command.defaultResponseMode ?? 'response'
-          : requestedMode;
+      const ackMode = resolveAckMode(command.defaultResponseMode, options?.responseMode);
+      const resRequired = ackMode === 'response' || ackMode === 'both';
+      const ackRequired = ackMode === 'ack-only' || ackMode === 'both';
 
-      // Determine protocol flags based on response mode
-      let resRequired = false;
-      let ackRequired = false;
-      
-      switch (ackMode) {
-        case 'ack-only':
-          ackRequired = true;
-          break;
-        case 'response':
-          resRequired = true;
-          break;
-        case 'both':
-          resRequired = true;
-          ackRequired = true;
-          break;
-      }
-      
-      const sequence = device.sequence;
-      device.sequence = incrementSequence(sequence);
-
-      const bytes = encode(
-        false,
-        source,
-        device.target,
-        resRequired,
-        ackRequired,
-        sequence,
-        command.type,
-        command.payload,
-      );
+      const { bytes, sequence } = encodeForDevice(command, device, resRequired, ackRequired);
 
       const promise = registerHandler(ackMode, device.serialNumber, sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal);
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 
       return promise as ModeReturn<T, ResolveMode<Override, Default>>;
+    },
+    /**
+     * Send a command to many devices and await all of their responses.
+     */
+    sendMany<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
+      command: Command<T> & { defaultResponseMode?: Default },
+      devices: Iterable<Device>,
+      options?: SendOptions<Override>,
+    ): Promise<PromiseSettledResult<ModeResult<T, ResolveMode<Override, Default>>>[]> {
+      if (disposed) throw new DisposedClientError(source);
+
+      const ackMode = resolveAckMode(command.defaultResponseMode, options?.responseMode);
+      const resRequired = ackMode === 'response' || ackMode === 'both';
+      const ackRequired = ackMode === 'ack-only' || ackMode === 'both';
+
+      // Register every handler and encode every packet before flushing so the
+      // batch leaves together and no response can race ahead of its handler.
+      const packets: OutboundPacket[] = [];
+      const promises: Promise<T | void>[] = [];
+      for (const device of devices) {
+        const { bytes, sequence } = encodeForDevice(command, device, resRequired, ackRequired);
+        promises.push(
+          registerHandler(ackMode, device.serialNumber, sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal),
+        );
+        packets.push({
+          message: bytes,
+          port: device.port,
+          address: device.address,
+          serialNumber: device.serialNumber,
+        });
+      }
+
+      router.sendMany(packets);
+
+      return Promise.allSettled(promises) as Promise<PromiseSettledResult<ModeResult<T, ResolveMode<Override, Default>>>[]>;
     },
     onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
       if (options.onMessage) {

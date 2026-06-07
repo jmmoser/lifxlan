@@ -767,4 +767,157 @@ describe('client', () => {
       client.dispose();
     });
   });
+
+  test('unicastMany fans out to every device and advances each sequence', () => {
+    const targets: string[] = [];
+    const client = Client({
+      router: Router({
+        onSend() {
+          throw new Error('onSend should not be used when onSendMany is wired up');
+        },
+        onSendMany(packets) {
+          for (const packet of packets) {
+            const header = decodeHeader(packet.message);
+            assert.equal(header.source, client.source);
+            assert.equal(header.res_required, false);
+            assert.equal(header.ack_required, false);
+            targets.push(packet.serialNumber!);
+          }
+        },
+      }),
+    });
+
+    const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
+    const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
+
+    client.unicastMany(SetPowerCommand(true), [deviceA, deviceB]);
+
+    assert.deepEqual(targets, ['aaaaaaaaaaaa', 'bbbbbbbbbbbb']);
+    assert.equal(deviceA.sequence, 1);
+    assert.equal(deviceB.sequence, 1);
+  });
+
+  test('sendMany resolves a settled result per device in order', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() { throw new Error('onSend should not be used when onSendMany is wired up'); },
+        onSendMany(packets) {
+          for (const packet of packets) {
+            const header = decodeHeader(packet.message);
+            const payload = new Uint8Array(2);
+            new DataView(payload.buffer).setUint16(0, 65535, true);
+            client.router.receive(
+              encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+            );
+          }
+        },
+      }),
+    });
+
+    const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
+    const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
+
+    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB]);
+
+    assert.equal(results.length, 2);
+    assert.equal(results[0]!.status, 'fulfilled');
+    assert.equal(results[1]!.status, 'fulfilled');
+    assert.equal((results[0] as PromiseFulfilledResult<number>).value, 0xFFFF);
+    assert.equal((results[1] as PromiseFulfilledResult<number>).value, 0xFFFF);
+  });
+
+  test('sendMany isolates failures so one unreachable device does not reject the batch', async () => {
+    const client = Client({
+      defaultTimeoutMs: 50,
+      router: Router({
+        onSend() { throw new Error('onSend should not be used when onSendMany is wired up'); },
+        onSendMany(packets) {
+          // Only the first device answers; the second times out.
+          const packet = packets[0]!;
+          const header = decodeHeader(packet.message);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+          );
+        },
+      }),
+    });
+
+    const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
+    const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
+
+    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB]);
+
+    assert.equal(results[0]!.status, 'fulfilled');
+    assert.equal(results[1]!.status, 'rejected');
+  });
+
+  test('sendMany honors ack-only response mode', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() { throw new Error('onSend should not be used when onSendMany is wired up'); },
+        onSendMany(packets) {
+          for (const packet of packets) {
+            const header = decodeHeader(packet.message);
+            assert.equal(header.ack_required, true);
+            assert.equal(header.res_required, false);
+            client.router.receive(
+              encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.Acknowledgement),
+            );
+          }
+        },
+      }),
+    });
+
+    const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
+    const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
+
+    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB], { responseMode: 'ack-only' });
+
+    assert.equal(results[0]!.status, 'fulfilled');
+    assert.equal(results[1]!.status, 'fulfilled');
+    assert.equal((results[0] as PromiseFulfilledResult<void>).value, undefined);
+  });
+
+  test('sendMany without onSendMany falls back to per-packet send', async () => {
+    let sendCount = 0;
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          sendCount += 1;
+          const header = decodeHeader(message);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+          );
+        },
+      }),
+    });
+
+    const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
+    const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
+
+    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB]);
+
+    assert.equal(sendCount, 2);
+    assert.equal(results[0]!.status, 'fulfilled');
+    assert.equal(results[1]!.status, 'fulfilled');
+  });
+
+  test('unicastMany and sendMany throw once the client is disposed', () => {
+    const client = Client({
+      router: Router({ onSend() {}, onSendMany() {} }),
+    });
+    const device = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
+
+    client.dispose();
+
+    assert.throws(() => client.unicastMany(SetPowerCommand(true), [device]), /disposed/i);
+    assert.throws(() => client.sendMany(GetPowerCommand(), [device]), /disposed/i);
+  });
 });

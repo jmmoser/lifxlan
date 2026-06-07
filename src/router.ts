@@ -15,8 +15,30 @@ const MAX_SOURCE = 0xFFFFFFFF;
 /** 0 and 1 are reserved */
 const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 
+/**
+ * A single outbound UDP datagram destined for one device (or the broadcast
+ * address). A batch of these is handed to {@link RouterInstance.sendMany} so a
+ * runtime that supports sending multiple packets in one syscall (e.g. Bun's
+ * `socket.sendMany`) can do so.
+ */
+export interface OutboundPacket {
+  message: Uint8Array;
+  port: number;
+  address: string;
+  serialNumber?: string;
+}
+
 export interface RouterOptions {
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
+  /**
+   * Optional batch send. When provided, {@link RouterInstance.sendMany} hands
+   * the whole batch to this callback so runtimes with a multi-packet send API
+   * (such as Bun's `socket.sendMany`) can flush every datagram in a single
+   * syscall. When omitted, `sendMany` falls back to invoking {@link onSend}
+   * once per packet, so callers can rely on batch sending regardless of
+   * runtime support.
+   */
+  onSendMany?: (packets: readonly OutboundPacket[]) => void;
   onMessage?: MessageHandler;
   /**
    * Called when an inbound message cannot be decoded (e.g. truncated or
@@ -32,6 +54,12 @@ export interface RouterInstance {
   register(source: number, handler: MessageHandler): void;
   deregister(source: number, handler: MessageHandler): void;
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+  /**
+   * Send a batch of datagrams. Uses {@link RouterOptions.onSendMany} when one
+   * was supplied, otherwise sends each packet individually via
+   * {@link RouterOptions.onSend}. An empty batch is a no-op.
+   */
+  sendMany(packets: readonly OutboundPacket[]): void;
   receive(message: Uint8Array): {
     header: Header;
     payload: Uint8Array;
@@ -94,6 +122,19 @@ export function Router(options: RouterOptions): RouterInstance {
     },
     send(message: Uint8Array, port: number, address: string, serialNumber?: string) {
       options.onSend(message, port, address, serialNumber);
+    },
+    sendMany(packets: readonly OutboundPacket[]) {
+      if (packets.length === 0) {
+        return;
+      }
+      if (options.onSendMany) {
+        options.onSendMany(packets);
+        return;
+      }
+      for (let i = 0; i < packets.length; i += 1) {
+        const packet = packets[i]!;
+        options.onSend(packet.message, packet.port, packet.address, packet.serialNumber);
+      }
     },
     receive(message: Uint8Array) {
       let header: Header;

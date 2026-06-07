@@ -418,4 +418,55 @@ describe('router', () => {
       assert.ok(error.message.includes('No more source IDs available'));
     }
   });
+
+  test('sendMany uses onSendMany when provided', () => {
+    let batch: readonly { message: Uint8Array; port: number; address: string; serialNumber?: string }[] | undefined;
+    let individualSends = 0;
+    const router = Router({
+      onSend() { individualSends += 1; },
+      onSendMany(packets) { batch = packets; },
+    });
+
+    const packets = [
+      { message: new Uint8Array([1]), port: 56700, address: '1.1.1.1', serialNumber: 'a' },
+      { message: new Uint8Array([2]), port: 56700, address: '2.2.2.2', serialNumber: 'b' },
+    ];
+    router.sendMany(packets);
+
+    assert.equal(individualSends, 0);
+    assert.deepEqual(batch, packets);
+  });
+
+  test('sendMany falls back to onSend per packet when onSendMany is absent', () => {
+    const sent: { port: number; address: string; serialNumber: string | undefined }[] = [];
+    const router = Router({
+      onSend(_message, port, address, serialNumber) {
+        sent.push({ port, address, serialNumber });
+      },
+    });
+
+    router.sendMany([
+      { message: new Uint8Array([1]), port: 56700, address: '1.1.1.1', serialNumber: 'a' },
+      { message: new Uint8Array([2]), port: 56701, address: '2.2.2.2' },
+    ]);
+
+    assert.deepEqual(sent, [
+      { port: 56700, address: '1.1.1.1', serialNumber: 'a' },
+      { port: 56701, address: '2.2.2.2', serialNumber: undefined },
+    ]);
+  });
+
+  test('sendMany with empty batch is a no-op', () => {
+    let onSendCalls = 0;
+    let onSendManyCalls = 0;
+    const router = Router({
+      onSend() { onSendCalls += 1; },
+      onSendMany() { onSendManyCalls += 1; },
+    });
+
+    router.sendMany([]);
+
+    assert.equal(onSendCalls, 0);
+    assert.equal(onSendManyCalls, 0);
+  });
 });

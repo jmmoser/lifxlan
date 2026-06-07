@@ -95,9 +95,12 @@ await new Promise(resolve => setTimeout(resolve, 3000));
 // Stop scanning
 clearInterval(scanInterval);
 
-// Turn on all discovered lights
-for (const device of devices) {
-  await client.send(SetPowerCommand(true), device);
+// Turn on all discovered lights in one batch and await every ack
+const results = await client.sendMany(SetPowerCommand(true), devices);
+for (const result of results) {
+  if (result.status === 'rejected') {
+    console.warn('a device did not respond', result.reason);
+  }
 }
 ```
 
@@ -171,6 +174,60 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 **Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
 
 **Type Safety:** The return type automatically changes based on your response mode choice - no type assertions needed!
+
+### Sending to Many Devices at Once
+
+When you want to send the same command to a whole group of devices, use
+`client.unicastMany()` (fire-and-forget) or `client.sendMany()` (await every
+response). Both accept any iterable of devices — the `Devices` registry, a
+group's `devices` array, or a plain array:
+
+```javascript
+// Fire-and-forget to every device in a group
+client.unicastMany(SetPowerCommand(true), group.devices);
+
+// Await one settled result per device, in iteration order. A single
+// unreachable device produces a 'rejected' result instead of rejecting
+// the whole batch, so the rest still resolve.
+const results = await client.sendMany(GetColorCommand(), devices);
+results.forEach((result, i) => {
+  if (result.status === 'fulfilled') {
+    console.log(`device ${i} color`, result.value);
+  }
+});
+```
+
+Internally both methods encode every packet up front and hand the whole batch
+to the router's `sendMany`. If you wire up an `onSendMany` (see below), every
+datagram is flushed in a single syscall on runtimes that support it (such as
+Bun); otherwise the router transparently falls back to sending each packet
+individually, so the same code works everywhere.
+
+#### Batch sending with `onSendMany` (Bun)
+
+Bun's UDP sockets expose `socket.sendMany()`, which sends many packets in one
+syscall. Provide an `onSendMany` to the router to take advantage of it — it is
+entirely optional, and `unicastMany`/`sendMany` work without it:
+
+```javascript
+const socket = await Bun.udpSocket({});
+
+const router = Router({
+  // Required: used by send(), unicast(), broadcast(), and as the fallback
+  // for sendMany() when onSendMany is not provided.
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+  // Optional: flush a whole batch of datagrams in a single syscall.
+  onSendMany(packets) {
+    const flat = [];
+    for (const packet of packets) {
+      flat.push(packet.message, packet.port, packet.address);
+    }
+    socket.sendMany(flat);
+  },
+});
+```
 
 ## Examples by Runtime
 
