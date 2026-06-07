@@ -53,3 +53,28 @@ export type _getColorAckOnlyIsVoid = Expect<Equal<Awaited<ReturnType<typeof getC
 // Explicit 'auto' behaves exactly like omitting options (uses the default).
 const setPowerAuto = () => client.send(SetPowerCommand(true), device, { responseMode: 'auto' });
 export type _setPowerAutoIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerAuto>>, void>>;
+
+// --- Multi-device overload: an iterable fans out to settled results --------
+
+declare const devices: Iterable<Device>;
+
+// Many devices + a 'response'-default Get → one settled LightState per device.
+const getColorMany = () => client.send(GetColorCommand(), devices);
+export type _getColorManyIsSettledLightState =
+  Expect<Equal<Awaited<ReturnType<typeof getColorMany>>, PromiseSettledResult<LightState>[]>>;
+
+// Many devices + an 'ack-only'-default Set → one settled void per device.
+const setPowerMany = () => client.send(SetPowerCommand(true), devices);
+export type _setPowerManyIsSettledVoid =
+  Expect<Equal<Awaited<ReturnType<typeof setPowerMany>>, PromiseSettledResult<void>[]>>;
+
+// Overrides apply per device too: force a response out of a Set command.
+const setPowerManyResponse = () => client.send(SetPowerCommand(true), devices, { responseMode: 'response' });
+export type _setPowerManyResponseIsSettledNumber =
+  Expect<Equal<Awaited<ReturnType<typeof setPowerManyResponse>>, PromiseSettledResult<number>[]>>;
+
+// unicast() returns void for both a single device and an iterable.
+const unicastOne = () => client.unicast(SetPowerCommand(true), device);
+export type _unicastOneIsVoid = Expect<Equal<ReturnType<typeof unicastOne>, void>>;
+const unicastMany = () => client.unicast(SetPowerCommand(true), devices);
+export type _unicastManyIsVoid = Expect<Equal<ReturnType<typeof unicastMany>, void>>;

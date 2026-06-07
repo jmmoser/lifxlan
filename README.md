@@ -96,7 +96,7 @@ await new Promise(resolve => setTimeout(resolve, 3000));
 clearInterval(scanInterval);
 
 // Turn on all discovered lights in one batch and await every ack
-const results = await client.sendMany(SetPowerCommand(true), devices);
+const results = await client.send(SetPowerCommand(true), devices);
 for (const result of results) {
   if (result.status === 'rejected') {
     console.warn('a device did not respond', result.reason);
@@ -171,25 +171,27 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 - **Get commands** (GetColor, GetPower, etc.) default to `'response'`
 - **Set commands** (SetColor, SetPower, etc.) default to `'ack-only'`
 
-**Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
-
 **Type Safety:** The return type automatically changes based on your response mode choice - no type assertions needed!
 
-### Sending to Many Devices at Once
+### Sending to One or Many Devices
 
-When you want to send the same command to a whole group of devices, use
-`client.unicastMany()` (fire-and-forget) or `client.sendMany()` (await every
-response). Both accept any iterable of devices — the `Devices` registry, a
-group's `devices` array, or a plain array:
+Both `client.unicast()` (fire-and-forget) and `client.send()` (await responses)
+accept either a single device or any iterable of devices — the `Devices`
+registry, a group's `devices` array, or a plain array. Passing many devices
+fans the command out as a batch; the return type follows the argument:
 
 ```javascript
-// Fire-and-forget to every device in a group
-client.unicastMany(SetPowerCommand(true), group.devices);
+// Single device — resolves with the decoded response (or void for ack-only)
+const color = await client.send(GetColorCommand(), device);
+client.unicast(SetPowerCommand(true), device); // fire-and-forget
 
-// Await one settled result per device, in iteration order. A single
-// unreachable device produces a 'rejected' result instead of rejecting
-// the whole batch, so the rest still resolve.
-const results = await client.sendMany(GetColorCommand(), devices);
+// Many devices — fire-and-forget fan-out
+client.unicast(SetPowerCommand(true), group.devices);
+
+// Many devices — one settled result per device, in iteration order. A single
+// unreachable device produces a 'rejected' result instead of rejecting the
+// whole batch, so the rest still resolve.
+const results = await client.send(GetColorCommand(), devices);
 results.forEach((result, i) => {
   if (result.status === 'fulfilled') {
     console.log(`device ${i} color`, result.value);
@@ -197,17 +199,18 @@ results.forEach((result, i) => {
 });
 ```
 
-Internally both methods encode every packet up front and hand the whole batch
-to the router's `sendMany`. If you wire up an `onSendMany` (see below), every
-datagram is flushed in a single syscall on runtimes that support it (such as
-Bun); otherwise the router transparently falls back to sending each packet
-individually, so the same code works everywhere.
+When fanning out, every packet is encoded up front and handed to the router as
+a single batch. If you wire up an `onSendMany` (see below), the whole batch is
+flushed in one syscall on runtimes that support it (such as Bun); otherwise the
+router transparently falls back to sending each packet individually, so the
+same code works everywhere.
 
 #### Batch sending with `onSendMany` (Bun)
 
 Bun's UDP sockets expose `socket.sendMany()`, which sends many packets in one
 syscall. Provide an `onSendMany` to the router to take advantage of it — it is
-entirely optional, and `unicastMany`/`sendMany` work without it:
+entirely optional, and the multi-device forms of `send()`/`unicast()` work
+without it:
 
 ```javascript
 const socket = await Bun.udpSocket({});

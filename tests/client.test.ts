@@ -790,7 +790,7 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    client.unicastMany(SetPowerCommand(true), [deviceA, deviceB]);
+    client.unicast(SetPowerCommand(true), [deviceA, deviceB]);
 
     assert.deepEqual(targets, ['aaaaaaaaaaaa', 'bbbbbbbbbbbb']);
     assert.equal(deviceA.sequence, 1);
@@ -818,7 +818,7 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB]);
+    const results = await client.send(GetPowerCommand(), [deviceA, deviceB]);
 
     assert.equal(results.length, 2);
     assert.equal(results[0]!.status, 'fulfilled');
@@ -848,7 +848,7 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB]);
+    const results = await client.send(GetPowerCommand(), [deviceA, deviceB]);
 
     assert.equal(results[0]!.status, 'fulfilled');
     assert.equal(results[1]!.status, 'rejected');
@@ -875,7 +875,7 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB], { responseMode: 'ack-only' });
+    const results = await client.send(GetPowerCommand(), [deviceA, deviceB], { responseMode: 'ack-only' });
 
     assert.equal(results[0]!.status, 'fulfilled');
     assert.equal(results[1]!.status, 'fulfilled');
@@ -902,7 +902,7 @@ describe('client', () => {
     const deviceA = Device({ serialNumber: 'aaaaaaaaaaaa', port: 1, address: '1.1.1.1' });
     const deviceB = Device({ serialNumber: 'bbbbbbbbbbbb', port: 2, address: '2.2.2.2' });
 
-    const results = await client.sendMany(GetPowerCommand(), [deviceA, deviceB]);
+    const results = await client.send(GetPowerCommand(), [deviceA, deviceB]);
 
     assert.equal(sendCount, 2);
     assert.equal(results[0]!.status, 'fulfilled');
@@ -917,7 +917,7 @@ describe('client', () => {
 
     client.dispose();
 
-    assert.throws(() => client.unicastMany(SetPowerCommand(true), [device]), /disposed/i);
-    assert.throws(() => client.sendMany(GetPowerCommand(), [device]), /disposed/i);
+    assert.throws(() => client.unicast(SetPowerCommand(true), [device]), /disposed/i);
+    assert.throws(() => client.send(GetPowerCommand(), [device]), /disposed/i);
   });
 });
