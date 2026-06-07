@@ -162,7 +162,7 @@ console.log(response.hue);    // response is typed as LightState
 - `'auto'` - Use the command's default behavior (recommended) → `Promise<T>`
 - `'ack-only'` - Wait for acknowledgment packet (confirms receipt) → `Promise<void>`
 - `'response'` - Wait for response data packet (Get commands) → `Promise<T>`
-- `'both'` - Wait for both ack and response (maximum reliability) → `Promise<T>`
+- `'both'` - Wait for both ack and response → `Promise<T>`
 
 **Command Defaults:**
 - **Get commands** (GetColor, GetPower, etc.) default to `'response'`
