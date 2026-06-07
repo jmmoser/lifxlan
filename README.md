@@ -129,7 +129,7 @@ The library uses three main components:
 2. **Client** - High-level interface for sending commands with timeouts and response correlation  
 3. **Devices** - Registry that tracks discovered LIFX devices on your network
 
-Each `Client` is assigned a unique **source** id by the `Router` when it is created, and it tracks a per-device **sequence** number internally. Together these correlate every response with the request that triggered it, so multiple clients can share a single router and socket without their messages getting crossed. Sequence numbers are managed for you — a `Device` is just a network descriptor (`address`, `port`, `target`, `serialNumber`), not something you mutate.
+Each `Client` gets a unique **source** id from the `Router` and tracks a per-device **sequence** number internally; together they correlate responses with their requests, so many clients can share one router and socket. Sequence is managed for you — a `Device` is just a network descriptor.
 
 ### Bring Your Own Socket
 

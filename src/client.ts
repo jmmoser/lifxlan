@@ -287,9 +287,7 @@ export function Client(options: ClientOptions): ClientInstance {
     }
   }
 
-  const source = options.source !== undefined
-    ? router.register(onMessage, options.source)
-    : router.register(onMessage);
+  const source = router.register(onMessage, options.source);
 
   const client: ClientInstance = {
     /**
