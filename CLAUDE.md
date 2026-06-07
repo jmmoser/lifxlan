@@ -17,7 +17,7 @@ This is a TypeScript library for the LIFX LAN protocol that works across Node.js
 
 - **Router** (`src/router.ts`): Message routing system that handles source assignment and message forwarding between clients and the network. Routes response messages back to the originating client using source IDs.
 
-- **Client** (`src/client.ts`): High-level interface for device communication. Handles message sending/receiving with timeout and retry logic. Supports both acknowledged and unacknowledged message patterns.
+- **Client** (`src/client.ts`): High-level interface for device communication. Handles message sending/receiving with timeout handling and response correlation. Tracks a per-device sequence number internally. Supports both acknowledged and unacknowledged message patterns.
 
 - **Devices** (`src/devices.ts`): Device registry that tracks discovered LIFX devices on the network, maintaining their network addresses and connection state.
 
