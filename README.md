@@ -21,7 +21,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 npm install lifxlan
 ```
 
-### Turn a light on (simplest example)
+### Turn a light on
 
 ```javascript
 import dgram from 'node:dgram';
@@ -152,10 +152,10 @@ const result = await client.send(command, device, { responseMode: 'both' });   /
 
 // With abort signal
 const response = await client.send(GetColorCommand(), device, { 
-  responseMode: 'both',     // TypeScript knows this returns Promise<LightState>
+  responseMode: 'both',     // returns Promise<LightState>
   signal: abortController.signal 
 });
-console.log(response.hue);    // ✅ TypeScript knows response is LightState
+console.log(response.hue);    // response is typed as LightState
 ```
 
 **Response Modes:**
@@ -170,7 +170,7 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 
 **Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
 
-**Type Safety:** The return type automatically changes based on your response mode choice - no type assertions needed!
+**Type Safety:** The return type changes based on your response mode choice, so no type assertions are needed.
 
 ## Examples by Runtime
 
@@ -341,9 +341,9 @@ while (true) {
 ```javascript
 // High-reliability mode: wait for both ack and response (typed return)
 const state = await client.send(SetColorCommand(120, 100, 100, 3500, 1000), device, { 
-  responseMode: 'both'     // TypeScript knows this returns Promise<LightState>
+  responseMode: 'both'     // returns Promise<LightState>
 });
-console.log('Confirmed color:', state.hue); // ✅ Fully typed
+console.log('Confirmed color:', state.hue);
 
 // Fast mode: fire-and-forget for animations (no promise)
 for (let i = 0; i < 360; i += 10) {
@@ -353,14 +353,14 @@ for (let i = 0; i < 360; i += 10) {
 
 // Confirmation only (void return)
 await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
-  responseMode: 'ack-only' // TypeScript knows this returns Promise<void>
+  responseMode: 'ack-only' // returns Promise<void>
 });
 
 // Get response data (typed return)
 const currentState = await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
-  responseMode: 'response' // TypeScript knows this returns Promise<LightState>
+  responseMode: 'response' // returns Promise<LightState>
 });
-console.log('Light is now:', currentState.hue); // ✅ Fully typed, no assertions needed
+console.log('Light is now:', currentState.hue);
 ```
 
 ## Advanced Examples
