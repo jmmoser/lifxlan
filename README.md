@@ -210,6 +210,44 @@ flushed in one syscall on runtimes that support it (such as Bun); otherwise the
 router transparently falls back to sending each packet individually, so the
 same code works everywhere.
 
+#### Different commands to different devices (`sendBatch` / `unicastBatch`)
+
+`sendEach`/`unicastEach` fan *one* command across many devices. When you need
+*different* commands per device in the same flush, use `sendBatch` (awaited) or
+`unicastBatch` (fire-and-forget). Each entry pairs a `command` with its `device`
+(and optional per-entry `options`), and the whole batch leaves through the same
+one-syscall `sendMany` path.
+
+`sendBatch` preserves types per entry: passed an inline array literal, the
+result is a **tuple** where each slot keeps its own decoded type:
+
+```javascript
+// Result type: [DeviceResponse<LightState>, DeviceResponse<void>]
+const [color, powered] = await client.sendBatch([
+  { command: GetColorCommand(), device: d1 },              // 'response' default → LightState
+  { command: SetPowerCommand(true), device: d2 },          // 'ack-only' default → void
+]);
+if (color.ok) console.log(color.device.serialNumber, color.value);
+
+// Per-entry options resolve independently (force a response out of a Set):
+await client.sendBatch([
+  { command: SetColorCommand(...), device: d1, options: { responseMode: 'response' } },
+  { command: SetPowerCommand(true), device: d2 },
+]);
+
+// Fire-and-forget heterogeneous batch:
+client.unicastBatch([
+  { command: SetPowerCommand(true), device: d1 },
+  { command: SetColorCommand(...), device: d2 },
+]);
+```
+
+Like `sendEach`, `sendBatch` resolves a `DeviceResponse` per entry in order and
+never rejects for a single failed entry. A dynamically-built array (e.g. from
+`.map`) still type-checks — it degrades to a homogeneous `DeviceResponse<...>[]`
+rather than a precise tuple. (See `bun run bench:batch` for a batched-vs-
+unbatched throughput comparison against an emulated light.)
+
 #### Batch sending with `onSendMany` (Bun)
 
 Bun's UDP sockets expose `socket.sendMany()`, which sends many packets in one

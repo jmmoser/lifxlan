@@ -243,6 +243,55 @@ export type DeviceResponse<T> =
   | { device: Device; ok: true; value: T }
   | { device: Device; ok: false; error: unknown };
 
+/**
+ * One leg of a heterogeneous {@link ClientInstance.sendBatch}: a command paired
+ * with the device it targets and optional per-entry {@link SendOptions}. The
+ * generics are inferred per entry so a `const` array literal preserves each
+ * command's own decoded result type and response mode (see `sendBatch`).
+ */
+export interface SendBatchEntry<
+  T = unknown,
+  Default extends ResponseMode = ResponseMode,
+  Override extends ResponseMode = ResponseMode,
+> {
+  command: Command<T> & { defaultResponseMode?: Default };
+  device: Device;
+  options?: SendOptions<Override>;
+}
+
+/**
+ * One leg of a fire-and-forget {@link ClientInstance.unicastBatch}: a command
+ * and the device it targets. No options, because fire-and-forget never awaits a
+ * response.
+ */
+export interface UnicastBatchEntry<T = unknown> {
+  command: Command<T>;
+  device: Device;
+}
+
+/**
+ * Extracts the resolved response-mode override from an entry's options, falling
+ * back to 'auto' when no `responseMode` was supplied — mirroring how `send`
+ * resolves `options.responseMode` against the command default.
+ */
+type OverrideOf<Opt> = Opt extends { responseMode: infer R extends ResponseMode } ? R : 'auto';
+
+/**
+ * Maps a `const` tuple of {@link SendBatchEntry} to the tuple of
+ * {@link DeviceResponse} results, preserving each entry's own decoded type and
+ * its individually resolved response mode. A dynamically-built (non-tuple) array
+ * degrades to a homogeneous `DeviceResponse<...>[]` over the union of entry
+ * types — still correct, just less precise.
+ */
+type SendBatchResult<E extends readonly SendBatchEntry[]> = {
+  -readonly [K in keyof E]: E[K] extends {
+    command: Command<infer T> & { defaultResponseMode?: infer Default extends ResponseMode };
+    options?: infer Opt;
+  }
+    ? DeviceResponse<ModeResult<T, ResolveMode<OverrideOf<Opt>, Default>>>
+    : never;
+};
+
 export interface ClientInstance {
   readonly router: RouterInstance;
   readonly source: number;
@@ -291,6 +340,29 @@ export interface ClientInstance {
     devices: Iterable<Device>,
     options?: SendOptions<Override>,
   ): Promise<DeviceResponse<ModeResult<T, ResolveMode<Override, Default>>>[]>;
+
+  /**
+   * Fire-and-forget a heterogeneous batch — different commands to different
+   * devices — flushed together through {@link RouterInstance.sendMany} (one
+   * syscall on runtimes that support it). Each entry pairs a command with its
+   * target device; nothing is awaited. Use this over {@link unicastEach} when
+   * the commands differ per device.
+   */
+  unicastBatch(entries: readonly UnicastBatchEntry[]): void;
+
+  /**
+   * Send a heterogeneous batch — different commands to different devices — and
+   * await each leg's outcome. Every packet is encoded and registered before the
+   * batch is flushed through {@link RouterInstance.sendMany} (one syscall on
+   * runtimes that support it), then awaited independently.
+   *
+   * Resolves with a {@link DeviceResponse} per entry, in entry order, and NEVER
+   * rejects for a per-entry failure. Passed a `const` array literal, the result
+   * is a tuple that preserves each entry's own decoded type and response mode
+   * (e.g. `[DeviceResponse<LightState>, DeviceResponse<void>]`). A dynamically
+   * built array degrades to a homogeneous `DeviceResponse<...>[]`.
+   */
+  sendBatch<const E extends readonly SendBatchEntry[]>(entries: E): Promise<SendBatchResult<E>>;
 
   onMessage(header: Header, payload: Uint8Array, serialNumber: string): void;
 }
@@ -432,6 +504,51 @@ export function Client(options: ClientOptions): ClientInstance {
     return Promise.all(outcomes) as Promise<DeviceResponse<ModeResult<T, ResolveMode<Override, Default>>>[]>;
   }
 
+  function unicastBatch<const E extends readonly UnicastBatchEntry[]>(entries: E): void {
+    if (disposed) throw new DisposedClientError(source);
+
+    const packets: OutboundPacket[] = [];
+    for (const { command, device } of entries) {
+      const { bytes } = encodeForDevice(command, device, false, false);
+      packets.push({
+        message: bytes,
+        port: device.port,
+        address: device.address,
+        serialNumber: device.serialNumber,
+      });
+    }
+    router.sendMany(packets);
+  }
+
+  function sendBatch<const E extends readonly SendBatchEntry[]>(entries: E): Promise<SendBatchResult<E>> {
+    if (disposed) throw new DisposedClientError(source);
+
+    // Same register-all-then-flush discipline as sendEach, but each entry
+    // resolves its own response mode from its own command + options. Results are
+    // typed `unknown` internally and recovered per entry by SendBatchResult.
+    const packets: OutboundPacket[] = [];
+    const outcomes: Promise<DeviceResponse<unknown>>[] = [];
+    for (const { command, device, options } of entries) {
+      const ackMode = resolveAckMode(command.defaultResponseMode, options?.responseMode);
+      const resRequired = ackMode === 'response' || ackMode === 'both';
+      const ackRequired = ackMode === 'ack-only' || ackMode === 'both';
+      const { bytes, sequence } = encodeForDevice(command, device, resRequired, ackRequired);
+      outcomes.push(
+        registerHandler(ackMode, device.serialNumber, sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal)
+          .then((value): DeviceResponse<unknown> => ({ device, ok: true, value }))
+          .catch((error: unknown): DeviceResponse<unknown> => ({ device, ok: false, error })),
+      );
+      packets.push({
+        message: bytes,
+        port: device.port,
+        address: device.address,
+        serialNumber: device.serialNumber,
+      });
+    }
+    router.sendMany(packets);
+    return Promise.all(outcomes) as Promise<SendBatchResult<E>>;
+  }
+
   const client: ClientInstance = {
     /**
      * @readonly
@@ -500,8 +617,10 @@ export function Client(options: ClientOptions): ClientInstance {
     },
     unicast,
     unicastEach,
+    unicastBatch,
     send,
     sendEach,
+    sendBatch,
     onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
       if (options.onMessage) {
         options.onMessage(header, payload, serialNumber);

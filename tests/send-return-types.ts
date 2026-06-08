@@ -78,3 +78,42 @@ const unicastOne = () => client.unicast(SetPowerCommand(true), device);
 export type _unicastOneIsVoid = Expect<Equal<ReturnType<typeof unicastOne>, void>>;
 const unicastEach = () => client.unicastEach(SetPowerCommand(true), devices);
 export type _unicastEachIsVoid = Expect<Equal<ReturnType<typeof unicastEach>, void>>;
+
+// --- Heterogeneous batch: sendBatch preserves per-entry types as a tuple ----
+
+// An inline `const` array literal of mixed commands resolves to a TUPLE where
+// each slot keeps its own decoded type and resolved mode: GetColor → LightState,
+// SetPower (ack-only default) → void.
+const mixedBatch = () => client.sendBatch([
+  { command: GetColorCommand(), device },
+  { command: SetPowerCommand(true), device },
+] as const);
+export type _mixedBatchIsTypedTuple = Expect<Equal<
+  Awaited<ReturnType<typeof mixedBatch>>,
+  [DeviceResponse<LightState>, DeviceResponse<void>]
+>>;
+
+// Per-entry option overrides resolve independently: forcing 'response' on the
+// Set entry flips just that slot to the decoded payload (number).
+const mixedBatchOverride = () => client.sendBatch([
+  { command: GetColorCommand(), device },
+  { command: SetPowerCommand(true), device, options: { responseMode: 'response' } },
+] as const);
+export type _mixedBatchOverrideTuple = Expect<Equal<
+  Awaited<ReturnType<typeof mixedBatchOverride>>,
+  [DeviceResponse<LightState>, DeviceResponse<number>]
+>>;
+
+// A dynamically-built (non-tuple) homogeneous array degrades gracefully to a
+// correctly-typed array, NOT `unknown`.
+declare const deviceList: Device[];
+const dynamicBatch = () => client.sendBatch(deviceList.map((d) => ({ command: SetPowerCommand(true), device: d })));
+export type _dynamicBatchIsVoidArray =
+  Expect<Equal<Awaited<ReturnType<typeof dynamicBatch>>, DeviceResponse<void>[]>>;
+
+// unicastBatch is fire-and-forget → void.
+const unicastBatch = () => client.unicastBatch([
+  { command: SetPowerCommand(true), device },
+  { command: GetColorCommand(), device },
+]);
+export type _unicastBatchIsVoid = Expect<Equal<ReturnType<typeof unicastBatch>, void>>;
