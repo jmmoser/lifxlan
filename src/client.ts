@@ -100,6 +100,15 @@ function registerHandler<T>(
   }
 
   if (signal) {
+    if (signal.aborted) {
+      // The signal is already aborted, so the 'abort' event will never fire
+      // again. Reject immediately rather than registering a handler that would
+      // hang forever. This mirrors the live-abort path, which always rejects
+      // with an AbortError when the 'abort' event fires.
+      settled = true;
+      reject(new AbortError('device response'));
+      return promise;
+    }
     signal.addEventListener('abort', onAbort, { once: true });
   } else if (defaultTimeoutMs > 0) {
     const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');
