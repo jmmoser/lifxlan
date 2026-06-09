@@ -191,8 +191,6 @@ describe('client', () => {
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
       return error instanceof AbortError && error.message === 'device response was aborted';
     });
-
-    client.dispose();
   });
 
   test('timeout send', async () => {
