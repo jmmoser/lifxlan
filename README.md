@@ -225,6 +225,41 @@ setTimeout(() => {
 }, 1000);
 ```
 
+#### Batching sends with `sendMany` (Bun)
+
+Bun's `socket.sendMany()` can send multiple datagrams in a single syscall on
+supported operating systems. Buffer outgoing messages in `onSend` and flush them
+on a microtask to collapse every send issued in the same tick into one
+`sendMany`. Ordinary `send()`, `unicast()`, `broadcast()`, and `Promise.all`
+fan-outs then batch automatically, with no API changes:
+
+```javascript
+const socket = await Bun.udpSocket({});
+
+const queue = [];
+let scheduled = false;
+
+const router = Router({
+  onSend(message, port, address) {
+    queue.push(message, port, address);
+    if (!scheduled) {
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        const batch = queue.slice(); // copy before clearing
+        queue.length = 0;
+        socket.sendMany(batch);
+      });
+    }
+  },
+});
+```
+
+This replaces one syscall per packet with one per tick, reducing send-path
+overhead when pushing frequent updates to many devices (such as color
+animations across a group). Benchmark it against your own workload to decide
+whether it is worth wiring up.
+
 ### Deno
 
 ```javascript
