@@ -12,7 +12,7 @@
  * ack-only-default command was mistyped as resolving its decoder's payload
  * even though it resolves `undefined` at runtime.
  */
-import type { ClientInstance, DeviceResponse } from '../src/client.js';
+import type { ClientInstance } from '../src/client.js';
 import type { Device } from '../src/devices.js';
 import type { LightState } from '../src/encoding.js';
 import { SetPowerCommand, GetColorCommand } from '../src/commands/index.js';
@@ -53,67 +53,3 @@ export type _getColorAckOnlyIsVoid = Expect<Equal<Awaited<ReturnType<typeof getC
 // Explicit 'auto' behaves exactly like omitting options (uses the default).
 const setPowerAuto = () => client.send(SetPowerCommand(true), device, { responseMode: 'auto' });
 export type _setPowerAutoIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerAuto>>, void>>;
-
-// --- Multi-device fan-out: sendEach yields device-tagged outcomes ----------
-
-declare const devices: Iterable<Device>;
-
-// Many devices + a 'response'-default Get → one outcome carrying LightState per device.
-const getColorEach = () => client.sendEach(GetColorCommand(), devices);
-export type _getColorEachIsDeviceResponseLightState =
-  Expect<Equal<Awaited<ReturnType<typeof getColorEach>>, DeviceResponse<LightState>[]>>;
-
-// Many devices + an 'ack-only'-default Set → one outcome carrying void per device.
-const setPowerEach = () => client.sendEach(SetPowerCommand(true), devices);
-export type _setPowerEachIsDeviceResponseVoid =
-  Expect<Equal<Awaited<ReturnType<typeof setPowerEach>>, DeviceResponse<void>[]>>;
-
-// Overrides apply per device too: force a response out of a Set command.
-const setPowerEachResponse = () => client.sendEach(SetPowerCommand(true), devices, { responseMode: 'response' });
-export type _setPowerEachResponseIsDeviceResponseNumber =
-  Expect<Equal<Awaited<ReturnType<typeof setPowerEachResponse>>, DeviceResponse<number>[]>>;
-
-// unicast()/unicastEach() both return void.
-const unicastOne = () => client.unicast(SetPowerCommand(true), device);
-export type _unicastOneIsVoid = Expect<Equal<ReturnType<typeof unicastOne>, void>>;
-const unicastEach = () => client.unicastEach(SetPowerCommand(true), devices);
-export type _unicastEachIsVoid = Expect<Equal<ReturnType<typeof unicastEach>, void>>;
-
-// --- Heterogeneous batch: sendBatch preserves per-entry types as a tuple ----
-
-// An inline `const` array literal of mixed commands resolves to a TUPLE where
-// each slot keeps its own decoded type and resolved mode: GetColor → LightState,
-// SetPower (ack-only default) → void.
-const mixedBatch = () => client.sendBatch([
-  { command: GetColorCommand(), device },
-  { command: SetPowerCommand(true), device },
-] as const);
-export type _mixedBatchIsTypedTuple = Expect<Equal<
-  Awaited<ReturnType<typeof mixedBatch>>,
-  [DeviceResponse<LightState>, DeviceResponse<void>]
->>;
-
-// Per-entry option overrides resolve independently: forcing 'response' on the
-// Set entry flips just that slot to the decoded payload (number).
-const mixedBatchOverride = () => client.sendBatch([
-  { command: GetColorCommand(), device },
-  { command: SetPowerCommand(true), device, options: { responseMode: 'response' } },
-] as const);
-export type _mixedBatchOverrideTuple = Expect<Equal<
-  Awaited<ReturnType<typeof mixedBatchOverride>>,
-  [DeviceResponse<LightState>, DeviceResponse<number>]
->>;
-
-// A dynamically-built (non-tuple) homogeneous array degrades gracefully to a
-// correctly-typed array, NOT `unknown`.
-declare const deviceList: Device[];
-const dynamicBatch = () => client.sendBatch(deviceList.map((d) => ({ command: SetPowerCommand(true), device: d })));
-export type _dynamicBatchIsVoidArray =
-  Expect<Equal<Awaited<ReturnType<typeof dynamicBatch>>, DeviceResponse<void>[]>>;
-
-// unicastBatch is fire-and-forget → void.
-const unicastBatch = () => client.unicastBatch([
-  { command: SetPowerCommand(true), device },
-  { command: GetColorCommand(), device },
-]);
-export type _unicastBatchIsVoid = Expect<Equal<ReturnType<typeof unicastBatch>, void>>;

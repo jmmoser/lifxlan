@@ -95,12 +95,9 @@ await new Promise(resolve => setTimeout(resolve, 3000));
 // Stop scanning
 clearInterval(scanInterval);
 
-// Turn on all discovered lights in one batch and await every ack
-const results = await client.sendEach(SetPowerCommand(true), devices);
-for (const result of results) {
-  if (!result.ok) {
-    console.warn(`${result.device.serialNumber} did not respond`, result.error);
-  }
+// Turn on all discovered lights
+for (const device of devices) {
+  await client.send(SetPowerCommand(true), device);
 }
 ```
 
@@ -171,92 +168,9 @@ console.log(response.hue);    // ✅ TypeScript knows response is LightState
 - **Get commands** (GetColor, GetPower, etc.) default to `'response'`
 - **Set commands** (SetColor, SetPower, etc.) default to `'ack-only'`
 
+**Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
+
 **Type Safety:** The return type automatically changes based on your response mode choice - no type assertions needed!
-
-### Sending to One or Many Devices
-
-Single-device sends stay simple: `client.send()` resolves the decoded response
-(and rejects if the device doesn't answer), and `client.unicast()` is
-fire-and-forget. To address many devices, use the dedicated fan-out methods
-`client.sendEach()` and `client.unicastEach()`, which accept any iterable of
-devices — the `Devices` registry, a group's `devices` array, or a plain array:
-
-```javascript
-// Single device — resolves the decoded response (or void for ack-only);
-// rejects on timeout/unreachable
-const color = await client.send(GetColorCommand(), device);
-client.unicast(SetPowerCommand(true), device); // fire-and-forget
-
-// Many devices — fire-and-forget fan-out
-client.unicastEach(SetPowerCommand(true), group.devices);
-
-// Many devices — one outcome per device, in iteration order. sendEach NEVER
-// rejects for a per-device failure: a dead device is reported as
-// { ok: false, error } while the rest still resolve. Each outcome carries the
-// device it belongs to, so you always know which one failed.
-const results = await client.sendEach(GetColorCommand(), devices);
-for (const result of results) {
-  if (result.ok) {
-    console.log(`${result.device.serialNumber} color`, result.value);
-  } else {
-    console.warn(`${result.device.serialNumber} failed`, result.error);
-  }
-}
-```
-
-When fanning out, every packet is encoded up front and handed to the router as
-a single batch. If you wire up an `onSendMany` (see below), the whole batch is
-flushed in one syscall on runtimes that support it (such as Bun); otherwise the
-router transparently falls back to sending each packet individually, so the
-same code works everywhere.
-
-#### Different commands to different devices (`sendBatch` / `unicastBatch`)
-
-Pass an array of `{ command, device, options? }` entries to send different
-commands to different devices in one flush. `sendBatch` resolves a
-`DeviceResponse` per entry (in order, never rejecting for a single failure);
-`unicastBatch` is fire-and-forget. An inline literal types each result slot
-individually.
-
-```javascript
-// Result type: [DeviceResponse<LightState>, DeviceResponse<void>]
-const [color, powered] = await client.sendBatch([
-  { command: GetColorCommand(), device: d1 },
-  { command: SetPowerCommand(true), device: d2 },
-]);
-if (color.ok) console.log(color.device.serialNumber, color.value);
-
-client.unicastBatch([
-  { command: SetPowerCommand(true), device: d1 },
-  { command: SetColorCommand(...), device: d2 },
-]);
-```
-
-#### Batch sending with `onSendMany` (Bun)
-
-Bun's UDP sockets expose `socket.sendMany()`, which sends many packets in one
-syscall. Provide an `onSendMany` to the router to take advantage of it — it is
-entirely optional, and `sendEach()`/`unicastEach()` work without it:
-
-```javascript
-const socket = await Bun.udpSocket({});
-
-const router = Router({
-  // Required: used by send(), unicast(), broadcast(), and as the fallback
-  // for sendMany() when onSendMany is not provided.
-  onSend(message, port, address) {
-    socket.send(message, port, address);
-  },
-  // Optional: flush a whole batch of datagrams in a single syscall.
-  onSendMany(packets) {
-    const flat = [];
-    for (const packet of packets) {
-      flat.push(packet.message, packet.port, packet.address);
-    }
-    socket.sendMany(flat);
-  },
-});
-```
 
 ## Examples by Runtime
 
@@ -307,6 +221,36 @@ socket.bind();
 setTimeout(() => {
   socket.close();
 }, 1000);
+```
+
+#### Coalescing sends into one syscall (Bun)
+
+Bun's `socket.sendMany()` sends many datagrams in a single syscall. Buffer
+outgoing messages in `onSend` and flush them on a microtask to collapse every
+send issued in the same tick into one `sendMany` — ordinary `send()`,
+`unicast()`, `broadcast()`, and `Promise.all` fan-outs batch automatically, with
+no API changes:
+
+```javascript
+const socket = await Bun.udpSocket({ /* ...handlers... */ });
+
+const queue = [];
+let scheduled = false;
+
+const router = Router({
+  onSend(message, port, address) {
+    queue.push(message, port, address);
+    if (!scheduled) {
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        const batch = queue.slice(); // copy before clearing
+        queue.length = 0;
+        socket.sendMany(batch);
+      });
+    }
+  },
+});
 ```
 
 ### Deno
