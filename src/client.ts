@@ -100,6 +100,13 @@ function registerHandler<T>(
   }
 
   if (signal) {
+    if (signal.aborted) {
+      // An already-aborted signal won't fire another 'abort' event, so the
+      // listener below would never run. Reject now.
+      settled = true;
+      reject(new AbortError('device response'));
+      return promise;
+    }
     signal.addEventListener('abort', onAbort, { once: true });
   } else if (defaultTimeoutMs > 0) {
     const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');

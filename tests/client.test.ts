@@ -6,7 +6,7 @@ import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand, SetPowerCommand } from '../src/commands/index.js';
-import { UnhandledCommandError } from '../src/errors.js';
+import { UnhandledCommandError, AbortError } from '../src/errors.js';
 
 describe('client', () => {
   const sharedDevice = Device({
@@ -174,6 +174,22 @@ describe('client', () => {
 
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
       return Error.isError(error) && error.message.includes('abort');
+    });
+  });
+
+  test('pre-aborted signal rejects immediately', async () => {
+    const client = Client({
+      // No timeout fallback: a hang here would never resolve.
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const signal = AbortSignal.abort();
+
+    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
+      return error instanceof AbortError && error.message === 'device response was aborted';
     });
   });
 
