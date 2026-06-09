@@ -233,7 +233,7 @@ ordinary `send()`, `unicast()`, `broadcast()`, and `Promise.all` fan-outs batch
 automatically, with no API changes:
 
 ```javascript
-const socket = await Bun.udpSocket({ /* ...handlers... */ });
+const socket = await Bun.udpSocket({});
 
 const queue = [];
 let scheduled = false;
