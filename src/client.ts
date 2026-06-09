@@ -101,10 +101,8 @@ function registerHandler<T>(
 
   if (signal) {
     if (signal.aborted) {
-      // The signal is already aborted, so the 'abort' event will never fire
-      // again. Reject immediately rather than registering a handler that would
-      // hang forever. This mirrors the live-abort path, which always rejects
-      // with an AbortError when the 'abort' event fires.
+      // An already-aborted signal won't fire another 'abort' event, so the
+      // listener below would never run. Reject now.
       settled = true;
       reject(new AbortError('device response'));
       return promise;
