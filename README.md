@@ -253,6 +253,10 @@ const router = Router({
 });
 ```
 
+This replaces one syscall per packet with one per tick, reducing send-path
+overhead when pushing frequent updates to many devices (such as color
+animations across a group). For a few devices the difference is negligible.
+
 ### Deno
 
 ```javascript
