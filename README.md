@@ -225,12 +225,11 @@ setTimeout(() => {
 
 #### Batching sends with `sendMany` (Bun)
 
-Bun's `socket.sendMany()` batches many datagrams into one send operation — a
-single syscall on Linux (`sendmmsg`) and macOS (`sendmsg_x`), with a per-packet
-fallback elsewhere. Buffer outgoing messages in `onSend` and flush them on a
-microtask to collapse every send issued in the same tick into one `sendMany` —
-ordinary `send()`, `unicast()`, `broadcast()`, and `Promise.all` fan-outs batch
-automatically, with no API changes:
+Bun's `socket.sendMany()` can send multiple datagrams in a single syscall on
+supported operating systems. Buffer outgoing messages in `onSend` and flush them
+on a microtask to collapse every send issued in the same tick into one
+`sendMany` — ordinary `send()`, `unicast()`, `broadcast()`, and `Promise.all`
+fan-outs batch automatically, with no API changes:
 
 ```javascript
 const socket = await Bun.udpSocket({});
