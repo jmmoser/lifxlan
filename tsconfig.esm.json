@@ -6,7 +6,6 @@
     "rootDir": "./src",
     "outDir": "./dist/esm",
     "sourceMap": true,
-    "declarationMap": true,
     "inlineSources": true
   },
   "include": [

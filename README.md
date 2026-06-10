@@ -500,8 +500,6 @@ if (features?.extended_multizone) {
 }
 ```
 
-The module is a separate export, so applications that never look up capabilities don't carry it.
-
 ### LIFX Switch (Relays and Buttons)
 
 ```javascript
@@ -607,13 +605,6 @@ const client = Client({
   },
 });
 ```
-
-## API Stability
-
-The exports of `lifxlan` and `lifxlan/products` are the semver surface: everything reachable from them — including the shapes of decoded responses such as `LightState` and `StateService` — only changes with a major version bump. Internal helpers that are not exported may change at any time. Two contracts worth restating:
-
-- Decoded responses may be zero-copy views into the receive buffer (see [Buffer Ownership](#buffer-ownership)).
-- `client.send()` reports all failures through its promise; `broadcast()`/`unicast()` throw synchronously.
 
 ## Contributing
 

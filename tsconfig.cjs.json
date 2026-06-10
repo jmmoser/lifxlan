@@ -8,7 +8,6 @@
     "rootDir": "./src",
     "outDir": "./dist/cjs",
     "sourceMap": true,
-    "declarationMap": true,
     "inlineSources": true
   },
   "include": [
