@@ -66,6 +66,8 @@ export type StateTileEffect = ReturnType<typeof decodeStateTileEffect>;
 
 export type SensorStateAmbientLight = ReturnType<typeof decodeSensorStateAmbientLight>;
 
+export type StateButton = ReturnType<typeof decodeStateButton>;
+
 /**
  * Encodes a LIFX protocol message into a binary format.
  * 
@@ -1225,6 +1227,108 @@ export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: Offs
   return {
     lux,
   };
+}
+
+/**
+ * Button wire format (https://github.com/LIFX/public-protocol):
+ * a ButtonAction is gesture (uint16) + target_type (uint16) + a 16-byte
+ * target whose interpretation depends on target_type; a Button is an action
+ * count followed by 5 actions; Set/StateButton carry a fixed array of 8
+ * buttons.
+ */
+const BUTTON_ACTION_SIZE = 20;
+const BUTTON_ACTIONS_PER_BUTTON = 5;
+const BUTTON_SIZE = 1 + BUTTON_ACTIONS_PER_BUTTON * BUTTON_ACTION_SIZE;
+const BUTTONS_PER_MESSAGE = 8;
+const SET_BUTTON_SIZE = 2 + BUTTONS_PER_MESSAGE * BUTTON_SIZE;
+const STATE_BUTTON_SIZE = 3 + BUTTONS_PER_MESSAGE * BUTTON_SIZE;
+
+export interface ButtonAction {
+  gesture: number;
+  target_type: number;
+  /** 16 bytes; interpretation depends on target_type (relays, serial, location/group/scene id). */
+  target: Uint8Array;
+}
+
+export interface Button {
+  actions_count: number;
+  actions: ButtonAction[];
+}
+
+export interface ButtonActionInput {
+  gesture: number;
+  targetType: number;
+  /** Up to 16 bytes; interpretation depends on targetType. Zero-filled when omitted. */
+  target?: Uint8Array;
+}
+
+export interface ButtonInput {
+  /** Up to 5 actions; remaining slots are zero-filled. */
+  actions: ButtonActionInput[];
+}
+
+export function decodeStateButton(bytes: Uint8Array, offsetRef: OffsetRef) {
+  const o = offsetRef.current;
+  ensureSize(bytes, o, STATE_BUTTON_SIZE);
+  const count = bytes[o]!;
+  const index = bytes[o + 1]!;
+  const buttons_count = bytes[o + 2]!;
+
+  const buttons: Button[] = new Array(BUTTONS_PER_MESSAGE);
+  let buttonOffset = o + 3;
+  for (let i = 0; i < BUTTONS_PER_MESSAGE; i++) {
+    const actions_count = bytes[buttonOffset]!;
+    const actions: ButtonAction[] = new Array(BUTTON_ACTIONS_PER_BUTTON);
+    let actionOffset = buttonOffset + 1;
+    for (let j = 0; j < BUTTON_ACTIONS_PER_BUTTON; j++) {
+      actions[j] = {
+        gesture: readUint16(bytes, actionOffset),
+        target_type: readUint16(bytes, actionOffset + 2),
+        target: bytes.subarray(actionOffset + 4, actionOffset + BUTTON_ACTION_SIZE),
+      };
+      actionOffset += BUTTON_ACTION_SIZE;
+    }
+    buttons[i] = { actions_count, actions };
+    buttonOffset += BUTTON_SIZE;
+  }
+
+  offsetRef.current = o + STATE_BUTTON_SIZE;
+  return {
+    count,
+    index,
+    buttons_count,
+    buttons,
+  };
+}
+
+export function encodeSetButton(index: number, buttons: readonly ButtonInput[]): Uint8Array {
+  const payload = new Uint8Array(SET_BUTTON_SIZE);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, index);
+  view.setUint8(1, Math.min(buttons.length, BUTTONS_PER_MESSAGE));
+
+  let buttonOffset = 2;
+  for (let i = 0; i < BUTTONS_PER_MESSAGE; i++) {
+    const button = buttons[i];
+    if (button) {
+      view.setUint8(buttonOffset, Math.min(button.actions.length, BUTTON_ACTIONS_PER_BUTTON));
+      let actionOffset = buttonOffset + 1;
+      for (let j = 0; j < BUTTON_ACTIONS_PER_BUTTON; j++) {
+        const action = button.actions[j];
+        if (action) {
+          view.setUint16(actionOffset, action.gesture, true);
+          view.setUint16(actionOffset + 2, action.targetType, true);
+          if (action.target) {
+            payload.set(action.target.subarray(0, 16), actionOffset + 4);
+          }
+        }
+        actionOffset += BUTTON_ACTION_SIZE;
+      }
+    }
+    buttonOffset += BUTTON_SIZE;
+  }
+
+  return payload;
 }
 
 export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => readUint16(bytes, offset);

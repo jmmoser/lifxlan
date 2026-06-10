@@ -24,6 +24,7 @@ export interface Command<OutputType> {
 }
 
 // Re-export all commands for backwards compatibility
+export * from './button.js';
 export * from './device.js';
 export * from './light.js';
 export * from './multizone.js';

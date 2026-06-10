@@ -67,6 +67,11 @@ export const Type = {
   SetRPower: 817,
   StateRPower: 818,
 
+  /** Button */
+  GetButton: 905,
+  SetButton: 906,
+  StateButton: 907,
+
   /** Tile */
   GetDeviceChain: 701,
   StateDeviceChain: 702,
