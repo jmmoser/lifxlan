@@ -143,19 +143,23 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       return removed;
     },
     get(serialNumber: string, options?: GetDeviceOptions): Promise<Device> {
+      const signal = options?.signal;
+
+      if (signal?.aborted) {
+        // The caller already cancelled. Reject even when the device is
+        // already known — resolving a cancelled lookup is more surprising
+        // than rejecting it, and it matches platform abort semantics. (An
+        // already-aborted signal also never fires another 'abort' event, so
+        // the listener below would never run.)
+        return Promise.reject(signal.reason ?? new AbortError('device lookup'));
+      }
+
       const knownDevice = knownDevices.get(serialNumber);
       if (knownDevice) {
         return Promise.resolve(knownDevice);
       }
 
-      const signal = options?.signal;
       const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-
-      if (signal?.aborted) {
-        // An already-aborted signal won't fire another 'abort' event, so the
-        // listener below would never run. Reject now.
-        return Promise.reject(signal.reason ?? new AbortError('device lookup'));
-      }
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 

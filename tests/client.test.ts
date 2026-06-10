@@ -212,6 +212,117 @@ describe('client', () => {
     });
   });
 
+  test('pre-aborted signal does not transmit or consume a sequence number', async () => {
+    let sendCount = 0;
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          sendCount++;
+          const header = decodeHeader(message);
+          // The aborted send below must not have consumed sequence 0.
+          assert.equal(header.sequence, 0);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetPowerCommand(), sharedDevice, { signal: AbortSignal.abort() }),
+    );
+    assert.equal(sendCount, 0); // nothing was transmitted for the aborted call
+
+    await client.send(GetPowerCommand(), sharedDevice);
+    assert.equal(sendCount, 1);
+
+    client.dispose();
+  });
+
+  test('abort after the response has settled is a no-op', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    const controller = new AbortController();
+    const result = await client.send(GetPowerCommand(), sharedDevice, { signal: controller.signal });
+    assert.equal(result, 65535);
+
+    // The settled exchange already removed its abort listener; this must not
+    // re-settle the promise or surface an unhandled rejection.
+    controller.abort(new Error('too late'));
+    await new Promise((resolve) => setTimeout(resolve, 1));
+
+    client.dispose();
+  });
+
+  test('multi-response command times out when only partially complete', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          // Deliver only zone 0 of the two requested zones; the exchange
+          // stays open (expectMore) and must be settled by the timeout.
+          const payload = new Uint8Array(10);
+          const view = new DataView(payload.buffer);
+          view.setUint8(0, 2); // zones_count
+          view.setUint8(1, 0); // zone_index
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StateZone,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetColorZonesCommand(0, 1), sharedDevice, { timeoutMs: 10 }),
+      (error) => error instanceof TimeoutError,
+    );
+
+    client.dispose();
+  });
+
   test('send times out even when a signal is provided', async () => {
     const client = Client({
       defaultTimeoutMs: 1,

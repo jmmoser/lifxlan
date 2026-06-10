@@ -104,21 +104,16 @@ function registerHandler<T>(
     settleReject(signal?.reason ?? new AbortError('device response'));
   }
 
-  if (signal?.aborted) {
-    // An already-aborted signal won't fire another 'abort' event, so the
-    // listener below would never run. Reject now.
-    settled = true;
-    reject(signal.reason ?? new AbortError('device response'));
-    return promise;
+  // send() rejects pre-aborted signals before calling this function (so no
+  // packet is transmitted and no sequence number is consumed), which means
+  // the signal here can only abort *after* the listener below is attached.
+  if (signal) {
+    signal.addEventListener('abort', onAbort, { once: true });
   }
-
   // The timeout and the signal are independent: a lost UDP packet must not
   // hang the caller just because they passed a cancellation signal, so the
   // timeout arms whether or not a signal is present. A timeoutMs <= 0
   // disables it, leaving the signal (or a response) as the only way to settle.
-  if (signal) {
-    signal.addEventListener('abort', onAbort, { once: true });
-  }
   if (timeoutMs > 0) {
     const timeoutError = new TimeoutError(timeoutMs, 'device response');
     timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
@@ -412,7 +407,17 @@ export function Client(options: ClientOptions): ClientInstance {
       options?: SendOptions<Override>,
     ): ModeReturn<T, ResolveMode<Override, Default>> {
       if (disposed) throw new DisposedClientError(source);
-      
+
+      const signal = options?.signal;
+      if (signal?.aborted) {
+        // The caller already cancelled: reject before a sequence number is
+        // consumed or a packet is transmitted on their behalf. This check
+        // must live here (not in registerHandler) precisely so nothing below
+        // runs. The cast mirrors the return cast at the bottom of send().
+        const rejected: Promise<never> = Promise.reject(signal.reason ?? new AbortError('device response'));
+        return rejected as ModeReturn<T, ResolveMode<Override, Default>>;
+      }
+
       // Determine response mode: an explicit, non-'auto' override wins;
       // otherwise fall back to the command's default mode.
       const requestedMode = options?.responseMode;
@@ -457,7 +462,7 @@ export function Client(options: ClientOptions): ClientInstance {
       const decode = command.createDecoder ? command.createDecoder() : command.decode;
       const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
 
-      const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, timeoutMs, responseHandlerMap, options?.signal);
+      const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, timeoutMs, responseHandlerMap, signal);
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 

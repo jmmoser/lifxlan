@@ -299,7 +299,12 @@ const controller = new AbortController();
 const promise = client.send(GetColorCommand(), device, { signal: controller.signal });
 
 controller.abort(new Error('user navigated away'));
-await promise; // rejects with the abort reason; the timeout still covers the un-aborted case
+
+try {
+  await promise;
+} catch (err) {
+  console.log(err.message); // 'user navigated away'
+}
 ```
 
 Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.get()` accepts the same options: `devices.get(serialNumber, { signal, timeoutMs })`.
@@ -456,22 +461,34 @@ const res = await client.send(CustomCommand(), device);
 console.log(res.val1, res.val2);
 ```
 
-`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. For commands whose result spans *multiple* response packets, provide `createDecoder` instead: it is called once per `send()`, so each exchange gets fresh accumulation state (this is how the built-in `GetColorZonesCommand`, `GetExtendedColorZonesCommand`, and `Get64Command` work):
+`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices.
+
+### Custom Multi-Response Commands
+
+For commands whose result spans *multiple* response packets, provide `createDecoder` instead of `decode`. It is called once per `send()`, so every exchange gets its own accumulation state and the command object stays safe to reuse. This is how the built-in `GetColorZonesCommand`, `GetExtendedColorZonesCommand`, and `Get64Command` work.
 
 ```javascript
-function CustomMultiResponseCommand() {
+function CustomMultiResponseCommand(expectedResponses) {
   return {
     type: 1234,
     createDecoder() {
+      // Fresh state for each send()
       const responses = [];
       return (bytes, offsetRef, continuation, responseType) => {
-        responses.push(decodeCustom(bytes, offsetRef));
-        continuation.expectMore = responses.length < 2; // keep waiting until done
+        responses.push({
+          responseType,
+          value: bytes[offsetRef.current++],
+        });
+        // Keep the exchange open until every packet has arrived
+        continuation.expectMore = responses.length < expectedResponses;
         return responses;
       };
     },
   };
 }
+
+const responses = await client.send(CustomMultiResponseCommand(2), device);
+console.log(responses.length); // 2
 ```
 
 ### Separate Sockets for Broadcast/Unicast

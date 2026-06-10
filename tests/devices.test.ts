@@ -163,6 +163,18 @@ describe('devices', () => {
     devices.register('abcdef123456', 56700, '1.2.3.4');
   });
 
+  test('get device with pre-aborted signal rejects even when the device is known', async () => {
+    const devices = Devices({ defaultTimeoutMs: 0 });
+    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+
+    // Abort wins over the cache: the caller explicitly cancelled.
+    const reason = new Error('already cancelled');
+    await assert.rejects(
+      devices.get(sharedDevice.serialNumber, { signal: AbortSignal.abort(reason) }),
+      (error) => error === reason,
+    );
+  });
+
   test('get device rejects with the abort reason', async () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
 
