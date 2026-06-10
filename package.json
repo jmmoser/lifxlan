@@ -50,6 +50,16 @@
         "default": "./dist/cjs/index.js"
       }
     },
+    "./products": {
+      "import": {
+        "types": "./dist/esm/products.d.ts",
+        "default": "./dist/esm/products.js"
+      },
+      "require": {
+        "types": "./dist/cjs/products.d.ts",
+        "default": "./dist/cjs/products.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -58,6 +68,13 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jmmoser/lifxlan.git"
+  },
+  "homepage": "https://github.com/jmmoser/lifxlan#readme",
+  "bugs": {
+    "url": "https://github.com/jmmoser/lifxlan/issues"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "author": "Justin Moser",
   "license": "MIT",

@@ -6,7 +6,9 @@
     "moduleResolution": "node10",
     "declaration": true,
     "rootDir": "./src",
-    "outDir": "./dist/cjs"
+    "outDir": "./dist/cjs",
+    "sourceMap": true,
+    "inlineSources": true
   },
   "include": [
     "src/**/*.ts"

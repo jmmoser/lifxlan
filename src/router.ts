@@ -56,6 +56,14 @@ export interface RouterInstance {
    *    for synchronous inspection.
    *
    * Returns `undefined` if the message could not be decoded.
+   *
+   * Ownership: the buffer passed to `receive()` is consumed, not copied.
+   * Decoded values — `header.target`, `payload`, and the results that
+   * decoders deliver to awaiting `send()` calls — are zero-copy views into
+   * it. A socket layer that reuses its receive buffer must hand `receive()`
+   * a copy; otherwise the next datagram silently corrupts previously decoded
+   * results. (Node's dgram and Deno's listenDatagram allocate a fresh buffer
+   * per message, so no copy is needed there.)
    */
   receive(message: Uint8Array): {
     header: Header;

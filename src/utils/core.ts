@@ -46,19 +46,19 @@ export function convertSignalToRssi(signal: number): number {
   return Math.floor(10 * Math.log10(signal) + 0.5);
 }
 
+/** Byte-to-lowercase-hex lookup table, shared by every hex hot path. */
+export const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+
 export function convertTargetToSerialNumber(slice: Uint8Array): string {
   if (slice.toHex) {
     return slice.toHex();
   }
+  // Table-driven fallback: this runs once per inbound packet on runtimes
+  // without Uint8Array.prototype.toHex.
   let str = '';
   const { length } = slice;
   for (let i = 0; i < length; i++) {
-    const chunk = slice[i]!.toString(16);
-    if (chunk.length < 2) {
-      str += '0' + chunk;
-    } else {
-      str += chunk;
-    }
+    str += HEX_BYTES[slice[i]!];
   }
   return str;
 }

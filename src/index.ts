@@ -22,6 +22,7 @@ export {
   MultiZoneExtendedApplicationRequest,
 } from './constants/multizone.js';
 export { TileEffectType, TileEffectSkyType } from './constants/tile.js';
+export { ButtonGesture, ButtonTargetType } from './constants/button.js';
 
 /** Core abstractions */
 export { Router } from './router.js';
@@ -38,8 +39,8 @@ export {
   LifxError,
   TimeoutError,
   UnhandledCommandError,
-  MessageConflictError,
   SourceExhaustionError,
+  SequenceExhaustionError,
   DisposedClientError,
   AbortError,
   ValidationError,
@@ -98,6 +99,7 @@ export {
   SetTileEffectCommand,
 } from './commands/tile.js';
 export { GetRPowerCommand, SetRPowerCommand } from './commands/relay.js';
+export { GetButtonCommand, SetButtonCommand } from './commands/button.js';
 export { SensorGetAmbientLightCommand } from './commands/sensor.js';
 
 /** Protocol encoding/decoding, for custom commands and custom routing */
@@ -169,6 +171,8 @@ export {
   decodeStateExtendedColorZones,
   decodeStateTileEffect,
   decodeSensorStateAmbientLight,
+  decodeStateButton,
+  encodeSetButton,
 } from './encoding.js';
 export type {
   Header,
@@ -196,6 +200,11 @@ export type {
   StateExtendedColorZones,
   StateTileEffect,
   SensorStateAmbientLight,
+  StateButton,
+  Button,
+  ButtonAction,
+  ButtonInput,
+  ButtonActionInput,
 } from './encoding.js';
 
 /** Utilities */
