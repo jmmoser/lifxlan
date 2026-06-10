@@ -13,51 +13,56 @@ export function GetDeviceChainCommand() {
 }
 
 export function Get64Command(
-  tileIndex: number, 
-  length: number, 
-  x: number, 
-  y: number, 
+  tileIndex: number,
+  length: number,
+  x: number,
+  y: number,
   width: number,
   onResponse?: (response: Encoding.State64) => boolean | void
 ) {
-  let tilesSeen = 0;
-  
-  const responses: Encoding.State64[] = [];
-  
-  const decode: Decoder<Encoding.State64[]> = (bytes, offsetRef, continuation, responseType) => {
-    let response: Encoding.State64 | undefined;
-    
-    if (responseType === Type.State64) {
-      response = Encoding.decodeState64(bytes, offsetRef);
-      tilesSeen++;
-    }
-    
-    // Update continuation to indicate if more responses are expected
-    if (continuation) {
-      if (response) {
-        responses.push(response);
-        
-        // Call user callback if provided
-        let shouldContinue = true;
-        if (onResponse) {
-          const result = onResponse(response);
-          shouldContinue = result !== false; // false = stop early
-        }
-        
-        continuation.expectMore = shouldContinue && tilesSeen < length;
-      } else {
-        // Unknown response type - still expect more responses
-        continuation.expectMore = tilesSeen < length;
+  // Accumulation state lives inside createDecoder so each send() gets a
+  // fresh decoder, making this command safe to reuse across concurrent
+  // sends and devices.
+  const createDecoder = (): Decoder<Encoding.State64[]> => {
+    let tilesSeen = 0;
+
+    const responses: Encoding.State64[] = [];
+
+    return (bytes, offsetRef, continuation, responseType) => {
+      let response: Encoding.State64 | undefined;
+
+      if (responseType === Type.State64) {
+        response = Encoding.decodeState64(bytes, offsetRef);
+        tilesSeen++;
       }
-    }
-    
-    return responses; // Always return the accumulated array
+
+      // Update continuation to indicate if more responses are expected
+      if (continuation) {
+        if (response) {
+          responses.push(response);
+
+          // Call user callback if provided
+          let shouldContinue = true;
+          if (onResponse) {
+            const result = onResponse(response);
+            shouldContinue = result !== false; // false = stop early
+          }
+
+          continuation.expectMore = shouldContinue && tilesSeen < length;
+        } else {
+          // Unknown response type - still expect more responses
+          continuation.expectMore = tilesSeen < length;
+        }
+      }
+
+      return responses; // Always return the accumulated array
+    };
   };
-  
+
   return {
     type: Type.Get64,
     payload: Encoding.encodeGet64(tileIndex, length, x, y, width),
-    decode,
+    createDecoder,
     defaultResponseMode: 'response' as const,
   };
 }

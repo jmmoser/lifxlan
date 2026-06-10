@@ -53,3 +53,13 @@ export type _getColorAckOnlyIsVoid = Expect<Equal<Awaited<ReturnType<typeof getC
 // Explicit 'auto' behaves exactly like omitting options (uses the default).
 const setPowerAuto = () => client.send(SetPowerCommand(true), device, { responseMode: 'auto' });
 export type _setPowerAutoIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerAuto>>, void>>;
+
+// --- Multi-response commands (createDecoder) --------------------------------
+
+// A createDecoder-based command infers its payload type the same way decode
+// does: GetColorZones resolves the accumulated response array.
+import { GetColorZonesCommand } from '../src/commands/multizone.js';
+import type { ColorZoneResponse } from '../src/commands/multizone.js';
+
+const getZones = () => client.send(GetColorZonesCommand(0, 1), device);
+export type _getZonesIsResponseArray = Expect<Equal<Awaited<ReturnType<typeof getZones>>, ColorZoneResponse[]>>;

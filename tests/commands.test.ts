@@ -345,7 +345,7 @@ describe('commands', () => {
   test('Get64Command with callback', () => {
     const cmd = Commands.Get64Command(0, 3, 0, 0, 8);
     assert.equal(cmd.type, Type.Get64);
-    assert.equal(typeof cmd.decode, 'function');
+    assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('Get64Command decode handles State64 responses', () => {
@@ -375,7 +375,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(state64Bytes, offsetRef, continuation, Type.State64);
+    const decode = cmd.createDecoder();
+    const result = decode(state64Bytes, offsetRef, continuation, Type.State64);
     
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
@@ -406,7 +407,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    cmd.decode(state64Bytes, offsetRef, continuation, Type.State64);
+    const decode = cmd.createDecoder();
+    decode(state64Bytes, offsetRef, continuation, Type.State64);
     
     assert.equal(receivedResponses.length, 1);
     assert.equal(receivedResponses[0]?.tile_index, 0);
@@ -430,7 +432,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    cmd.decode(state64Bytes, offsetRef, continuation, Type.State64);
+    const decode = cmd.createDecoder();
+    decode(state64Bytes, offsetRef, continuation, Type.State64);
     
     assert.equal(receivedResponses.length, 1);
     assert.equal(continuation.expectMore, false); // Stopped early due to callback returning false
@@ -448,7 +451,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result1 = cmd.decode(state64Bytes1, offsetRef, continuation, Type.State64);
+    const decode = cmd.createDecoder();
+    const result1 = decode(state64Bytes1, offsetRef, continuation, Type.State64);
     assert.equal(result1.length, 1);
     assert.equal(continuation.expectMore, true);
     
@@ -461,7 +465,7 @@ describe('commands', () => {
     offsetRef.current = 36;
     continuation.expectMore = false;
     
-    const result2 = cmd.decode(state64Bytes2, offsetRef, continuation, Type.State64);
+    const result2 = decode(state64Bytes2, offsetRef, continuation, Type.State64);
     assert.equal(result2.length, 2);
     assert.equal(result2[0]?.tile_index, 0);
     assert.equal(result2[1]?.tile_index, 1);
@@ -479,7 +483,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(unknownBytes, offsetRef, continuation, 999);
+    const decode = cmd.createDecoder();
+    const result = decode(unknownBytes, offsetRef, continuation, 999);
     
     assert.equal(result.length, 0); // No responses added
     assert.equal(continuation.expectMore, true); // Still expecting responses
@@ -493,7 +498,7 @@ describe('commands', () => {
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint8(0), 0);
     assert.equal(view.getUint8(1), 15);
-    assert.equal(typeof cmd.decode, 'function');
+    assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('GetColorZonesCommand with callback', () => {
@@ -502,7 +507,7 @@ describe('commands', () => {
       responses.push(response);
     });
     assert.equal(cmd.type, Type.GetColorZones);
-    assert.equal(typeof cmd.decode, 'function');
+    assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('GetColorZonesCommand decode handles StateZone responses', () => {
@@ -524,7 +529,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
+    const decode = cmd.createDecoder();
+    const result = decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
     
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
@@ -561,7 +567,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(stateMultiZoneBytes, offsetRef, continuation, Type.StateMultiZone);
+    const decode = cmd.createDecoder();
+    const result = decode(stateMultiZoneBytes, offsetRef, continuation, Type.StateMultiZone);
     
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
@@ -593,7 +600,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
+    const decode = cmd.createDecoder();
+    decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
     
     assert.equal(receivedResponses.length, 1);
     const res = receivedResponses[0];
@@ -626,7 +634,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    cmd.decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
+    const decode = cmd.createDecoder();
+    decode(stateZoneBytes, offsetRef, continuation, Type.StateZone);
     
     assert.equal(receivedResponses.length, 1);
     assert.equal(continuation.expectMore, false); // Stopped early due to callback returning false
@@ -646,7 +655,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result1 = cmd.decode(stateZoneBytes1, offsetRef, continuation, Type.StateZone);
+    const decode = cmd.createDecoder();
+    const result1 = decode(stateZoneBytes1, offsetRef, continuation, Type.StateZone);
     assert.equal(result1.length, 1);
     assert.equal(continuation.expectMore, true);
     
@@ -660,7 +670,7 @@ describe('commands', () => {
     offsetRef.current = 36;
     continuation.expectMore = false;
     
-    const result2 = cmd.decode(stateZoneBytes2, offsetRef, continuation, Type.StateZone);
+    const result2 = decode(stateZoneBytes2, offsetRef, continuation, Type.StateZone);
     assert.equal(result2.length, 2);
     assert.equal(result2[0]?.zone_index, 0);
     assert.equal(result2[1]?.zone_index, 1);
@@ -676,7 +686,7 @@ describe('commands', () => {
     offsetRef.current = 36;
     continuation.expectMore = false;
     
-    const result3 = cmd.decode(stateZoneBytes3, offsetRef, continuation, Type.StateZone);
+    const result3 = decode(stateZoneBytes3, offsetRef, continuation, Type.StateZone);
     assert.equal(result3.length, 3);
     assert.equal(result3[2]?.zone_index, 2);
     assert.equal(continuation.expectMore, false); // Complete
@@ -693,7 +703,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(unknownBytes, offsetRef, continuation, 999);
+    const decode = cmd.createDecoder();
+    const result = decode(unknownBytes, offsetRef, continuation, 999);
     
     assert.equal(result.length, 0); // No responses added
     assert.equal(continuation.expectMore, true); // Still expecting responses
@@ -740,13 +751,13 @@ describe('commands', () => {
   test('GetExtendedColorZonesCommand', () => {
     const cmd = Commands.GetExtendedColorZonesCommand();
     assert.equal(cmd.type, Type.GetExtendedColorZones);
-    assert.equal(typeof cmd.decode, 'function');
+    assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('GetExtendedColorZonesCommand with callback', () => {
     const cmd = Commands.GetExtendedColorZonesCommand();
     assert.equal(cmd.type, Type.GetExtendedColorZones);
-    assert.equal(typeof cmd.decode, 'function');
+    assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('GetExtendedColorZonesCommand decode handles StateExtendedColorZones responses for single response', () => {
@@ -775,7 +786,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
+    const decode = cmd.createDecoder();
+    const result = decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
@@ -812,7 +824,8 @@ describe('commands', () => {
     let offsetRef = { current: 36 };
     let continuation = { expectMore: false };
     
-    const result1 = cmd.decode(stateExtendedBytes1, offsetRef, continuation, Type.StateExtendedColorZones);
+    const decode = cmd.createDecoder();
+    const result1 = decode(stateExtendedBytes1, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(result1.length, 1);
     assert.equal(result1[0]?.zone_index, 0);
@@ -840,7 +853,7 @@ describe('commands', () => {
     offsetRef = { current: 36 };
     continuation = { expectMore: false };
     
-    const result2 = cmd.decode(stateExtendedBytes2, offsetRef, continuation, Type.StateExtendedColorZones);
+    const result2 = decode(stateExtendedBytes2, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(result2.length, 2); // Accumulated responses
     assert.equal(result2[1]?.zone_index, 82);
@@ -875,7 +888,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    cmd.decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
+    const decode = cmd.createDecoder();
+    decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(receivedResponses.length, 1);
     assert.equal(receivedResponses[0]?.zones_count, 50);
@@ -910,7 +924,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    cmd.decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
+    const decode = cmd.createDecoder();
+    decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(receivedResponses.length, 1);
     assert.equal(continuation.expectMore, false); // Stopped early due to callback returning false
@@ -927,7 +942,8 @@ describe('commands', () => {
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
     
-    const result = cmd.decode(unknownBytes, offsetRef, continuation, 999);
+    const decode = cmd.createDecoder();
+    const result = decode(unknownBytes, offsetRef, continuation, 999);
     
     assert.equal(result.length, 0); // No responses added
     assert.equal(continuation.expectMore, false); // No expected responses set up yet, so false

@@ -60,7 +60,7 @@ describe('errors', () => {
     const error = new MessageConflictError('test-key', 123);
     expect(error.message).toBe('Message routing conflict for key: test-key');
     expect(error.key).toBe('test-key');
-    expect(error.source).toBe(123);
+    expect(error.sequence).toBe(123);
     expect(error instanceof LifxError).toBe(true);
   });
 

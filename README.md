@@ -280,21 +280,29 @@ for (let i = 0; i < 3; i++) {
 }
 ```
 
-### Custom Timeouts
+### Timeouts and Cancellation
+
+Every `client.send()` is covered by a timeout (3 seconds by default — UDP packets get lost, so a call never hangs forever). Override it per client or per call:
+
+```javascript
+const client = Client({ router, defaultTimeoutMs: 5000 });
+
+// Per-call override
+await client.send(GetColorCommand(), device, { timeoutMs: 100 });
+```
+
+An `AbortSignal` can be passed for cancellation. The signal is *additive* to the timeout — it does not replace it — and the promise rejects with the signal's reason:
 
 ```javascript
 const controller = new AbortController();
 
-const timeout = setTimeout(() => {
-  controller.abort();
-}, 100);
+const promise = client.send(GetColorCommand(), device, { signal: controller.signal });
 
-try {
-  console.log(await client.send(GetColorCommand(), device, { signal: controller.signal }));
-} finally {
-  clearTimeout(timeout)
-}
+controller.abort(new Error('user navigated away'));
+await promise; // rejects with the abort reason; the timeout still covers the un-aborted case
 ```
+
+Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.get()` accepts the same options: `devices.get(serialNumber, { signal, timeoutMs })`.
 
 ### Use Without Device Discovery
 
@@ -446,6 +454,24 @@ function CustomCommand() {
 
 const res = await client.send(CustomCommand(), device);
 console.log(res.val1, res.val2);
+```
+
+`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. For commands whose result spans *multiple* response packets, provide `createDecoder` instead: it is called once per `send()`, so each exchange gets fresh accumulation state (this is how the built-in `GetColorZonesCommand`, `GetExtendedColorZonesCommand`, and `Get64Command` work):
+
+```javascript
+function CustomMultiResponseCommand() {
+  return {
+    type: 1234,
+    createDecoder() {
+      const responses = [];
+      return (bytes, offsetRef, continuation, responseType) => {
+        responses.push(decodeCustom(bytes, offsetRef));
+        continuation.expectMore = responses.length < 2; // keep waiting until done
+        return responses;
+      };
+    },
+  };
+}
 ```
 
 ### Separate Sockets for Broadcast/Unicast

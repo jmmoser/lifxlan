@@ -64,7 +64,7 @@ function registerHandler<T>(
   serialNumber: string,
   sequence: number,
   decode: Decoder<T> | undefined,
-  defaultTimeoutMs: number,
+  timeoutMs: number,
   responseHandlerMap: Map<string, PendingHandler>,
   signal?: AbortSignal
 ): Promise<T | void> {
@@ -86,31 +86,42 @@ function registerHandler<T>(
   function cleanup() {
     if (signal) {
       signal.removeEventListener('abort', onAbort);
-    } else if (timeout) {
+    }
+    if (timeout !== undefined) {
       clearTimeout(timeout);
     }
     responseHandlerMap.delete(key);
   }
 
-  function onAbort(errOrEvent: Error | Event) {
+  function settleReject(reason: unknown) {
     if (settled) return;
     settled = true;
     cleanup();
-    reject(errOrEvent instanceof Error ? errOrEvent : new AbortError('device response'));
+    reject(reason);
   }
 
+  function onAbort() {
+    settleReject(signal?.reason ?? new AbortError('device response'));
+  }
+
+  if (signal?.aborted) {
+    // An already-aborted signal won't fire another 'abort' event, so the
+    // listener below would never run. Reject now.
+    settled = true;
+    reject(signal.reason ?? new AbortError('device response'));
+    return promise;
+  }
+
+  // The timeout and the signal are independent: a lost UDP packet must not
+  // hang the caller just because they passed a cancellation signal, so the
+  // timeout arms whether or not a signal is present. A timeoutMs <= 0
+  // disables it, leaving the signal (or a response) as the only way to settle.
   if (signal) {
-    if (signal.aborted) {
-      // An already-aborted signal won't fire another 'abort' event, so the
-      // listener below would never run. Reject now.
-      settled = true;
-      reject(new AbortError('device response'));
-      return promise;
-    }
     signal.addEventListener('abort', onAbort, { once: true });
-  } else if (defaultTimeoutMs > 0) {
-    const timeoutError = new TimeoutError(defaultTimeoutMs, 'device response');
-    timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
+  }
+  if (timeoutMs > 0) {
+    const timeoutError = new TimeoutError(timeoutMs, 'device response');
+    timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
   }
 
   function checkForCompletion() {
@@ -139,10 +150,8 @@ function registerHandler<T>(
       }
 
       if (type === Type.StateUnhandled) {
-        settled = true;
-        cleanup();
         const requestType = decodeStateUnhandled(bytes, offsetRef);
-        reject(new UnhandledCommandError(requestType, serialNumber));
+        settleReject(new UnhandledCommandError(requestType, serialNumber));
         return;
       }
 
@@ -152,9 +161,7 @@ function registerHandler<T>(
           continuation.expectMore = false;
           result = decode(bytes, offsetRef, continuation, type);
         } catch (err) {
-          settled = true;
-          cleanup();
-          reject(err instanceof Error ? err : new Error(String(err)));
+          settleReject(err instanceof Error ? err : new Error(String(err)));
           return;
         }
 
@@ -168,10 +175,7 @@ function registerHandler<T>(
       }
     },
     cancel(reason) {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(reason);
+      settleReject(reason);
     },
   });
 
@@ -209,12 +213,28 @@ export interface SendOptions<A extends ResponseMode = ResponseMode> {
    * - 'both': Wait for both ack and response (maximum reliability)
    */
   responseMode?: A;
+  /**
+   * Cancels the exchange when aborted; the promise rejects with the signal's
+   * reason. The signal is additive to the timeout — passing a signal does not
+   * disable the timeout.
+   */
   signal?: AbortSignal;
+  /**
+   * Per-call override of the client's `defaultTimeoutMs`. Pass 0 to disable
+   * the timeout for this call, in which case only a response (or the signal,
+   * if provided) settles the promise.
+   */
+  timeoutMs?: number;
 }
 
 
 export interface ClientOptions {
   router: RouterInstance;
+  /**
+   * How long send() waits for the device before rejecting with TimeoutError.
+   * Applies whether or not a per-call signal is provided; set 0 to disable
+   * timeouts by default. Defaults to 3000ms.
+   */
   defaultTimeoutMs?: number;
   source?: number;
   onMessage?: MessageHandler;
@@ -431,7 +451,13 @@ export function Client(options: ClientOptions): ClientInstance {
         command.payload,
       );
 
-      const promise = registerHandler(ackMode, device.serialNumber, sequence, command.decode, defaultTimeoutMs, responseHandlerMap, options?.signal);
+      // A createDecoder command gets a fresh decoder per exchange so commands
+      // that accumulate multi-packet state stay safe to reuse across
+      // concurrent sends and devices.
+      const decode = command.createDecoder ? command.createDecoder() : command.decode;
+      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+
+      const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, timeoutMs, responseHandlerMap, options?.signal);
 
       router.send(bytes, device.port, device.address, device.serialNumber);
 
