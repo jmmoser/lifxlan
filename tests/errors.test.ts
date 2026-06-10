@@ -3,8 +3,8 @@ import {
   LifxError,
   TimeoutError,
   UnhandledCommandError,
-  MessageConflictError,
   SourceExhaustionError,
+  SequenceExhaustionError,
   DisposedClientError,
   AbortError,
   ValidationError,
@@ -56,11 +56,10 @@ describe('errors', () => {
     expect(error.deviceSerial).toBeUndefined();
   });
 
-  test('MessageConflictError', () => {
-    const error = new MessageConflictError('test-key', 123);
-    expect(error.message).toBe('Message routing conflict for key: test-key');
-    expect(error.key).toBe('test-key');
-    expect(error.sequence).toBe(123);
+  test('SequenceExhaustionError', () => {
+    const error = new SequenceExhaustionError('abcdef123456');
+    expect(error.message).toBe('All sequence numbers for device abcdef123456 are in flight. Wait for pending requests to settle or reduce concurrency.');
+    expect(error.serialNumber).toBe('abcdef123456');
     expect(error instanceof LifxError).toBe(true);
   });
 

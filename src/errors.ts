@@ -57,25 +57,24 @@ export class UnhandledCommandError extends LifxError {
 }
 
 /**
- * Thrown when there's a conflict in message routing.
- */
-export class MessageConflictError extends LifxError {
-  public readonly key: string;
-  public readonly sequence: number | undefined;
-
-  constructor(key: string, sequence?: number) {
-    super(`Message routing conflict for key: ${key}`);
-    this.key = key;
-    this.sequence = sequence;
-  }
-}
-
-/**
  * Thrown when router runs out of available source IDs.
  */
 export class SourceExhaustionError extends LifxError {
   constructor() {
     super('No more source IDs available. Consider disposing unused clients.');
+  }
+}
+
+/**
+ * Rejected when all 255 sequence numbers for a device are tied up by
+ * in-flight requests, so a new send() cannot be correlated with a response.
+ */
+export class SequenceExhaustionError extends LifxError {
+  public readonly serialNumber: string;
+
+  constructor(serialNumber: string) {
+    super(`All sequence numbers for device ${serialNumber} are in flight. Wait for pending requests to settle or reduce concurrency.`);
+    this.serialNumber = serialNumber;
   }
 }
 

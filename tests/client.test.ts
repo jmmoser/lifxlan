@@ -424,6 +424,104 @@ describe('client', () => {
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice));
   });
 
+  test('send on a disposed client rejects instead of throwing', async () => {
+    const client = Client({
+      router: Router({ onSend() {} }),
+    });
+    client.dispose();
+
+    // Must not throw synchronously: the failure has to surface through the
+    // returned promise so Promise.all fan-outs observe it uniformly.
+    const promise = client.send(GetPowerCommand(), sharedDevice);
+    await assert.rejects(promise, (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError');
+  });
+
+  test('send rejects when the transport throws synchronously', async () => {
+    const client = Client({
+      defaultTimeoutMs: 60000,
+      router: Router({
+        onSend() {
+          throw new Error('socket closed');
+        },
+      }),
+    });
+
+    const promise = client.send(GetPowerCommand(), sharedDevice);
+    await assert.rejects(promise, /socket closed/);
+
+    // The failed exchange must release its sequence/handler immediately
+    // (not wait for the timeout), so a retry can reuse the slot.
+    const retry = client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 1 });
+    await assert.rejects(retry, /socket closed/);
+  });
+
+  test('send rejects response modes on commands without a decoder', async () => {
+    const client = Client({
+      router: Router({ onSend() {} }),
+    });
+
+    await assert.rejects(
+      client.send({ type: 1234 }, sharedDevice),
+      (error: unknown) => Error.isError(error) && error.name === 'ValidationError',
+    );
+    await assert.rejects(
+      client.send({ type: 1234 }, sharedDevice, { responseMode: 'both' }),
+      (error: unknown) => Error.isError(error) && error.name === 'ValidationError',
+    );
+
+    // ack-only needs no decoder and must still work.
+    let sent = 0;
+    const ackClient = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          sent++;
+          const header = decodeHeader(message);
+          ackClient.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.Acknowledgement),
+          );
+        },
+      }),
+    });
+    await ackClient.send({ type: 1234 }, sharedDevice, { responseMode: 'ack-only' });
+    assert.equal(sent, 1);
+  });
+
+  test('send skips sequence numbers held by in-flight requests', async () => {
+    const observed: number[] = [];
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          observed.push(header.sequence);
+          if (observed.length > 1) {
+            // Answer everything except the first (stuck) request.
+            const payload = new Uint8Array(2);
+            client.router.receive(
+              encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+            );
+          }
+        },
+      }),
+    });
+
+    // Request with sequence 0 never gets a response and never times out.
+    const stuck = client.send(GetPowerCommand(), sharedDevice, { signal: new AbortController().signal });
+
+    // Drive the counter through the entire sequence space. Each send must
+    // skip the still-pending sequence 0 instead of conflicting with it.
+    for (let i = 0; i < 300; i++) {
+      await client.send(GetPowerCommand(), sharedDevice);
+    }
+
+    assert.equal(observed[0], 0);
+    assert.ok(observed.slice(1).every((sequence) => sequence !== 0), 'in-flight sequence 0 must never be reused');
+
+    client.dispose();
+    await assert.rejects(stuck, (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError');
+  });
+
   test('dispose rejects pending send promises with DisposedClientError', async () => {
     const client = Client({
       defaultTimeoutMs: 60000,
@@ -458,9 +556,9 @@ describe('client', () => {
       client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal });
     }
 
-    assert.throws(
-      () => client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal }),
-      (error) => Error.isError(error) && error.name === 'MessageConflictError',
+    await assert.rejects(
+      client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal }),
+      (error: unknown) => Error.isError(error) && error.name === 'SequenceExhaustionError',
     );
   });
 
@@ -484,9 +582,9 @@ describe('client', () => {
       client.send(GetPowerCommand(), device, { signal: new AbortController().signal });
     }
 
-    assert.throws(
-      () => client.send(GetPowerCommand(), device, { signal: new AbortController().signal }),
-      (error) => Error.isError(error) && error.name === 'MessageConflictError',
+    await assert.rejects(
+      client.send(GetPowerCommand(), device, { signal: new AbortController().signal }),
+      (error: unknown) => Error.isError(error) && error.name === 'SequenceExhaustionError',
     );
   });
 
@@ -683,7 +781,7 @@ describe('client', () => {
     client.dispose();
   });
 
-  test('disposed client throws DisposedClientError on operations', () => {
+  test('disposed client throws DisposedClientError on operations', async () => {
     const router = Router({
       onSend() {},
     });
@@ -696,26 +794,27 @@ describe('client', () => {
     });
     
     client.dispose();
-    
-    // All client operations should throw DisposedClientError
+
+    // The fire-and-forget (non-promise) operations throw synchronously...
     assert.throws(
       () => client.broadcast(GetServiceCommand()),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
-    
+
     assert.throws(
       () => client.unicast(GetServiceCommand(), device),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
-    
-    assert.throws(
-      () => client.send(GetServiceCommand(), device, { responseMode: 'ack-only' }),
-      (error) => Error.isError(error) && error.name === 'DisposedClientError',
+
+    // ...while send() always reports failure through its promise.
+    await assert.rejects(
+      client.send(GetServiceCommand(), device, { responseMode: 'ack-only' }),
+      (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError',
     );
-    
-    assert.throws(
-      () => client.send(GetServiceCommand(), device),
-      (error) => Error.isError(error) && error.name === 'DisposedClientError',
+
+    await assert.rejects(
+      client.send(GetServiceCommand(), device),
+      (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError',
     );
   });
 
