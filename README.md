@@ -36,7 +36,7 @@ const router = Router({
   },
 });
 
-// Track discovered devices
+// Registry of discovered devices (populated by the message handler below)
 const devices = Devices();
 
 // Handle incoming messages
@@ -135,12 +135,13 @@ Each `Client` gets a unique **source** id from the `Router` and tracks a per-dev
 
 This library doesn't include UDP socket implementation - you provide it. This makes it work across different server-side JavaScript runtimes:
 
-- **Node.js/Bun**: Use `dgram.createSocket('udp4')`
+- **Node.js**: Use `dgram.createSocket('udp4')`
+- **Bun**: Use `Bun.udpSocket()` (or `node:dgram`, which Bun also implements)
 - **Deno**: Use `Deno.listenDatagram()`
 
 ### Buffer Ownership
 
-For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram` and Deno's `listenDatagram` allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `message.slice()`), and copy any decoded bytes you intend to keep long-term.
+For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram`, Bun's `udpSocket`, and Deno's `listenDatagram` all allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `message.slice()`), and copy any decoded bytes you intend to keep long-term.
 
 ### Response Mode Control
 
@@ -229,7 +230,50 @@ setTimeout(() => {
 }, 1000);
 ```
 
-#### Batching sends with `sendMany` (Bun)
+### Bun (native socket)
+
+The `node:dgram` example above works in Bun as-is, but Bun also has a native
+UDP socket API. Incoming datagrams arrive through the `data` callback instead
+of a `'message'` event:
+
+```javascript
+import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
+
+const router = Router({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+});
+
+const devices = Devices({
+  onAdded(device) {
+    console.log(device);
+  },
+});
+
+const socket = await Bun.udpSocket({
+  socket: {
+    data(_socket, message, port, address) {
+      const result = router.receive(message);
+      if (result) {
+        devices.register(result.serialNumber, port, address, result.header.target);
+      }
+    },
+  },
+});
+
+socket.setBroadcast(true);
+
+const client = Client({ router });
+
+client.broadcast(GetServiceCommand());
+
+setTimeout(() => {
+  socket.close();
+}, 1000);
+```
+
+#### Batching sends with `sendMany`
 
 Bun's `socket.sendMany()` can send multiple datagrams in a single syscall on
 supported operating systems. Buffer outgoing messages in `onSend` and flush them
@@ -458,11 +502,11 @@ for (const group of groups) {
 
 ```javascript
 const PARTY_COLORS = [
-  [48241, 65535, 65535, 3500], // Red
-  [43690, 49151, 65535, 3500], // Blue  
-  [54612, 65535, 65535, 3500], // Green
-  [43690, 65535, 65535, 3500], // Cyan
-  [38956, 55704, 65535, 3500], // Purple
+  [0, 65535, 65535, 3500],     // Red
+  [21845, 65535, 65535, 3500], // Green
+  [32768, 65535, 65535, 3500], // Cyan
+  [43690, 65535, 65535, 3500], // Blue
+  [49151, 65535, 65535, 3500], // Purple
 ];
 
 while (true) {
