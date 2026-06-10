@@ -138,6 +138,10 @@ This library doesn't include UDP socket implementation - you provide it. This ma
 - **Node.js/Bun**: Use `dgram.createSocket('udp4')`
 - **Deno**: Use `Deno.listenDatagram()`
 
+### Buffer Ownership
+
+For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram` and Deno's `listenDatagram` allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `message.slice()`), and copy any decoded bytes you intend to keep long-term.
+
 ### Response Mode Control
 
 The `client.send()` method supports flexible response modes with **full type safety** - the return type changes based on the response mode you choose:
@@ -344,6 +348,10 @@ try {
 
 Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.get()` accepts the same options: `devices.get(serialNumber, { signal, timeoutMs })`.
 
+**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `unicast()` throw synchronously instead, since they have no promise to reject.)
+
+Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
+
 ### Use Without Device Discovery
 
 ```javascript
@@ -472,6 +480,42 @@ while (true) {
 }
 ```
 
+### Product Capabilities
+
+Not every device supports every command — multizone, extended multizone, HEV, infrared, relays, and buttons are all product-specific. The optional `lifxlan/products` subpath resolves the vendor/product ids from a `GetVersionCommand` (plus, optionally, the firmware version from `GetHostFirmwareCommand`) against the official [products.json](https://github.com/LIFX/products) registry:
+
+```javascript
+import { PRODUCTS_URL, GetVersionCommand, GetHostFirmwareCommand } from 'lifxlan';
+import { Products } from 'lifxlan/products';
+
+// Bring your own data: fetch it at runtime or vendor the file.
+const products = Products(await (await fetch(PRODUCTS_URL)).json());
+
+const version = await client.send(GetVersionCommand(), device);
+const firmware = await client.send(GetHostFirmwareCommand(), device);
+
+const features = products.features(version.vendor, version.product, firmware);
+if (features?.extended_multizone) {
+  // safe to use SetExtendedColorZonesCommand
+}
+```
+
+The module is a separate export, so applications that never look up capabilities don't carry it.
+
+### LIFX Switch (Relays and Buttons)
+
+```javascript
+import { GetRPowerCommand, SetRPowerCommand, GetButtonCommand, SetButtonCommand, ButtonGesture, ButtonTargetType } from 'lifxlan';
+
+// Toggle relay 0
+const { level } = await client.send(GetRPowerCommand(0), device);
+await client.send(SetRPowerCommand(0, level > 0 ? 0 : 65535), device);
+
+// Read the button configuration
+const state = await client.send(GetButtonCommand(), device);
+console.log(state.count, state.buttons[0].actions[0].gesture);
+```
+
 ### Custom Commands
 
 ```javascript
@@ -563,6 +607,13 @@ const client = Client({
   },
 });
 ```
+
+## API Stability
+
+The exports of `lifxlan` and `lifxlan/products` are the semver surface: everything reachable from them — including the shapes of decoded responses such as `LightState` and `StateService` — only changes with a major version bump. Internal helpers that are not exported may change at any time. Two contracts worth restating:
+
+- Decoded responses may be zero-copy views into the receive buffer (see [Buffer Ownership](#buffer-ownership)).
+- `client.send()` reports all failures through its promise; `broadcast()`/`unicast()` throw synchronously.
 
 ## Contributing
 
