@@ -4,7 +4,10 @@
     "noEmit": false,
     "declaration": true,
     "rootDir": "./src",
-    "outDir": "./dist/esm"
+    "outDir": "./dist/esm",
+    "sourceMap": true,
+    "declarationMap": true,
+    "inlineSources": true
   },
   "include": [
     "src/**/*.ts"
