@@ -427,85 +427,96 @@ export function Client(options: ClientOptions): ClientInstance {
         return rejected(signal.reason ?? new AbortError('device response'));
       }
 
-      // Determine response mode: an explicit, non-'auto' override wins;
-      // otherwise fall back to the command's default mode.
-      const requestedMode = options?.responseMode;
-      const ackMode: 'ack-only' | 'response' | 'both' =
-        !requestedMode || requestedMode === 'auto'
-          ? command.defaultResponseMode ?? 'response'
-          : requestedMode;
+      // Everything below runs inside one guard so that no synchronous throw
+      // — a user-supplied createDecoder/payload getter, encode() on a
+      // malformed device, or anything unforeseen — can escape send() as an
+      // exception instead of a rejection.
+      let pendingBySequence: Map<number, PendingHandler> | undefined;
+      try {
+        // Determine response mode: an explicit, non-'auto' override wins;
+        // otherwise fall back to the command's default mode.
+        const requestedMode = options?.responseMode;
+        const ackMode: 'ack-only' | 'response' | 'both' =
+          !requestedMode || requestedMode === 'auto'
+            ? command.defaultResponseMode ?? 'response'
+            : requestedMode;
 
-      // A createDecoder command gets a fresh decoder per exchange so commands
-      // that accumulate multi-packet state stay safe to reuse across
-      // concurrent sends and devices.
-      const decode = command.createDecoder ? command.createDecoder() : command.decode;
+        // A createDecoder command gets a fresh decoder per exchange so commands
+        // that accumulate multi-packet state stay safe to reuse across
+        // concurrent sends and devices.
+        const decode = command.createDecoder ? command.createDecoder() : command.decode;
 
-      // A mode that waits on response data can never settle without a
-      // decoder; fail loudly now instead of letting the call ride to a
-      // confusing timeout.
-      if (ackMode !== 'ack-only' && decode === undefined) {
-        return rejected(new ValidationError('command', command.type, `response mode '${ackMode}' requires the command to provide decode or createDecoder`));
-      }
+        // A mode that waits on response data can never settle without a
+        // decoder; fail loudly now instead of letting the call ride to a
+        // confusing timeout.
+        if (ackMode !== 'ack-only' && decode === undefined) {
+          throw new ValidationError('command', command.type, `response mode '${ackMode}' requires the command to provide decode or createDecoder`);
+        }
 
-      // Determine protocol flags based on response mode
-      let resRequired = false;
-      let ackRequired = false;
+        // Determine protocol flags based on response mode
+        let resRequired = false;
+        let ackRequired = false;
 
-      switch (ackMode) {
-        case 'ack-only':
-          ackRequired = true;
-          break;
-        case 'response':
-          resRequired = true;
-          break;
-        case 'both':
-          resRequired = true;
-          ackRequired = true;
-          break;
-      }
+        switch (ackMode) {
+          case 'ack-only':
+            ackRequired = true;
+            break;
+          case 'response':
+            resRequired = true;
+            break;
+          case 'both':
+            resRequired = true;
+            ackRequired = true;
+            break;
+        }
 
-      let pendingBySequence = responseHandlerMap.get(device.serialNumber);
-      if (!pendingBySequence) {
-        pendingBySequence = new Map();
-        responseHandlerMap.set(device.serialNumber, pendingBySequence);
-      }
+        pendingBySequence = responseHandlerMap.get(device.serialNumber);
+        if (!pendingBySequence) {
+          pendingBySequence = new Map();
+          responseHandlerMap.set(device.serialNumber, pendingBySequence);
+        }
 
-      const sequence = nextFreeSequence(device.serialNumber, pendingBySequence);
-      if (sequence === undefined) {
-        if (pendingBySequence.size === 0) {
+        const sequence = nextFreeSequence(device.serialNumber, pendingBySequence);
+        if (sequence === undefined) {
+          throw new SequenceExhaustionError(device.serialNumber);
+        }
+
+        const bytes = encode(
+          false,
+          source,
+          device.target,
+          resRequired,
+          ackRequired,
+          sequence,
+          command.type,
+          command.payload,
+        );
+
+        const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+
+        const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, timeoutMs, responseHandlerMap, pendingBySequence, signal);
+
+        try {
+          router.send(bytes, device.port, device.address, device.serialNumber);
+        } catch (err) {
+          // The transport refused the packet synchronously. Cancel the pending
+          // handler (which also clears its timeout and abort listener) so the
+          // failure is delivered through the returned promise.
+          const entry = pendingBySequence.get(sequence);
+          if (entry) {
+            entry.cancel(err instanceof Error ? err : new Error(String(err)));
+          }
+        }
+
+        return promise as ModeReturn<T, ResolveMode<Override, Default>>;
+      } catch (err) {
+        // A per-device map created for an exchange that never registered a
+        // handler must not linger.
+        if (pendingBySequence && pendingBySequence.size === 0) {
           responseHandlerMap.delete(device.serialNumber);
         }
-        return rejected(new SequenceExhaustionError(device.serialNumber));
+        return rejected(err);
       }
-
-      const bytes = encode(
-        false,
-        source,
-        device.target,
-        resRequired,
-        ackRequired,
-        sequence,
-        command.type,
-        command.payload,
-      );
-
-      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-
-      const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, timeoutMs, responseHandlerMap, pendingBySequence, signal);
-
-      try {
-        router.send(bytes, device.port, device.address, device.serialNumber);
-      } catch (err) {
-        // The transport refused the packet synchronously. Cancel the pending
-        // handler (which also clears its timeout and abort listener) so the
-        // failure is delivered through the returned promise.
-        const entry = pendingBySequence.get(sequence);
-        if (entry) {
-          entry.cancel(err instanceof Error ? err : new Error(String(err)));
-        }
-      }
-
-      return promise as ModeReturn<T, ResolveMode<Override, Default>>;
     },
   };
 

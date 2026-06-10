@@ -7,6 +7,7 @@ import type {
   TileEffectSkyType
 } from './constants/index.js';
 import { ValidationError } from './errors.js';
+import { HEX_BYTES } from './utils/core.js';
 
 const HEX_CHARS = /^[0-9a-fA-F]+$/;
 
@@ -178,8 +179,6 @@ function decodeBytes(bytes: Uint8Array, offsetRef: OffsetRef, byteLength: number
   offsetRef.current += byteLength;
   return subarray;
 }
-
-const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
 
 function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
   const o = offsetRef.current;

@@ -9,6 +9,29 @@ describe('devices', () => {
     address: '1.2.3.4',
   });
 
+  test('Device rejects targets that are not 6 or 8 bytes', () => {
+    // A wrong-length target would silently derive a serial number that can
+    // never match an inbound response, so it must fail fast instead.
+    assert.throws(
+      () => Device({ address: '1.2.3.4', target: new Uint8Array(20) }),
+      (error: unknown) => Error.isError(error) && error.name === 'ValidationError',
+    );
+    assert.throws(
+      () => Device({ address: '1.2.3.4', target: new Uint8Array(0) }),
+      (error: unknown) => Error.isError(error) && error.name === 'ValidationError',
+    );
+  });
+
+  test('Device derives the serial number from the first 6 bytes of an 8-byte target', () => {
+    // The wire target field is 8 bytes: 6-byte serial + 2 reserved bytes.
+    const device = Device({
+      address: '1.2.3.4',
+      target: new Uint8Array([0xd0, 0x73, 0xd5, 0x12, 0x34, 0x56, 0x00, 0x00]),
+    });
+    assert.equal(device.serialNumber, 'd073d5123456');
+    assert.equal(device.target.length, 8);
+  });
+
   test('onAdded is called when a device is registered', () => {
     const devicesOptions = {
       onAdded(device: Device) {

@@ -46,7 +46,8 @@ export function convertSignalToRssi(signal: number): number {
   return Math.floor(10 * Math.log10(signal) + 0.5);
 }
 
-const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+/** Byte-to-lowercase-hex lookup table, shared by every hex hot path. */
+export const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
 
 export function convertTargetToSerialNumber(slice: Uint8Array): string {
   if (slice.toHex) {

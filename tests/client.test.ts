@@ -455,6 +455,22 @@ describe('client', () => {
     await assert.rejects(retry, /socket closed/);
   });
 
+  test('send rejects when createDecoder throws synchronously', async () => {
+    const client = Client({
+      router: Router({ onSend() {} }),
+    });
+
+    const promise = client.send(
+      { type: 1234, createDecoder: () => { throw new Error('decoder construction failed'); } },
+      sharedDevice,
+    );
+    await assert.rejects(promise, /decoder construction failed/);
+
+    // The failed exchange must not leave per-device state behind; a normal
+    // send afterwards still works.
+    await assert.rejects(client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 1 }), TimeoutError);
+  });
+
   test('send rejects response modes on commands without a decoder', async () => {
     const client = Client({
       router: Router({ onSend() {} }),

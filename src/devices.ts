@@ -25,8 +25,17 @@ export function Device(config: DeviceConfig): Device {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
 
+  // The wire target field is 8 bytes: a 6-byte serial plus 2 reserved padding
+  // bytes, so both shapes are accepted. Anything else would silently encode a
+  // corrupt frame address and derive a serial number that can never match an
+  // inbound response, so fail fast here instead.
+  if (config.target !== undefined && config.target.length !== 6 && config.target.length !== 8) {
+    throw new ValidationError('target', config.target, 'must be 6 bytes (or 8 with two trailing reserved bytes)');
+  }
+
   const target = config.target ?? (config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET);
-  const serialNumber = config.serialNumber ?? convertTargetToSerialNumber(target);
+  const serialNumber = config.serialNumber
+    ?? convertTargetToSerialNumber(target.length > 6 ? target.subarray(0, 6) : target);
 
   return {
     address: config.address,

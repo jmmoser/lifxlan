@@ -42,6 +42,7 @@ const decoders: Array<{
   { name: 'decodeStateExtendedColorZones', size: 661, decode: Encoding.decodeStateExtendedColorZones },
   { name: 'decodeStateTileEffect', size: 187, decode: Encoding.decodeStateTileEffect },
   { name: 'decodeSensorStateAmbientLight', size: 4, decode: Encoding.decodeSensorStateAmbientLight },
+  { name: 'decodeStateButton', size: 811, decode: Encoding.decodeStateButton },
 ];
 
 describe('decoder bounds checking', () => {
