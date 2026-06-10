@@ -1,5 +1,12 @@
 # lifxlan
 
+[![npm version](https://img.shields.io/npm/v/lifxlan.svg)](https://www.npmjs.com/package/lifxlan)
+[![npm downloads](https://img.shields.io/npm/dm/lifxlan.svg)](https://www.npmjs.com/package/lifxlan)
+[![CI](https://github.com/jmmoser/lifxlan/actions/workflows/ci.yml/badge.svg)](https://github.com/jmmoser/lifxlan/actions/workflows/ci.yml)
+![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
+![runtimes](https://img.shields.io/badge/runtime-Node.js%20%7C%20Bun%20%7C%20Deno-blueviolet)
+[![license](https://img.shields.io/npm/l/lifxlan.svg)](LICENSE)
+
 A fast, lightweight TypeScript library for controlling LIFX smart lights over your local network (LAN). Works with Node.js, Bun, and Deno with zero dependencies.
 
 ## What does this do?
@@ -12,6 +19,8 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - ⚡ **High performance** - optimized for speed
 - 🚀 **Zero dependencies** - bring your own UDP socket
 - 🎛️ **Direct packet control** - each client operation sends exactly one packet with no hidden behavior
+
+Runnable scripts for every runtime live in [`examples/`](examples/).
 
 ## Quick Start
 
