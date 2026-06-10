@@ -703,7 +703,7 @@ export function encodeSetMultiZoneEffect(instanceid: number, effectType: MultiZo
   view.setBigUint64(11, duration, true);
   view.setUint32(19, 0); // reserved
   view.setUint32(23, 0); // reserved
-  payload.set(parameters.slice(0, 32), 27);
+  payload.set(parameters.subarray(0, 32), 27);
   return payload;
 }
 
