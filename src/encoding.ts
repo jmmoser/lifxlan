@@ -157,10 +157,21 @@ export function encodeString(value: string, byteLength: number): Uint8Array {
   return bytes;
 }
 
-function decodeBytes(bytes: Uint8Array, offsetRef: OffsetRef, byteLength: number): Uint8Array {
-  if (offsetRef.current + byteLength > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${byteLength} bytes at offset ${offsetRef.current}, only ${bytes.length - offsetRef.current} available`);
+/**
+ * Asserts that `byteLength` bytes are available at `offset`. Every payload
+ * decoder calls this before reading so a truncated or malformed packet always
+ * surfaces as a ValidationError instead of silently producing garbage values
+ * (e.g. `undefined` on a field typed `number`). Anyone on the LAN can send a
+ * packet, so decoders must never trust the advertised size.
+ */
+function ensureSize(bytes: Uint8Array, offset: number, byteLength: number): void {
+  if (offset + byteLength > bytes.length) {
+    throw new ValidationError('payload', bytes.length, `expected ${byteLength} bytes at offset ${offset}, only ${bytes.length - offset} available`);
   }
+}
+
+function decodeBytes(bytes: Uint8Array, offsetRef: OffsetRef, byteLength: number): Uint8Array {
+  ensureSize(bytes, offsetRef.current, byteLength);
   const subarray = bytes.subarray(offsetRef.current, offsetRef.current + byteLength);
   offsetRef.current += byteLength;
   return subarray;
@@ -170,9 +181,7 @@ const HEX_BYTES: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16)
 
 function decodeUuid(bytes: Uint8Array, offsetRef: OffsetRef): string {
   const o = offsetRef.current;
-  if (o + 16 > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected 16 bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, 16);
   let result = '';
   for (let i = 0; i < 16; i++) {
     result += HEX_BYTES[bytes[o + i]!];
@@ -232,6 +241,7 @@ function readString(bytes: Uint8Array, start: number, maxLength: number): string
 }
 
 function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number): string {
+  ensureSize(bytes, offsetRef.current, maxLength);
   const value = readString(bytes, offsetRef.current, maxLength);
   offsetRef.current += maxLength;
   return value;
@@ -254,6 +264,7 @@ function readTimestamp(bytes: Uint8Array, offset: number): Date {
 }
 
 function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
+  ensureSize(bytes, offsetRef.current, 8);
   const time = readTimestamp(bytes, offsetRef.current);
   offsetRef.current += 8;
   return time;
@@ -261,6 +272,7 @@ function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
 
 export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 5);
   const service = bytes[o]!;
   const port = readUint32(bytes, o + 1);
   offsetRef.current = o + 5;
@@ -303,9 +315,7 @@ class HostFirmwareMessage {
 
 export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef): HostFirmwareMessage {
   const o = offsetRef.current;
-  if (o + FIRMWARE_SIZE > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${FIRMWARE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, FIRMWARE_SIZE);
   offsetRef.current = o + FIRMWARE_SIZE;
   return new HostFirmwareMessage(bytes, o);
 }
@@ -349,9 +359,7 @@ class WifiInfoMessage {
 
 export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): WifiInfoMessage {
   const o = offsetRef.current;
-  if (o + WIFI_INFO_SIZE > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${WIFI_INFO_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, WIFI_INFO_SIZE);
   offsetRef.current = o + WIFI_INFO_SIZE;
   return new WifiInfoMessage(bytes, o);
 }
@@ -386,18 +394,14 @@ class WifiFirmwareMessage {
 
 export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef): WifiFirmwareMessage {
   const o = offsetRef.current;
-  if (o + FIRMWARE_SIZE > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${FIRMWARE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, FIRMWARE_SIZE);
   offsetRef.current = o + FIRMWARE_SIZE;
   return new WifiFirmwareMessage(bytes, o);
 }
 
 export function decodeStatePower(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const offset = offsetRef.current;
-  if (offset + 2 > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected 2 bytes at offset ${offset}, only ${bytes.length - offset} available`);
-  }
+  ensureSize(bytes, offset, 2);
   const power = readUint16(bytes, offset);
   offsetRef.current += 2;
   return power;
@@ -409,6 +413,7 @@ export function decodeStateLabel(bytes: Uint8Array, offsetRef: OffsetRef): strin
 
 export function decodeStateVersion(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 8);
   const vendor = readUint32(bytes, o);
   const product = readUint32(bytes, o + 4);
   offsetRef.current = o + 8;
@@ -459,12 +464,14 @@ export function decodeEchoResponse(bytes: Uint8Array, offsetRef: OffsetRef): Uin
 
 export function decodeStateUnhandled(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 2);
   const type = readUint16(bytes, o);
   offsetRef.current = o + 2;
   return type;
 }
 
 export function decodeSetColor(bytes: Uint8Array, offsetRef: OffsetRef) {
+  ensureSize(bytes, offsetRef.current, 13);
   const reserved = decodeBytes(bytes, offsetRef, 1);
   const o = offsetRef.current;
   const color = readColor(bytes, o);
@@ -839,15 +846,14 @@ class LightStateMessage {
 
 export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef): LightStateMessage {
   const o = offsetRef.current;
-  if (o + LIGHT_STATE_SIZE > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${LIGHT_STATE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, LIGHT_STATE_SIZE);
   offsetRef.current = o + LIGHT_STATE_SIZE;
   return new LightStateMessage(bytes, o);
 }
 
 export function decodeStateLightPower(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 2);
   const level = readUint16(bytes, o);
   offsetRef.current = o + 2;
   return level;
@@ -855,6 +861,7 @@ export function decodeStateLightPower(bytes: Uint8Array, offsetRef: OffsetRef): 
 
 export function decodeStateInfrared(bytes: Uint8Array, offsetRef: OffsetRef): number {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 2);
   const brightness = readUint16(bytes, o);
   offsetRef.current = o + 2;
   return brightness;
@@ -862,6 +869,7 @@ export function decodeStateInfrared(bytes: Uint8Array, offsetRef: OffsetRef): nu
 
 export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 9);
   const duration_s = readUint32(bytes, o);
   const remaining_s = readUint32(bytes, o + 4);
   const last_power = !!bytes[o + 8]!;
@@ -875,6 +883,7 @@ export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
 
 export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 5);
   const indication = bytes[o]!;
   const duration_s = readUint32(bytes, o + 1);
   offsetRef.current = o + 5;
@@ -885,12 +894,14 @@ export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: O
 }
 
 export function decodeStateLastHevCycleResult(bytes: Uint8Array, offsetRef: OffsetRef): number {
+  ensureSize(bytes, offsetRef.current, 1);
   const result = bytes[offsetRef.current]!; offsetRef.current += 1;
   return result;
 }
 
 export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 3);
   const relay_index = bytes[o]!;
   const level = readUint16(bytes, o + 1);
   offsetRef.current = o + 3;
@@ -972,13 +983,11 @@ class DeviceChainEntry {
 }
 
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
+  ensureSize(bytes, offsetRef.current, 1 + 16 * DEVICE_CHAIN_DEVICE_SIZE + 1);
   const start_index = bytes[offsetRef.current]!; offsetRef.current += 1;
   const devices: DeviceChainEntry[] = new Array(16);
   for (let i = 0; i < 16; i++) {
     const o = offsetRef.current;
-    if (o + DEVICE_CHAIN_DEVICE_SIZE > bytes.length) {
-      throw new ValidationError('payload', bytes.length, `expected ${DEVICE_CHAIN_DEVICE_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-    }
     devices[i] = new DeviceChainEntry(bytes, o);
     offsetRef.current = o + DEVICE_CHAIN_DEVICE_SIZE;
   }
@@ -991,6 +1000,7 @@ export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) 
 }
 
 export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
+  ensureSize(bytes, offsetRef.current, 5 + 64 * 8);
   const tile_index = bytes[offsetRef.current]!; offsetRef.current += 1;
   const reserved6 = decodeBytes(bytes, offsetRef, 1);
   const x = bytes[offsetRef.current]!; offsetRef.current += 1;
@@ -1015,6 +1025,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
 
 export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
+  ensureSize(bytes, o, 10);
   const zones_count = bytes[o]!;
   const zone_index = bytes[o + 1]!;
   const color = readColor(bytes, o + 2);
@@ -1031,6 +1042,7 @@ export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
 
 export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   let o = offsetRef.current;
+  ensureSize(bytes, o, 2 + 8 * 8);
   const zones_count = bytes[o]!;
   const zone_index = bytes[o + 1]!;
   o += 2;
@@ -1096,15 +1108,14 @@ class MultiZoneEffectMessage {
 
 export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef): MultiZoneEffectMessage {
   const o = offsetRef.current;
-  if (o + MULTIZONE_EFFECT_SIZE > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${MULTIZONE_EFFECT_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, MULTIZONE_EFFECT_SIZE);
   offsetRef.current = o + MULTIZONE_EFFECT_SIZE;
   return new MultiZoneEffectMessage(bytes, o);
 }
 
 export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: OffsetRef) {
   let o = offsetRef.current;
+  ensureSize(bytes, o, 5 + 82 * 8);
   const zones_count = readUint16(bytes, o);
   const zone_index = readUint16(bytes, o + 2);
   const colors_count = bytes[o + 4]!;
@@ -1203,14 +1214,13 @@ class TileEffectMessage {
 
 export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef): TileEffectMessage {
   const o = offsetRef.current;
-  if (o + TILE_EFFECT_SIZE > bytes.length) {
-    throw new ValidationError('payload', bytes.length, `expected ${TILE_EFFECT_SIZE} bytes at offset ${o}, only ${bytes.length - o} available`);
-  }
+  ensureSize(bytes, o, TILE_EFFECT_SIZE);
   offsetRef.current = o + TILE_EFFECT_SIZE;
   return new TileEffectMessage(bytes, o);
 }
 
 export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: OffsetRef) {
+  ensureSize(bytes, offsetRef.current, 4);
   const lux = readFloat32(bytes, offsetRef.current); offsetRef.current += 4;
   return {
     lux,
