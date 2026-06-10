@@ -1,9 +1,10 @@
 /**
  * Minifies the compiled JavaScript in `dist` in place.
  *
- * Each file is transformed individually (not bundled), so the per-file module
- * layout that `package.json`'s `./*` export map depends on is preserved, while
- * the verbose, comment-heavy `tsc` output is stripped down for publication.
+ * Each file is transformed individually (not bundled), preserving the
+ * compiled module graph (and with it, tree-shakability and readable stack
+ * traces), while the verbose, comment-heavy `tsc` output is stripped down
+ * for publication.
  * `.d.ts` files are left untouched so type information and its doc comments
  * remain intact for consumers.
  */

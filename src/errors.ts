@@ -61,12 +61,12 @@ export class UnhandledCommandError extends LifxError {
  */
 export class MessageConflictError extends LifxError {
   public readonly key: string;
-  public readonly source: number | undefined;
+  public readonly sequence: number | undefined;
 
-  constructor(key: string, source?: number) {
+  constructor(key: string, sequence?: number) {
     super(`Message routing conflict for key: ${key}`);
     this.key = key;
-    this.source = source;
+    this.sequence = sequence;
   }
 }
 

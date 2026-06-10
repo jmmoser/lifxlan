@@ -40,14 +40,34 @@ export interface DevicesOptions {
   onAdded?: (device: Device) => void;
   onChanged?: (device: Device) => void;
   onRemoved?: (device: Device) => void;
+  /**
+   * How long get() waits for a device to be registered before rejecting with
+   * TimeoutError. Applies whether or not a per-call signal is provided; set 0
+   * to disable timeouts by default. Defaults to 3000ms.
+   */
   defaultTimeoutMs?: number;
+}
+
+export interface GetDeviceOptions {
+  /**
+   * Cancels the lookup when aborted; the promise rejects with the signal's
+   * reason. The signal is additive to the timeout — passing a signal does not
+   * disable the timeout.
+   */
+  signal?: AbortSignal;
+  /**
+   * Per-call override of `defaultTimeoutMs`. Pass 0 to disable the timeout
+   * for this call, in which case only registration (or the signal, if
+   * provided) settles the promise.
+   */
+  timeoutMs?: number;
 }
 
 export interface DevicesInstance {
   readonly registered: ReadonlyMap<string, Device>;
   register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
   remove(serialNumber: string): boolean;
-  get(serialNumber: string, signal?: AbortSignal): Promise<Device>;
+  get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   [Symbol.iterator](): Iterator<Device>;
 }
 
@@ -122,11 +142,24 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
       return removed;
     },
-    get(serialNumber: string, signal?: AbortSignal): Promise<Device> {
+    get(serialNumber: string, options?: GetDeviceOptions): Promise<Device> {
+      const signal = options?.signal;
+
+      if (signal?.aborted) {
+        // The caller already cancelled. Reject even when the device is
+        // already known — resolving a cancelled lookup is more surprising
+        // than rejecting it, and it matches platform abort semantics. (An
+        // already-aborted signal also never fires another 'abort' event, so
+        // the listener below would never run.)
+        return Promise.reject(signal.reason ?? new AbortError('device lookup'));
+      }
+
       const knownDevice = knownDevices.get(serialNumber);
       if (knownDevice) {
         return Promise.resolve(knownDevice);
       }
+
+      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 
@@ -135,12 +168,13 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       function cleanup() {
         if (signal) {
           signal.removeEventListener('abort', onAbort);
-        } else if (timeout) {
+        }
+        if (timeout !== undefined) {
           clearTimeout(timeout);
         }
       }
 
-      function onAbort(errOrEvent: Error | Event) {
+      function settleReject(reason: unknown) {
         cleanup();
         const resolvers = deviceResolvers.get(serialNumber);
         if (resolvers) {
@@ -150,7 +184,11 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
             deviceResolvers.delete(serialNumber);
           }
         }
-        reject(errOrEvent instanceof Error ? errOrEvent : new AbortError('device lookup'));
+        reject(reason);
+      }
+
+      function onAbort() {
+        settleReject(signal?.reason ?? new AbortError('device lookup'));
       }
 
       const resolver = (device: Device) => {
@@ -158,11 +196,16 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         resolve(device);
       };
 
+      // The timeout and the signal are independent: a device that never
+      // appears must not hang the caller just because they passed a
+      // cancellation signal, so the timeout arms whether or not a signal is
+      // present. A timeoutMs <= 0 disables it.
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
-      } else {
-        const timeoutError = new TimeoutError(defaultTimeoutMs, 'device discovery');
-        timeout = setTimeout(onAbort.bind(undefined, timeoutError), defaultTimeoutMs);
+      }
+      if (timeoutMs > 0) {
+        const timeoutError = new TimeoutError(timeoutMs, 'device discovery');
+        timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
       }
 
       const resolvers = deviceResolvers.get(serialNumber);

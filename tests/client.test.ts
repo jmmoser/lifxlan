@@ -6,7 +6,7 @@ import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand, SetPowerCommand } from '../src/commands/index.js';
-import { UnhandledCommandError, AbortError } from '../src/errors.js';
+import { UnhandledCommandError, TimeoutError } from '../src/errors.js';
 
 describe('client', () => {
   const sharedDevice = Device({
@@ -172,9 +172,27 @@ describe('client', () => {
 
     const signal = AbortSignal.timeout(0);
 
+    // Rejects with the signal's reason (a DOMException named TimeoutError here).
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
-      return Error.isError(error) && error.message.includes('abort');
+      return error instanceof DOMException && error.name === 'TimeoutError';
     });
+  });
+
+  test('send rejects with the abort reason', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const controller = new AbortController();
+    const promise = client.send(GetPowerCommand(), sharedDevice, { signal: controller.signal });
+
+    const reason = new Error('user cancelled');
+    controller.abort(reason);
+
+    await assert.rejects(promise, (error) => error === reason);
   });
 
   test('pre-aborted signal rejects immediately', async () => {
@@ -186,11 +204,173 @@ describe('client', () => {
       }),
     });
 
-    const signal = AbortSignal.abort();
+    const reason = new Error('already cancelled');
+    const signal = AbortSignal.abort(reason);
 
     await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
-      return error instanceof AbortError && error.message === 'device response was aborted';
+      return error === reason;
     });
+  });
+
+  test('pre-aborted signal does not transmit or consume a sequence number', async () => {
+    let sendCount = 0;
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          sendCount++;
+          const header = decodeHeader(message);
+          // The aborted send below must not have consumed sequence 0.
+          assert.equal(header.sequence, 0);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetPowerCommand(), sharedDevice, { signal: AbortSignal.abort() }),
+    );
+    assert.equal(sendCount, 0); // nothing was transmitted for the aborted call
+
+    await client.send(GetPowerCommand(), sharedDevice);
+    assert.equal(sendCount, 1);
+
+    client.dispose();
+  });
+
+  test('abort after the response has settled is a no-op', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StatePower,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    const controller = new AbortController();
+    const result = await client.send(GetPowerCommand(), sharedDevice, { signal: controller.signal });
+    assert.equal(result, 65535);
+
+    // The settled exchange already removed its abort listener; this must not
+    // re-settle the promise or surface an unhandled rejection.
+    controller.abort(new Error('too late'));
+    await new Promise((resolve) => setTimeout(resolve, 1));
+
+    client.dispose();
+  });
+
+  test('multi-response command times out when only partially complete', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          // Deliver only zone 0 of the two requested zones; the exchange
+          // stays open (expectMore) and must be settled by the timeout.
+          const payload = new Uint8Array(10);
+          const view = new DataView(payload.buffer);
+          view.setUint8(0, 2); // zones_count
+          view.setUint8(1, 0); // zone_index
+          client.router.receive(
+            encode(
+              header.tagged,
+              header.source,
+              header.target,
+              false,
+              false,
+              header.sequence,
+              Type.StateZone,
+              payload,
+            ),
+          );
+        },
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetColorZonesCommand(0, 1), sharedDevice, { timeoutMs: 10 }),
+      (error) => error instanceof TimeoutError,
+    );
+
+    client.dispose();
+  });
+
+  test('send times out even when a signal is provided', async () => {
+    const client = Client({
+      defaultTimeoutMs: 1,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    // The signal never aborts; the timeout must still settle the promise
+    // instead of hanging forever on the lost response.
+    await assert.rejects(
+      () => client.send(GetPowerCommand(), sharedDevice, { signal: new AbortController().signal }),
+      (error) => error instanceof TimeoutError,
+    );
+  });
+
+  test('per-send timeoutMs overrides the default', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 1 }),
+      (error) => error instanceof TimeoutError && error.timeoutMs === 1,
+    );
+  });
+
+  test('timeoutMs: 0 disables the timeout for a call', async () => {
+    const client = Client({
+      defaultTimeoutMs: 1,
+      router: Router({
+        onSend() {},
+      }),
+    });
+
+    const controller = new AbortController();
+    const promise = client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 0, signal: controller.signal });
+
+    // Give the (overridden) 1ms default timeout a chance to fire first; the
+    // abort reason below proves it did not.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const reason = new Error('done waiting');
+    controller.abort(reason);
+
+    await assert.rejects(promise, (error) => error === reason);
   });
 
   test('timeout send', async () => {
@@ -260,6 +440,9 @@ describe('client', () => {
 
   test('max number of inflight ack-only requests', async () => {
     const client = Client({
+      // No timeout: the dangling sends must stay pending instead of piling
+      // up unhandled TimeoutError rejections after the test ends.
+      defaultTimeoutMs: 0,
       router: Router({
         onSend() { },
       }),
@@ -283,6 +466,9 @@ describe('client', () => {
 
   test('max number of inflight send requests', async () => {
     const client = Client({
+      // No timeout: the dangling sends must stay pending instead of piling
+      // up unhandled TimeoutError rejections after the test ends.
+      defaultTimeoutMs: 0,
       router: Router({
         onSend() { },
       }),
@@ -394,6 +580,59 @@ describe('client', () => {
     assert.ok('hue' in color1);
     assert.equal(color1.hue, 240);
     assert.equal(responseCount, 2); // Verify both responses were received
+  });
+
+  test('multi-response command instance is reusable across concurrent sends', async () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          // Respond synchronously with both zones for whichever device was
+          // addressed; handlers are registered before router.send() runs.
+          for (const zoneIndex of [0, 1]) {
+            const payload = new Uint8Array(10);
+            const view = new DataView(payload.buffer);
+            view.setUint8(0, 2); // zones_count
+            view.setUint8(1, zoneIndex); // zone_index
+            view.setUint16(2, 120 + zoneIndex, true); // hue
+            client.router.receive(
+              encode(
+                header.tagged,
+                header.source,
+                header.target,
+                false,
+                false,
+                header.sequence,
+                Type.StateZone,
+                payload,
+              ),
+            );
+          }
+        },
+      }),
+    });
+
+    const deviceA = Device({ serialNumber: 'abcdef123401', port: 1234, address: '1.2.3.4' });
+    const deviceB = Device({ serialNumber: 'abcdef123402', port: 1234, address: '1.2.3.5' });
+
+    // The same command object drives both exchanges.
+    const command = GetColorZonesCommand(0, 1);
+    const [resultA, resultB] = await Promise.all([
+      client.send(command, deviceA),
+      client.send(command, deviceB),
+    ]);
+
+    // Each exchange must get fresh accumulation state: two zones each, not a
+    // shared array interleaving both devices' responses.
+    assert.equal(resultA.length, 2);
+    assert.equal(resultB.length, 2);
+    assert.equal(resultA[0]?.zone_index, 0);
+    assert.equal(resultA[1]?.zone_index, 1);
+    assert.equal(resultB[0]?.zone_index, 0);
+    assert.equal(resultB[1]?.zone_index, 1);
+
+    client.dispose();
   });
 
   test('client with custom onMessage handler', () => {
@@ -516,7 +755,7 @@ describe('client', () => {
     }
   });
 
-  test('AbortSignal creates AbortError', async () => {
+  test('AbortSignal without reason rejects with the default abort reason', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
@@ -542,9 +781,9 @@ describe('client', () => {
       await promise;
       assert.fail('Promise should have been rejected');
     } catch (error) {
-      assert.ok(Error.isError(error));
+      // abort() without a reason → the signal's default DOMException reason.
+      assert.ok(error instanceof DOMException);
       assert.equal(error.name, 'AbortError');
-      assert.equal(error.message, 'device response was aborted');
     }
 
     client.dispose();
@@ -577,10 +816,8 @@ describe('client', () => {
       await promise;
       assert.fail('Promise should have been rejected');
     } catch (error) {
-      // Should receive the custom error when AbortController.abort() is called with a reason
-      // In some environments, this might still be wrapped in an AbortError
-      assert.ok(error instanceof Error);
-      assert.ok(error.message.includes('abort') || error === customError);
+      // abort(reason) → the promise rejects with exactly that reason.
+      assert.equal(error, customError);
     }
 
     client.dispose();

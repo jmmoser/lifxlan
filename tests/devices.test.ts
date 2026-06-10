@@ -65,7 +65,7 @@ describe('devices', () => {
   test('get device with abort signal', async () => {
     const devices = Devices();
 
-    const devicePromise = devices.get(sharedDevice.serialNumber, new AbortController().signal);
+    const devicePromise = devices.get(sharedDevice.serialNumber, { signal: new AbortController().signal });
     expect(Bun.peek(devicePromise)).toEqual(devicePromise);
 
     devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
@@ -77,7 +77,11 @@ describe('devices', () => {
   test('get device aborts', async () => {
     const devices = Devices();
 
-    await expect(devices.get(sharedDevice.serialNumber, AbortSignal.timeout(0))).rejects.toThrow('device lookup was aborted');
+    // Rejects with the signal's reason (a DOMException named TimeoutError here).
+    await assert.rejects(
+      devices.get(sharedDevice.serialNumber, { signal: AbortSignal.timeout(0) }),
+      (error) => error instanceof DOMException && error.name === 'TimeoutError',
+    );
   });
 
   test('remove device calls onRemoved', () => {
@@ -107,8 +111,8 @@ describe('devices', () => {
     const controller1 = new AbortController();
     const controller2 = new AbortController();
     
-    const promise1 = devices.get(sharedDevice.serialNumber, controller1.signal);
-    const promise2 = devices.get(sharedDevice.serialNumber, controller2.signal);
+    const promise1 = devices.get(sharedDevice.serialNumber, { signal: controller1.signal });
+    const promise2 = devices.get(sharedDevice.serialNumber, { signal: controller2.signal });
 
     // Abort the first one
     controller1.abort();
@@ -117,17 +121,70 @@ describe('devices', () => {
     devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
 
     // First should reject, second should resolve
-    await expect(promise1).rejects.toThrow('device lookup was aborted');
+    await expect(promise1).rejects.toThrow('aborted');
     const device = await promise2;
     expect(device).toEqual(sharedDevice);
   });
 
   test('get device timeout without signal', async () => {
     const devices = Devices({ defaultTimeoutMs: 10 });
-    
+
     // Get device without registering it, should timeout
     const promise = devices.get('nonexistent');
     await expect(promise).rejects.toThrow('device discovery timed out');
+  });
+
+  test('get device times out even when a signal is provided', async () => {
+    const devices = Devices({ defaultTimeoutMs: 10 });
+
+    // The signal never aborts; the timeout must still settle the promise
+    // instead of hanging forever.
+    const promise = devices.get('nonexistent', { signal: new AbortController().signal });
+    await expect(promise).rejects.toThrow('device discovery timed out');
+  });
+
+  test('get device per-call timeoutMs overrides the default', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    const promise = devices.get('nonexistent', { timeoutMs: 10 });
+    await expect(promise).rejects.toThrow('device discovery timed out after 10ms');
+  });
+
+  test('get device with pre-aborted signal rejects immediately', async () => {
+    const devices = Devices({ defaultTimeoutMs: 0 });
+
+    const reason = new Error('already cancelled');
+    await assert.rejects(
+      devices.get('nonexistent', { signal: AbortSignal.abort(reason) }),
+      (error) => error === reason,
+    );
+
+    // The rejected lookup must not have left a resolver behind.
+    devices.register('abcdef123456', 56700, '1.2.3.4');
+  });
+
+  test('get device with pre-aborted signal rejects even when the device is known', async () => {
+    const devices = Devices({ defaultTimeoutMs: 0 });
+    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+
+    // Abort wins over the cache: the caller explicitly cancelled.
+    const reason = new Error('already cancelled');
+    await assert.rejects(
+      devices.get(sharedDevice.serialNumber, { signal: AbortSignal.abort(reason) }),
+      (error) => error === reason,
+    );
+  });
+
+  test('get device rejects with the abort reason', async () => {
+    const devices = Devices({ defaultTimeoutMs: 0 });
+
+    const controller = new AbortController();
+    const promise = devices.get('nonexistent', { signal: controller.signal });
+
+    const reason = new Error('user cancelled');
+    controller.abort(reason);
+
+    await assert.rejects(promise, (error) => error === reason);
   });
 
   test('Devices.register tolerates a throwing onAdded callback', () => {
@@ -188,7 +245,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
     const c = new AbortController();
-    const p = devices.get('abcdef123456', c.signal);
+    const p = devices.get('abcdef123456', { signal: c.signal });
 
     // remove() before registration: drop the pending resolver state.
     devices.remove('abcdef123456'); // returns false but should clear deviceResolvers entry
@@ -206,8 +263,8 @@ describe('devices', () => {
 
     const c1 = new AbortController();
     const c2 = new AbortController();
-    const p1 = devices.get('abcdef123456', c1.signal);
-    const p2 = devices.get('abcdef123456', c2.signal);
+    const p1 = devices.get('abcdef123456', { signal: c1.signal });
+    const p2 = devices.get('abcdef123456', { signal: c2.signal });
 
     c1.abort();
     await assert.rejects(p1, /aborted/);
@@ -223,10 +280,10 @@ describe('devices', () => {
     const devices = Devices();
     const controller = new AbortController();
     
-    const promise = devices.get('test-device', controller.signal);
+    const promise = devices.get('test-device', { signal: controller.signal });
     controller.abort();
     
-    expect(promise).rejects.toThrow('device lookup was aborted');
+    expect(promise).rejects.toThrow('aborted');
   });
 
   test('Device factory validates address is required', () => {
