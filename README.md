@@ -708,7 +708,7 @@ The device received the command but doesn't support it — multizone, tile, HEV,
 
 ### Decoded values turn into garbage later
 
-Decoding is zero-copy (see [Buffer Ownership](#buffer-ownership)). If your socket layer reuses its receive buffer, every decoded result aliases memory the next datagram overwrites — pass `message.slice()` to `router.receive()`, or copy the decoded bytes you keep.
+Decoded results are views into the datagram's receive buffer rather than copies (see [Buffer Ownership](#buffer-ownership)). The built-in sockets in Node.js, Bun, and Deno allocate a fresh buffer for every datagram, so they are unaffected. But if your socket layer reads each datagram into one reusable buffer, the next datagram overwrites the memory your earlier results still point to, and values you already decoded silently change. Either pass a copy to `router.receive()` (e.g. `router.receive(message.slice())`) or copy any decoded bytes you want to keep.
 
 ### `SourceExhaustionError` / `SequenceExhaustionError`
 
@@ -725,7 +725,7 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:
 
-- **Breaking changes** to the surface above only happen in a major version, are listed in [CHANGELOG.md](CHANGELOG.md), and where practical the old API is marked `@deprecated` for at least one minor version first.
+- **Breaking changes** to the surface above only happen in a major version, are documented in the [release notes](https://github.com/jmmoser/lifxlan/releases), and where practical the old API is marked `@deprecated` for at least one minor version first.
 - **Supported runtimes** (Node.js ≥ 18, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
 - **Prereleases** are published under the `rc` npm dist-tag, so plain `npm install lifxlan` always resolves to the latest stable release.
 
@@ -733,7 +733,7 @@ Anything not reachable from those entry points — internal helpers, file layout
 
 This library follows a modular architecture with clear separation between protocol, transport, and application layers. See the source code for implementation details.
 
-Releases: bump `version` in `package.json`, update [CHANGELOG.md](CHANGELOG.md), and publish a GitHub release — the publish workflow runs the full test suite and ships to npm with provenance.
+Releases: bump `version` in `package.json` and publish a GitHub release — the publish workflow runs the full test suite, then ships to npm with a [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) (a signed statement, displayed on npmjs.com, proving the package was built by this repository's CI from a specific public commit rather than uploaded from someone's machine).
 
 ## License
 
