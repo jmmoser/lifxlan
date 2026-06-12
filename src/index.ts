@@ -3,6 +3,10 @@
  * is the semver surface. Helpers that are not listed (internal utilities,
  * scratch state, etc.) are implementation details and may change without a
  * major version bump.
+ *
+ * The wire-format encode/decode functions live in the 'lifxlan/encoding'
+ * subpath entry point; the optional products.json registry lives in
+ * 'lifxlan/products'. Both are equally part of the semver surface.
  */
 
 /** Protocol constants */
@@ -102,78 +106,11 @@ export { GetRPowerCommand, SetRPowerCommand } from './commands/relay.js';
 export { GetButtonCommand, SetButtonCommand } from './commands/button.js';
 export { SensorGetAmbientLightCommand } from './commands/sensor.js';
 
-/** Protocol encoding/decoding, for custom commands and custom routing */
-export {
-  encode,
-  decodeHeader,
-  getPayload,
-  getHeaderSize,
-  getHeaderFlags,
-  getHeaderTagged,
-  getHeaderSource,
-  getHeaderTarget,
-  getHeaderResponseFlags,
-  getHeaderResponseRequired,
-  getHeaderAcknowledgeRequired,
-  getHeaderType,
-  getHeaderSequence,
-  encodeString,
-  encodeStringTo,
-  encodeUuidTo,
-  encodeTimestampTo,
-  encodeSetColor,
-  encodeSetPower,
-  encodeSetLocation,
-  encodeSetGroup,
-  encodeEchoRequest,
-  encodeSetWaveform,
-  encodeSetLightPower,
-  encodeSetWaveformOptional,
-  encodeSetInfrared,
-  encodeSetHevCycle,
-  encodeSetHevCycleConfiguration,
-  encodeGetRPower,
-  encodeSetRPower,
-  encodeGet64,
-  encodeGetColorZones,
-  encodeSetColorZones,
-  encodeSetMultiZoneEffect,
-  encodeSetExtendedColorZones,
-  encodeSetUserPosition,
-  encodeSet64,
-  encodeGetTileEffect,
-  encodeSetTileEffect,
-  decodeStateService,
-  decodeStateHostFirmware,
-  decodeStateWifiInfo,
-  decodeStateWifiFirmware,
-  decodeStatePower,
-  decodeStateLabel,
-  decodeStateVersion,
-  decodeStateInfo,
-  decodeStateLocation,
-  decodeStateGroup,
-  decodeEchoResponse,
-  decodeStateUnhandled,
-  decodeSetColor,
-  decodeLightState,
-  decodeStateLightPower,
-  decodeStateInfrared,
-  decodeStateHevCycle,
-  decodeStateHevCycleConfiguration,
-  decodeStateLastHevCycleResult,
-  decodeStateRPower,
-  decodeStateDeviceChain,
-  decodeState64,
-  decodeStateZone,
-  decodeStateMultiZone,
-  decodeStateMultiZoneEffect,
-  decodeStateExtendedColorZones,
-  decodeStateTileEffect,
-  decodeSensorStateAmbientLight,
-  decodeStateButton,
-  encodeSetButton,
-} from './encoding.js';
+/**
+ * Decoded protocol message types. The encode/decode functions that produce
+ * and consume these shapes live in the 'lifxlan/encoding' subpath entry
+ * point, keeping the wire-format helpers out of the high-level surface.
+ */
 export type {
   Header,
   Color,

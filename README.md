@@ -621,6 +621,30 @@ const responses = await client.send(CustomMultiResponseCommand(2), device);
 console.log(responses.length); // 2
 ```
 
+### Low-Level Protocol Access
+
+The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` and the `getHeader*` accessors take frames apart, and every payload has an `encode*`/`decode*` function (`encodeSetColor`, `decodeStateService`, …). Use it to drive a socket without Router/Client, or to build custom commands from the same primitives the built-in ones use:
+
+```javascript
+import { Type, NO_TARGET } from 'lifxlan';
+import { encode, decodeHeader, getPayload, decodeStateService } from 'lifxlan/encoding';
+
+// Hand-roll a broadcast GetService and parse the reply yourself
+// encode(tagged, source, target, resRequired, ackRequired, sequence, type, payload?)
+const message = encode(true, 2, NO_TARGET, true, false, 0, Type.GetService);
+socket.send(message, 56700, '255.255.255.255');
+
+socket.on('message', (bytes) => {
+  const header = decodeHeader(bytes);
+  if (header.type === Type.StateService) {
+    const payload = getPayload(bytes);
+    console.log(decodeStateService(payload, { current: 0 }));
+  }
+});
+```
+
+The high-level API never requires importing it — `client.send()` already encodes and decodes for you.
+
 ### Separate Sockets for Broadcast/Unicast
 
 ```javascript
@@ -658,6 +682,50 @@ const client = Client({
   },
 });
 ```
+
+## Troubleshooting
+
+### Discovery finds no devices
+
+- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine.
+- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast on an interval (the Quick Start uses 1 second) until you've found what you're looking for.
+- **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
+- **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
+- **Replies arrive but nothing registers.** Registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples. Verify packets are arriving with `Router({ onMessage })` or a packet capture.
+- **Deno needs permissions.** `Deno.listenDatagram` requires `--allow-net --unstable-net`.
+
+### `client.send()` rejects with `TimeoutError`
+
+- **A packet was lost.** UDP is lossy even on a healthy network — wrap sends in a retry loop with backoff (see [Error Handling with Retries](#error-handling-with-retries)).
+- **The device's IP changed** (DHCP lease, power cycle). Keep periodic discovery running; `devices.register()` updates the address of a known device in place, and `onChanged` fires when it does.
+- **The network is slow.** Raise the timeout per call (`{ timeoutMs: 10000 }`) or per client (`Client({ router, defaultTimeoutMs })`).
+
+### `send()` rejects with `UnhandledCommandError`
+
+The device received the command but doesn't support it — multizone, tile, HEV, infrared, relay, and button commands are all product-specific. Check capabilities first with [`lifxlan/products`](#product-capabilities).
+
+### Decoded values turn into garbage later
+
+Decoded results are views into the datagram's receive buffer rather than copies (see [Buffer Ownership](#buffer-ownership)). The built-in sockets in Node.js, Bun, and Deno allocate a fresh buffer for every datagram, so they are unaffected. But if your socket layer reads each datagram into one reusable buffer, the next datagram overwrites the memory your earlier results still point to, and values you already decoded silently change. Either pass a copy to `router.receive()` (e.g. `router.receive(message.slice())`) or copy any decoded bytes you want to keep.
+
+### `SourceExhaustionError` / `SequenceExhaustionError`
+
+Creating clients in a loop without `client.dispose()` eventually exhausts the router's source ids. Sequence exhaustion means one client has 255 sends genuinely in flight to a single device — await or abort some of them.
+
+## Versioning and Stability
+
+This package is pre-1.0, so any 0.0.x release may still include breaking changes. From version 1.0 onward it follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the semver surface being exactly:
+
+- every export of the package root (`lifxlan`),
+- every export of `lifxlan/encoding`,
+- every export of `lifxlan/products`,
+- documented runtime behavior: zero-copy buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
+
+Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:
+
+- **Breaking changes** to the surface above only happen in a major version, are documented in the [release notes](https://github.com/jmmoser/lifxlan/releases), and where practical the old API is marked `@deprecated` for at least one minor version first.
+- **Supported runtimes** (Node.js ≥ 18, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
+- **Prereleases** are published under the `rc` npm dist-tag, so plain `npm install lifxlan` always resolves to the latest stable release.
 
 ## Contributing
 

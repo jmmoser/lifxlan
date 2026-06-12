@@ -10,10 +10,9 @@ import {
   Client,
   Device,
   Type,
-  encode,
-  decodeHeader,
   GetPowerCommand,
 } from '../dist/esm/index.js';
+import { encode, decodeHeader } from '../dist/esm/encoding.js';
 import { Products } from '../dist/esm/products.js';
 
 const router = Router({

@@ -1,6 +1,6 @@
 {
   "name": "lifxlan",
-  "version": "0.0.84",
+  "version": "0.0.85",
   "description": "TypeScript library for controlling LIFX products over LAN",
   "type": "module",
   "main": "./dist/cjs/index.js",
@@ -16,6 +16,7 @@
     "build:minify": "bun run scripts/minify.mjs",
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
+    "docs": "typedoc",
     "bench": "bun run benchmarks/performance.ts"
   },
   "keywords": [
@@ -48,6 +49,16 @@
       "require": {
         "types": "./dist/cjs/index.d.ts",
         "default": "./dist/cjs/index.js"
+      }
+    },
+    "./encoding": {
+      "import": {
+        "types": "./dist/esm/encoding.d.ts",
+        "default": "./dist/esm/encoding.js"
+      },
+      "require": {
+        "types": "./dist/cjs/encoding.d.ts",
+        "default": "./dist/cjs/encoding.js"
       }
     },
     "./products": {
@@ -84,6 +95,7 @@
     "esbuild": "^0.28.0",
     "mitata": "^1.0.34",
     "oxlint": "^1.30.0",
+    "typedoc": "^0.28.19",
     "typescript": "^5.9.3"
   }
 }
