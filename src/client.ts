@@ -240,7 +240,6 @@ export interface ClientInstance {
  * const client = Client({ router });
  * const response = await client.send(GetColorCommand(), device);
  * ```
- * @performance Optimized for high-throughput scenarios with minimal allocations
  */
 export function Client(options: ClientOptions): ClientInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;

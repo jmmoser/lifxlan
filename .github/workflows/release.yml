@@ -20,7 +20,18 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
+      # Prerelease versions (1.0.0-rc.1 etc.) publish under the `rc` dist-tag
+      # so `npm install lifxlan` keeps resolving to the latest stable release.
+      - name: Determine npm dist-tag
+        id: dist_tag
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "tag=rc" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
       # prepack runs the full test suite and build before packing.
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public --tag "${{ steps.dist_tag.outputs.tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

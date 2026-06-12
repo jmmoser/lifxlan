@@ -1,3 +1,11 @@
+/**
+ * Low-level LIFX LAN wire-format encoding and decoding.
+ *
+ * This module is published as the 'lifxlan/encoding' subpath entry point and
+ * every export is public semver surface. It is the layer to reach for when
+ * writing custom commands, custom routing, or driving sockets directly; the
+ * high-level API in the package root never requires importing it.
+ */
 import type {
   Waveform,
   MultiZoneApplicationRequest,

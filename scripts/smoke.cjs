@@ -9,10 +9,9 @@ const {
   Client,
   Device,
   Type,
-  encode,
-  decodeHeader,
   GetPowerCommand,
 } = require('../dist/cjs/index.js');
+const { encode, decodeHeader } = require('../dist/cjs/encoding.js');
 const { Products } = require('../dist/cjs/products.js');
 
 async function main() {

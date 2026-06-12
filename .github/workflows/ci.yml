@@ -19,6 +19,8 @@ jobs:
       - run: bun run lint
       - run: bunx tsc
       - run: bun run test
+      # Keeps the generated API reference building (broken links fail it).
+      - run: bun run docs
 
   node:
     # The test suite runs on bun:test, so other runtimes are covered by
