@@ -152,8 +152,6 @@ This library doesn't include UDP socket implementation - you provide it. This ma
 
 For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram`, Bun's `udpSocket`, and Deno's `listenDatagram` all allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `message.slice()`), and copy any decoded bytes you intend to keep long-term.
 
-Zero-copy decoding is a stable, guaranteed behavior — not an implementation detail. Code written around it (deciding when to copy, or deliberately aliasing the receive buffer) can rely on it; switching to copying would be a breaking change requiring a major version bump.
-
 ### Response Mode Control
 
 The `client.send()` method supports flexible response modes with **full type safety** - the return type changes based on the response mode you choose:
@@ -716,7 +714,7 @@ Creating clients in a loop without `client.dispose()` eventually exhausts the ro
 
 ## Versioning and Stability
 
-This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The semver surface is exactly:
+This package is pre-1.0, so any 0.0.x release may still include breaking changes. From version 1.0 onward it follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the semver surface being exactly:
 
 - every export of the package root (`lifxlan`),
 - every export of `lifxlan/encoding`,
@@ -732,8 +730,6 @@ Anything not reachable from those entry points — internal helpers, file layout
 ## Contributing
 
 This library follows a modular architecture with clear separation between protocol, transport, and application layers. See the source code for implementation details.
-
-Releases: bump `version` in `package.json` and publish a GitHub release — the publish workflow runs the full test suite, then ships to npm with a [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) (a signed statement, displayed on npmjs.com, proving the package was built by this repository's CI from a specific public commit rather than uploaded from someone's machine).
 
 ## License
 
