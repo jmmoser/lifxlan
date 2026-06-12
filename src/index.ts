@@ -6,7 +6,8 @@
  *
  * The wire-format encode/decode functions live in the 'lifxlan/encoding'
  * subpath entry point; the optional products.json registry lives in
- * 'lifxlan/products'. Both are equally part of the semver surface.
+ * 'lifxlan/products'; the optional discovery helper lives in
+ * 'lifxlan/discovery'. All are equally part of the semver surface.
  */
 
 /** Protocol constants */
@@ -34,7 +35,7 @@ export type { RouterInstance, RouterOptions, MessageHandler } from './router.js'
 export { Client } from './client.js';
 export type { ClientInstance, ClientOptions, SendOptions, ResponseMode } from './client.js';
 export { Device, Devices } from './devices.js';
-export type { DeviceConfig, DevicesOptions, DevicesInstance, GetDeviceOptions } from './devices.js';
+export type { DeviceConfig, DevicesOptions, DevicesInstance, GetDeviceOptions, DeviceEventHandlers } from './devices.js';
 export { Groups } from './groups.js';
 export type { Group, GroupsOptions, GroupsInstance } from './groups.js';
 

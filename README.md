@@ -358,6 +358,37 @@ for await (const [message, remote] of socket) {
 
 ## Common Patterns
 
+### Discovery Helper
+
+The broadcast-on-an-interval dance from the Quick Start is packaged in the optional `lifxlan/discovery` subpath. `discover()` broadcasts `GetService` immediately and then on an interval, and yields devices as your message handler registers them — already-known devices first, then new ones as they arrive:
+
+```javascript
+import { discover } from 'lifxlan/discovery';
+
+// ...socket + router + devices wiring as in the Quick Start...
+
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
+  console.log('found', device.serialNumber, device.address);
+}
+```
+
+The helper owns its broadcast timer and its own client (one source id), and releases both when iteration ends. Ending is never an error: the `timeoutMs` budget elapsing, an aborted `signal`, `break`ing out of the loop, and calling `dispose()` all end iteration normally. A deadline (`timeoutMs` or `signal`) still delivers devices already queued before reporting done; `break`/`dispose()` discard them. Note the contrast with `devices.get()`, where abort rejects — there, abort means the one lookup failed; here it just means "stop collecting".
+
+Waiting for one specific device:
+
+```javascript
+const discovery = discover(router, devices);
+try {
+  const device = await devices.get('d07123456789');
+} finally {
+  discovery.dispose();
+}
+```
+
+The helper only automates broadcasting and consumption. Registration is still your socket handler calling `router.receive()` and `devices.register()`, exactly as in the Quick Start — and a long-running app can keep one `discover()` iterating forever (the default, with no `timeoutMs`) so DHCP address changes keep flowing into the registry.
+
+Under the hood it uses `devices.subscribe({ onAdded, onChanged, onRemoved })`, which is also public: it adds observers alongside the callbacks fixed at construction and returns an unsubscribe function.
+
 ### Error Handling with Retries
 
 ```javascript
@@ -719,6 +750,7 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 - every export of the package root (`lifxlan`),
 - every export of `lifxlan/encoding`,
 - every export of `lifxlan/products`,
+- every export of `lifxlan/discovery`,
 - documented runtime behavior: zero-copy buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
 
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:

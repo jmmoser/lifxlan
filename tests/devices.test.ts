@@ -480,3 +480,75 @@ describe('devices', () => {
     expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
 });
+describe('devices subscribe', () => {
+  test('subscriber callbacks fire alongside constructor callbacks', () => {
+    const constructorEvents: string[] = [];
+    const subscriberEvents: string[] = [];
+    const devices = Devices({
+      onAdded(device) { constructorEvents.push(`added:${device.serialNumber}`); },
+      onChanged(device) { constructorEvents.push(`changed:${device.serialNumber}`); },
+      onRemoved(device) { constructorEvents.push(`removed:${device.serialNumber}`); },
+    });
+    devices.subscribe({
+      onAdded(device) { subscriberEvents.push(`added:${device.serialNumber}`); },
+      onChanged(device) { subscriberEvents.push(`changed:${device.serialNumber}`); },
+      onRemoved(device) { subscriberEvents.push(`removed:${device.serialNumber}`); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register('d073d5aa0001', 56700, '10.0.0.2');
+    devices.remove('d073d5aa0001');
+
+    const expected = ['added:d073d5aa0001', 'changed:d073d5aa0001', 'removed:d073d5aa0001'];
+    expect(constructorEvents).toEqual(expected);
+    expect(subscriberEvents).toEqual(expected);
+  });
+
+  test('unsubscribe stops notifications and is idempotent', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    const unsubscribe = devices.subscribe({
+      onAdded(device) { events.push(device.serialNumber); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    unsubscribe();
+    unsubscribe();
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+
+    expect(events).toEqual(['d073d5aa0001']);
+  });
+
+  test('a throwing subscriber does not block other subscribers', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    devices.subscribe({
+      onAdded() { throw new Error('subscriber bug'); },
+    });
+    devices.subscribe({
+      onAdded(device) { events.push(device.serialNumber); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+
+    expect(events).toEqual(['d073d5aa0001']);
+    expect(devices.registered.size).toBe(1);
+  });
+
+  test('subscribing the same handlers object twice creates independent subscriptions', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    const handlers = {
+      onAdded(device: Device) { events.push(device.serialNumber); },
+    };
+    devices.subscribe(handlers);
+    const unsubscribeSecond = devices.subscribe(handlers);
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001']);
+
+    unsubscribeSecond();
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001', 'd073d5aa0002']);
+  });
+});

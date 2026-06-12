@@ -45,10 +45,13 @@ export function Device(config: DeviceConfig): Device {
   };
 }
 
-export interface DevicesOptions {
+export interface DeviceEventHandlers {
   onAdded?: (device: Device) => void;
   onChanged?: (device: Device) => void;
   onRemoved?: (device: Device) => void;
+}
+
+export interface DevicesOptions extends DeviceEventHandlers {
   /**
    * How long get() waits for a device to be registered before rejecting with
    * TimeoutError. Applies whether or not a per-call signal is provided; set 0
@@ -77,6 +80,14 @@ export interface DevicesInstance {
   register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
   remove(serialNumber: string): boolean;
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
+  /**
+   * Adds an additional observer of registry events, independent of the
+   * callbacks fixed at construction; returns a function that removes it.
+   * For each event the constructor callback runs first, then subscribers in
+   * subscription order. Subscriber errors are swallowed like constructor
+   * callback errors, so one subscriber cannot starve another.
+   */
+  subscribe(handlers: DeviceEventHandlers): () => void;
   [Symbol.iterator](): Iterator<Device>;
 }
 
@@ -90,15 +101,48 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
   const deviceResolvers = new Map<string, Set<(device: Device) => void>>();
 
+  const subscribers = new Set<DeviceEventHandlers>();
+
+  function emitAdded(device: Device) {
+    if (onAdded) {
+      try { onAdded(device); } catch { /* user callback errors must not corrupt state */ }
+    }
+    for (const subscriber of subscribers) {
+      if (subscriber.onAdded) {
+        try { subscriber.onAdded(device); } catch { /* user callback errors must not corrupt state */ }
+      }
+    }
+  }
+
+  function emitChanged(device: Device) {
+    if (onChanged) {
+      try { onChanged(device); } catch { /* user callback errors must not corrupt state */ }
+    }
+    for (const subscriber of subscribers) {
+      if (subscriber.onChanged) {
+        try { subscriber.onChanged(device); } catch { /* user callback errors must not corrupt state */ }
+      }
+    }
+  }
+
+  function emitRemoved(device: Device) {
+    if (onRemoved) {
+      try { onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
+    }
+    for (const subscriber of subscribers) {
+      if (subscriber.onRemoved) {
+        try { subscriber.onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
+      }
+    }
+  }
+
   function registerDevice(serialNumber: string, port: number, address: string, target?: Uint8Array): Device {
     const existingDevice = knownDevices.get(serialNumber);
     if (existingDevice) {
       if (port !== existingDevice.port || address !== existingDevice.address) {
         existingDevice.port = port;
         existingDevice.address = address;
-        if (onChanged) {
-          try { onChanged(existingDevice); } catch { /* user callback errors must not corrupt state */ }
-        }
+        emitChanged(existingDevice);
       }
       return existingDevice;
     }
@@ -108,9 +152,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       serialNumber, port, address,
     });
     knownDevices.set(serialNumber, device);
-    if (onAdded) {
-      try { onAdded(device); } catch { /* user callback errors must not corrupt state */ }
-    }
+    emitAdded(device);
     return device;
   }
 
@@ -146,10 +188,23 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       // resolver Set must be cleared so they aren't accidentally
       // resolved by a future re-registration.
       deviceResolvers.delete(serialNumber);
-      if (device && onRemoved) {
-        try { onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
+      if (device) {
+        emitRemoved(device);
       }
       return removed;
+    },
+    subscribe(handlers: DeviceEventHandlers): () => void {
+      // Copy the handlers so each call is its own subscription — passing the
+      // same object twice must not collapse into one entry, and mutating the
+      // caller's object after subscribing must not alter what was subscribed.
+      const subscription: DeviceEventHandlers = {};
+      if (handlers.onAdded) subscription.onAdded = handlers.onAdded;
+      if (handlers.onChanged) subscription.onChanged = handlers.onChanged;
+      if (handlers.onRemoved) subscription.onRemoved = handlers.onRemoved;
+      subscribers.add(subscription);
+      return () => {
+        subscribers.delete(subscription);
+      };
     },
     get(serialNumber: string, options?: GetDeviceOptions): Promise<Device> {
       const signal = options?.signal;
