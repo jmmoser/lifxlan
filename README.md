@@ -367,6 +367,8 @@ import { discover } from 'lifxlan/discovery';
 
 // ...socket + router + devices wiring as in the Quick Start...
 
+// The 3-second budget ends the loop: when it elapses, the iterator
+// completes and the helper disposes its timer and client.
 for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
   console.log('found', device.serialNumber, device.address);
 }
@@ -374,7 +376,7 @@ for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
 
 The helper owns its broadcast timer and its own client (one source id), and releases both when iteration ends. Ending is never an error: the `timeoutMs` budget elapsing, an aborted `signal`, `break`ing out of the loop, and calling `dispose()` all end iteration normally. A deadline (`timeoutMs` or `signal`) still delivers devices already queued before reporting done; `break`/`dispose()` discard them. Note the contrast with `devices.get()`, where abort rejects — there, abort means the one lookup failed; here it just means "stop collecting".
 
-Waiting for one specific device. The iterator is `Disposable`, so a `using` declaration stops discovery at the end of the scope — `discover()` exposes `Symbol.dispose`, which is why the package requires Node.js ≥ 22 (where that symbol exists natively); any toolchain that downlevels `using` works on other runtimes too:
+Waiting for one specific device. The iterator is `Disposable`, so a `using` declaration stops discovery at the end of the scope:
 
 ```javascript
 using discovery = discover(router, devices);

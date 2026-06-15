@@ -60,6 +60,10 @@ const discoveryRouter = Router({
 });
 
 let discovered;
+// break disposes the stream through the iterator's return() — clearing the
+// broadcast interval and the timeout, and releasing the helper's client. If
+// it didn't, the pending interval would keep the event loop alive and this
+// script would hang instead of exiting.
 for await (const found of discover(discoveryRouter, discoveredDevices, { timeoutMs: 1000 })) {
   discovered = found;
   break;

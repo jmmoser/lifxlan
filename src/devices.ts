@@ -81,11 +81,13 @@ export interface DevicesInstance {
   remove(serialNumber: string): boolean;
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   /**
-   * Adds an additional observer of registry events, independent of the
-   * callbacks fixed at construction; returns a function that removes it.
-   * For each event the constructor callback runs first, then subscribers in
-   * subscription order. Subscriber errors are swallowed like constructor
-   * callback errors, so one subscriber cannot starve another.
+   * Adds observers of registry events alongside the callbacks fixed at
+   * construction; returns a function that removes exactly the handlers this
+   * call added. For each event the constructor callback runs first, then
+   * subscribers in subscription order. Handler errors are swallowed so one
+   * cannot starve another. Handlers are keyed by reference, like
+   * addEventListener: registering the same function for the same event twice
+   * is a no-op.
    */
   subscribe(handlers: DeviceEventHandlers): () => void;
   [Symbol.iterator](): Iterator<Device>;
@@ -93,46 +95,29 @@ export interface DevicesInstance {
 
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
-  const onAdded = options.onAdded;
-  const onChanged = options.onChanged;
-  const onRemoved = options.onRemoved;
 
   const knownDevices = new Map<string, Device>();
 
   const deviceResolvers = new Map<string, Set<(device: Device) => void>>();
 
-  const subscribers = new Set<DeviceEventHandlers>();
+  // One listener set per event, so dispatching an event never walks
+  // handlers that don't observe it. The constructor callbacks are simply the
+  // first listeners — that unifies dispatch (no separate code path) and, since
+  // Sets iterate in insertion order, keeps them running ahead of any later
+  // subscriber. Listeners are keyed by function reference, like
+  // addEventListener: registering the same function for the same event twice
+  // is a no-op.
+  const addedListeners = new Set<(device: Device) => void>();
+  const changedListeners = new Set<(device: Device) => void>();
+  const removedListeners = new Set<(device: Device) => void>();
 
-  function emitAdded(device: Device) {
-    if (onAdded) {
-      try { onAdded(device); } catch { /* user callback errors must not corrupt state */ }
-    }
-    for (const subscriber of subscribers) {
-      if (subscriber.onAdded) {
-        try { subscriber.onAdded(device); } catch { /* user callback errors must not corrupt state */ }
-      }
-    }
-  }
+  if (options.onAdded) addedListeners.add(options.onAdded);
+  if (options.onChanged) changedListeners.add(options.onChanged);
+  if (options.onRemoved) removedListeners.add(options.onRemoved);
 
-  function emitChanged(device: Device) {
-    if (onChanged) {
-      try { onChanged(device); } catch { /* user callback errors must not corrupt state */ }
-    }
-    for (const subscriber of subscribers) {
-      if (subscriber.onChanged) {
-        try { subscriber.onChanged(device); } catch { /* user callback errors must not corrupt state */ }
-      }
-    }
-  }
-
-  function emitRemoved(device: Device) {
-    if (onRemoved) {
-      try { onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
-    }
-    for (const subscriber of subscribers) {
-      if (subscriber.onRemoved) {
-        try { subscriber.onRemoved(device); } catch { /* user callback errors must not corrupt state */ }
-      }
+  function emit(listeners: Set<(device: Device) => void>, device: Device) {
+    for (const listener of listeners) {
+      try { listener(device); } catch { /* user callback errors must not corrupt state */ }
     }
   }
 
@@ -142,7 +127,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       if (port !== existingDevice.port || address !== existingDevice.address) {
         existingDevice.port = port;
         existingDevice.address = address;
-        emitChanged(existingDevice);
+        emit(changedListeners, existingDevice);
       }
       return existingDevice;
     }
@@ -152,7 +137,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       serialNumber, port, address,
     });
     knownDevices.set(serialNumber, device);
-    emitAdded(device);
+    emit(addedListeners, device);
     return device;
   }
 
@@ -189,21 +174,23 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       // resolved by a future re-registration.
       deviceResolvers.delete(serialNumber);
       if (device) {
-        emitRemoved(device);
+        emit(removedListeners, device);
       }
       return removed;
     },
     subscribe(handlers: DeviceEventHandlers): () => void {
-      // Copy the handlers so each call is its own subscription — passing the
-      // same object twice must not collapse into one entry, and mutating the
-      // caller's object after subscribing must not alter what was subscribed.
-      const subscription: DeviceEventHandlers = {};
-      if (handlers.onAdded) subscription.onAdded = handlers.onAdded;
-      if (handlers.onChanged) subscription.onChanged = handlers.onChanged;
-      if (handlers.onRemoved) subscription.onRemoved = handlers.onRemoved;
-      subscribers.add(subscription);
+      // Read the handlers once so the unsubscribe removes exactly what this
+      // call added, regardless of later mutation of the caller's object.
+      const added = handlers.onAdded;
+      const changed = handlers.onChanged;
+      const removed = handlers.onRemoved;
+      if (added) addedListeners.add(added);
+      if (changed) changedListeners.add(changed);
+      if (removed) removedListeners.add(removed);
       return () => {
-        subscribers.delete(subscription);
+        if (added) addedListeners.delete(added);
+        if (changed) changedListeners.delete(changed);
+        if (removed) removedListeners.delete(removed);
       };
     },
     get(serialNumber: string, options?: GetDeviceOptions): Promise<Device> {

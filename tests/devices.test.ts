@@ -535,20 +535,33 @@ describe('devices subscribe', () => {
     expect(devices.registered.size).toBe(1);
   });
 
-  test('subscribing the same handlers object twice creates independent subscriptions', () => {
+  test('registering the same function for an event twice is deduped', () => {
     const events: string[] = [];
     const devices = Devices();
-    const handlers = {
-      onAdded(device: Device) { events.push(device.serialNumber); },
-    };
-    devices.subscribe(handlers);
-    const unsubscribeSecond = devices.subscribe(handlers);
+    const handler = (device: Device) => { events.push(device.serialNumber); };
+    const unsubscribeFirst = devices.subscribe({ onAdded: handler });
+    devices.subscribe({ onAdded: handler });
 
     devices.register('d073d5aa0001', 56700, '10.0.0.1');
-    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001']);
+    expect(events).toEqual(['d073d5aa0001']);
 
-    unsubscribeSecond();
+    unsubscribeFirst();
     devices.register('d073d5aa0002', 56700, '10.0.0.2');
-    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001', 'd073d5aa0002']);
+    expect(events).toEqual(['d073d5aa0001']);
+  });
+
+  test('distinct subscriptions are independent', () => {
+    const a: string[] = [];
+    const b: string[] = [];
+    const devices = Devices();
+    const unsubscribeA = devices.subscribe({ onAdded: (device) => a.push(device.serialNumber) });
+    devices.subscribe({ onAdded: (device) => b.push(device.serialNumber) });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    unsubscribeA();
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+
+    expect(a).toEqual(['d073d5aa0001']);
+    expect(b).toEqual(['d073d5aa0001', 'd073d5aa0002']);
   });
 });
