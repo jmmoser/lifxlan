@@ -95,7 +95,7 @@
     "url": "https://github.com/jmmoser/lifxlan/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "author": "Justin Moser",
   "license": "MIT",

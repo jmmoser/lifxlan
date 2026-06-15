@@ -180,6 +180,21 @@ describe('discovery', () => {
     expect(handlers.size).toBe(0);
   });
 
+  test('Symbol.dispose stops discovery like dispose()', async () => {
+    const handlers = new Map();
+    const router = Router({ onSend() {}, handlers });
+    const devices = Devices();
+    const discovery = discover(router, devices);
+
+    expect(typeof discovery[Symbol.dispose]).toBe('function');
+    expect(handlers.size).toBe(1);
+
+    discovery[Symbol.dispose]();
+    expect(handlers.size).toBe(0);
+    const result = await discovery.next();
+    expect(result.done).toBe(true);
+  });
+
   test('dispose is idempotent and resolves pending next() calls', async () => {
     const { router } = recordingRouter();
     const devices = Devices();

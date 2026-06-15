@@ -374,16 +374,15 @@ for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
 
 The helper owns its broadcast timer and its own client (one source id), and releases both when iteration ends. Ending is never an error: the `timeoutMs` budget elapsing, an aborted `signal`, `break`ing out of the loop, and calling `dispose()` all end iteration normally. A deadline (`timeoutMs` or `signal`) still delivers devices already queued before reporting done; `break`/`dispose()` discard them. Note the contrast with `devices.get()`, where abort rejects — there, abort means the one lookup failed; here it just means "stop collecting".
 
-Waiting for one specific device:
+Waiting for one specific device. The iterator is `Disposable`, so a `using` declaration stops discovery at the end of the scope — `discover()` exposes `Symbol.dispose`, which is why the package requires Node.js ≥ 22 (where that symbol exists natively); any toolchain that downlevels `using` works on other runtimes too:
 
 ```javascript
-const discovery = discover(router, devices);
-try {
-  const device = await devices.get('d07123456789');
-} finally {
-  discovery.dispose();
-}
+using discovery = discover(router, devices);
+const device = await devices.get('d07123456789');
+// discovery.dispose() runs automatically at end of scope
 ```
+
+Without `using`, call `dispose()` yourself (e.g. in a `finally`).
 
 The helper only automates broadcasting and consumption. Registration is still your socket handler calling `router.receive()` and `devices.register()`, exactly as in the Quick Start — and a long-running app can keep one `discover()` iterating forever (the default, with no `timeoutMs`) so DHCP address changes keep flowing into the registry.
 
@@ -756,7 +755,7 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:
 
 - **Breaking changes** to the surface above only happen in a major version, are documented in the [release notes](https://github.com/jmmoser/lifxlan/releases), and where practical the old API is marked `@deprecated` for at least one minor version first.
-- **Supported runtimes** (Node.js ≥ 18, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
+- **Supported runtimes** (Node.js ≥ 22, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
 - **Prereleases** are published under the `rc` npm dist-tag, so plain `npm install lifxlan` always resolves to the latest stable release.
 
 ## Contributing

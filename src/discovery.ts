@@ -33,12 +33,14 @@ export interface DiscoveryOptions {
   timeoutMs?: number;
 }
 
-export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefined> {
+export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefined>, Disposable {
   /**
    * Stops discovery immediately: clears the broadcast timer, releases the
    * helper's source id, unsubscribes from the registry, discards any
    * not-yet-consumed devices, and ends iteration. Idempotent. Breaking out
-   * of a `for await` loop does the same through the iterator's return().
+   * of a `for await` loop does the same through the iterator's return(), and
+   * a `using` declaration does the same through `Symbol.dispose` at end of
+   * scope.
    */
   dispose(): void;
 }
@@ -66,6 +68,14 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
  * for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
  *   console.log('found', device.serialNumber, device.address);
  * }
+ * ```
+ *
+ * @example
+ * ```javascript
+ * // `using` disposes the stream at end of scope (Node >= 22, or any
+ * // toolchain that downlevels `using` against Symbol.dispose).
+ * using discovery = discover(router, devices);
+ * const device = await devices.get('d07123456789');
  * ```
  */
 export function discover(
@@ -164,11 +174,18 @@ export function discover(
     }, options.intervalMs ?? 1000);
   }
 
+  function disposeNow() {
+    queue.length = 0;
+    finish();
+  }
+
   const iterator: DiscoveryInstance = {
-    dispose() {
-      queue.length = 0;
-      finish();
-    },
+    dispose: disposeNow,
+    // Enables `using discovery = discover(...)`: end of scope disposes the
+    // stream. Requiring Node >= 22 (where Symbol.dispose exists natively)
+    // is what makes defining this safe — on older runtimes the symbol was
+    // undefined and the computed key silently became the string "undefined".
+    [Symbol.dispose]: disposeNow,
     [Symbol.asyncIterator]() {
       return iterator;
     },
