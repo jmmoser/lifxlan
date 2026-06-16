@@ -360,35 +360,48 @@ for await (const [message, remote] of socket) {
 
 ### Discovery Helper
 
-The broadcast-on-an-interval dance from the Quick Start is packaged in the optional `lifxlan/discovery` subpath. `discover()` broadcasts `GetService` immediately and then on an interval, and yields devices as your message handler registers them — already-known devices first, then new ones as they arrive:
+The optional `lifxlan/discovery` subpath packages the broadcast-on-an-interval loop from the Quick Start. `discover()` broadcasts `GetService` immediately and on an interval, yielding devices as your handler registers them — known devices first, then new arrivals. End to end:
 
 ```javascript
+import dgram from 'node:dgram';
+import { Devices, Router } from 'lifxlan';
 import { discover } from 'lifxlan/discovery';
 
-// ...socket + router + devices wiring as in the Quick Start...
+const socket = dgram.createSocket('udp4');
+const router = Router({ onSend: (msg, port, address) => socket.send(msg, port, address) });
+const devices = Devices();
 
-// The 3-second budget ends the loop: when it elapses, the iterator
-// completes and the helper disposes its timer and client.
+// Registration stays yours: feed received packets into the registry.
+socket.on('message', (msg, remote) => {
+  const result = router.receive(msg);
+  if (result) {
+    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
+  }
+});
+
+await new Promise((resolve) => {
+  socket.once('listening', resolve);
+  socket.bind();
+});
+socket.setBroadcast(true);
+
 for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
   console.log('found', device.serialNumber, device.address);
 }
+
+socket.close();
 ```
 
-The helper owns its broadcast timer and its own client (one source id), and releases both when iteration ends. Ending is never an error: the `timeoutMs` budget elapsing, an aborted `signal`, `break`ing out of the loop, and calling `dispose()` all end iteration normally. A deadline (`timeoutMs` or `signal`) still delivers devices already queued before reporting done; `break`/`dispose()` discard them. Note the contrast with `devices.get()`, where abort rejects — there, abort means the one lookup failed; here it just means "stop collecting".
+`discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.get()`, where abort *rejects* — there it means the lookup failed; here it just means "stop collecting".)
 
-Waiting for one specific device. The iterator is `Disposable`, so a `using` declaration stops discovery at the end of the scope:
+The iterator is `Disposable`, so `using` stops discovery at end of scope — handy when waiting for one device:
 
 ```javascript
 using discovery = discover(router, devices);
 const device = await devices.get('d07123456789');
-// discovery.dispose() runs automatically at end of scope
 ```
 
-Without `using`, call `dispose()` yourself (e.g. in a `finally`).
-
-The helper only automates broadcasting and consumption. Registration is still your socket handler calling `router.receive()` and `devices.register()`, exactly as in the Quick Start — and a long-running app can keep one `discover()` iterating forever (the default, with no `timeoutMs`) so DHCP address changes keep flowing into the registry.
-
-Under the hood it uses `devices.subscribe({ onAdded, onChanged, onRemoved })`, which is also public: it adds observers alongside the callbacks fixed at construction and returns an unsubscribe function.
+With no `timeoutMs` it runs until disposed, keeping the registry fresh as DHCP addresses change. Internally it uses the public `devices.subscribe({ onAdded, onChanged, onRemoved })`, which observes registry events and returns an unsubscribe function.
 
 ### Error Handling with Retries
 
