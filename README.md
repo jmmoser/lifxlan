@@ -394,7 +394,7 @@ socket.close();
 
 `discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.get()`, where abort *rejects* — there it means the lookup failed; here it just means "stop collecting".)
 
-The iterator is `Disposable`, so `using` stops discovery at end of scope — handy when waiting for one device:
+The iterator is `Disposable`, so `using` stops discovery at end of scope:
 
 ```javascript
 using discovery = discover(router, devices);
