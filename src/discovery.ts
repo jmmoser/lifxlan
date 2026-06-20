@@ -20,7 +20,9 @@ export interface DiscoveryOptions {
    * Ends iteration when aborted. Unlike devices.get() — where abort rejects
    * because the awaited lookup never happened — stopping a discovery stream
    * is its expected ending, so the iterator completes normally instead of
-   * throwing. Devices already queued are still yielded before it completes.
+   * throwing. Devices already queued are still yielded before it completes —
+   * including when the signal is already aborted at the call, which drains the
+   * current registry snapshot and then ends without broadcasting.
    */
   signal?: AbortSignal;
   /**
@@ -72,8 +74,9 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
  *
  * @example
  * ```javascript
- * // `using` disposes the stream at end of scope (Node >= 22, or any
- * // toolchain that downlevels `using` against Symbol.dispose).
+ * // `using` disposes the stream at end of scope. Needs Node >= 22 at
+ * // runtime and, to type-check, TypeScript >= 5.2 with esnext.disposable
+ * // in lib (or @types/node). Otherwise call dispose() directly.
  * using discovery = discover(router, devices);
  * const device = await devices.get('d07123456789');
  * ```
@@ -124,8 +127,11 @@ export function discover(
 
   if (signal?.aborted) {
     // The caller already cancelled. An already-aborted signal never fires
-    // another 'abort' event, so the listener below would never run; end
-    // up front instead, before any client, broadcast, or timer exists.
+    // another 'abort' event, so there is nothing to listen for and no point
+    // creating a client, broadcasting, or arming a timer. Still seed the
+    // already-registered snapshot so a pre-aborted signal drains it and then
+    // ends — identical to aborting a moment later, with no timing surprise.
+    queue.push(...devices.registered.values());
     done = true;
   } else {
     // Snapshot-then-subscribe runs synchronously, so a device registered

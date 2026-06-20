@@ -535,7 +535,7 @@ describe('devices subscribe', () => {
     expect(devices.registered.size).toBe(1);
   });
 
-  test('registering the same function for an event twice is deduped', () => {
+  test('subscribing the same function twice invokes it twice and removes independently', () => {
     const events: string[] = [];
     const devices = Devices();
     const handler = (device: Device) => { events.push(device.serialNumber); };
@@ -543,11 +543,27 @@ describe('devices subscribe', () => {
     devices.subscribe({ onAdded: handler });
 
     devices.register('d073d5aa0001', 56700, '10.0.0.1');
-    expect(events).toEqual(['d073d5aa0001']);
+    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001']);
 
     unsubscribeFirst();
     devices.register('d073d5aa0002', 56700, '10.0.0.2');
-    expect(events).toEqual(['d073d5aa0001']);
+    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001', 'd073d5aa0002']);
+  });
+
+  test('subscribing from within a handler does not fire for the in-progress event', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    devices.subscribe({
+      onAdded() {
+        devices.subscribe({ onAdded: (device) => events.push(`late:${device.serialNumber}`) });
+      },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    expect(events).toEqual([]);
+
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    expect(events).toEqual(['late:d073d5aa0002']);
   });
 
   test('distinct subscriptions are independent', () => {

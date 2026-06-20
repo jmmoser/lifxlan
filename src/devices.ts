@@ -85,12 +85,17 @@ export interface DevicesInstance {
    * construction; returns a function that removes exactly the handlers this
    * call added. For each event the constructor callback runs first, then
    * subscribers in subscription order. Handler errors are swallowed so one
-   * cannot starve another. Handlers are keyed by reference, like
-   * addEventListener: registering the same function for the same event twice
-   * is a no-op.
+   * cannot starve another. Each call is independent: subscribing the same
+   * function twice invokes it twice per event. Subscribing or unsubscribing
+   * from within a handler takes effect on the next event, not the one in
+   * progress.
    */
   subscribe(handlers: DeviceEventHandlers): () => void;
   [Symbol.iterator](): Iterator<Device>;
+}
+
+interface ListenerRecord {
+  fn: (device: Device) => void;
 }
 
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
@@ -100,24 +105,27 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
   const deviceResolvers = new Map<string, Set<(device: Device) => void>>();
 
-  // One listener set per event, so dispatching an event never walks
-  // handlers that don't observe it. The constructor callbacks are simply the
-  // first listeners — that unifies dispatch (no separate code path) and, since
-  // Sets iterate in insertion order, keeps them running ahead of any later
-  // subscriber. Listeners are keyed by function reference, like
-  // addEventListener: registering the same function for the same event twice
-  // is a no-op.
-  const addedListeners = new Set<(device: Device) => void>();
-  const changedListeners = new Set<(device: Device) => void>();
-  const removedListeners = new Set<(device: Device) => void>();
+  // One listener set per event, so dispatching an event never walks handlers
+  // that don't observe it. Each handler is wrapped in a per-subscription
+  // record: the constructor callbacks are simply the first records (Sets
+  // iterate in insertion order, so they run ahead of later subscribers, with
+  // no separate dispatch path), and every subscribe() stays independent —
+  // subscribing the same function twice registers two records, and each
+  // unsubscribe removes only its own.
+  const addedListeners = new Set<ListenerRecord>();
+  const changedListeners = new Set<ListenerRecord>();
+  const removedListeners = new Set<ListenerRecord>();
 
-  if (options.onAdded) addedListeners.add(options.onAdded);
-  if (options.onChanged) changedListeners.add(options.onChanged);
-  if (options.onRemoved) removedListeners.add(options.onRemoved);
+  if (options.onAdded) addedListeners.add({ fn: options.onAdded });
+  if (options.onChanged) changedListeners.add({ fn: options.onChanged });
+  if (options.onRemoved) removedListeners.add({ fn: options.onRemoved });
 
-  function emit(listeners: Set<(device: Device) => void>, device: Device) {
-    for (const listener of listeners) {
-      try { listener(device); } catch { /* user callback errors must not corrupt state */ }
+  function emit(listeners: Set<ListenerRecord>, device: Device) {
+    // Snapshot so subscribing or unsubscribing from inside a handler takes
+    // effect on the next event, not the one in progress (like addEventListener).
+    // emit() only fires on a genuine add/change/remove, so the copy is rare.
+    for (const listener of [...listeners]) {
+      try { listener.fn(device); } catch { /* user callback errors must not corrupt state */ }
     }
   }
 
@@ -179,11 +187,12 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       return removed;
     },
     subscribe(handlers: DeviceEventHandlers): () => void {
-      // Read the handlers once so the unsubscribe removes exactly what this
-      // call added, regardless of later mutation of the caller's object.
-      const added = handlers.onAdded;
-      const changed = handlers.onChanged;
-      const removed = handlers.onRemoved;
+      // Wrap each handler in its own record so the unsubscribe removes exactly
+      // what this call added — independent of later mutation of the caller's
+      // object and of any other subscriber that passes the same function.
+      const added = handlers.onAdded ? { fn: handlers.onAdded } : undefined;
+      const changed = handlers.onChanged ? { fn: handlers.onChanged } : undefined;
+      const removed = handlers.onRemoved ? { fn: handlers.onRemoved } : undefined;
       if (added) addedListeners.add(added);
       if (changed) changedListeners.add(changed);
       if (removed) removedListeners.add(removed);

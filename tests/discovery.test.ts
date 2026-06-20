@@ -15,31 +15,48 @@ function sleep(ms: number) {
 
 function recordingRouter() {
   const sent: Uint8Array[] = [];
+  const waiters: Array<{ n: number; resolve: () => void }> = [];
   const router = Router({
     onSend(message) {
       sent.push(message);
+      for (let i = waiters.length - 1; i >= 0; i--) {
+        const waiter = waiters[i];
+        if (waiter !== undefined && sent.length >= waiter.n) {
+          waiters.splice(i, 1);
+          waiter.resolve();
+        }
+      }
     },
   });
-  return { router, sent };
+  // Resolves the moment the cumulative send count first reaches n, so timing
+  // assertions wait exactly as long as needed instead of a fixed sleep.
+  function untilSent(n: number): Promise<void> {
+    if (sent.length >= n) return Promise.resolve();
+    return new Promise((resolve) => { waiters.push({ n, resolve }); });
+  }
+  return { router, sent, untilSent };
 }
 
 describe('discovery', () => {
   test('broadcasts GetService immediately and on the interval, and stops on dispose', async () => {
-    const { router, sent } = recordingRouter();
+    const { router, sent, untilSent } = recordingRouter();
     const devices = Devices();
 
-    const discovery = discover(router, devices, { intervalMs: 5 });
+    const discovery = discover(router, devices, { intervalMs: 1 });
     expect(sent.length).toBe(1);
     const initial = sent[0];
     if (initial === undefined) throw new Error('no initial broadcast');
     expect(decodeHeader(initial).type).toBe(Type.GetService);
 
-    await sleep(25);
+    // Wait for exactly the second broadcast rather than guessing a duration.
+    await untilSent(2);
     expect(sent.length).toBeGreaterThanOrEqual(2);
 
     discovery.dispose();
     const sendsAtDispose = sent.length;
-    await sleep(25);
+    // With intervalMs:1 a leaked timer would fire ~20 more times in this window,
+    // so a cleared timer is asserted by margin, not by luck.
+    await sleep(20);
     expect(sent.length).toBe(sendsAtDispose);
   });
 
@@ -110,7 +127,7 @@ describe('discovery', () => {
     expect(second.done).toBe(true);
   });
 
-  test('an already-aborted signal performs no work at all', async () => {
+  test('an already-aborted signal drains the registry snapshot then ends, doing no network work', async () => {
     const { router, sent } = recordingRouter();
     const devices = Devices();
     devices.register(SERIAL_A, 56700, '10.0.0.1');
@@ -118,20 +135,38 @@ describe('discovery', () => {
     controller.abort();
 
     const discovery = discover(router, devices, { signal: controller.signal });
+    // No client, no broadcast, no timer — but the snapshot is still yielded.
     expect(sent.length).toBe(0);
-    const result = await discovery.next();
-    expect(result.done).toBe(true);
+
+    const first = await discovery.next();
+    expect(first.done).toBe(false);
+    expect(first.value?.serialNumber).toBe(SERIAL_A);
+
+    const second = await discovery.next();
+    expect(second.done).toBe(true);
+  });
+
+  test('an already-aborted signal owns no source id', () => {
+    const handlers = new Map();
+    const router = Router({ onSend() {}, handlers });
+    const devices = Devices();
+    const controller = new AbortController();
+    controller.abort();
+
+    discover(router, devices, { signal: controller.signal });
+    expect(handlers.size).toBe(0);
   });
 
   test('timeoutMs ends iteration normally and drains the queue', async () => {
     const { router } = recordingRouter();
     const devices = Devices();
-    const discovery = discover(router, devices, { timeoutMs: 10 });
+    const discovery = discover(router, devices, { timeoutMs: 5 });
 
     devices.register(SERIAL_A, 56700, '10.0.0.1');
     devices.register(SERIAL_B, 56700, '10.0.0.2');
-    await sleep(25);
 
+    // The two devices are queued synchronously; the loop yields them, then
+    // blocks on next() until the deadline fires finish() — no sleep needed.
     const collected: string[] = [];
     for await (const device of discovery) {
       collected.push(device.serialNumber);
@@ -142,7 +177,7 @@ describe('discovery', () => {
   test('a pending next() resolves done when the timeout elapses', async () => {
     const { router } = recordingRouter();
     const devices = Devices();
-    const discovery = discover(router, devices, { timeoutMs: 10 });
+    const discovery = discover(router, devices, { timeoutMs: 5 });
 
     const result = await discovery.next();
     expect(result.done).toBe(true);
@@ -154,7 +189,7 @@ describe('discovery', () => {
     devices.register(SERIAL_A, 56700, '10.0.0.1');
     devices.register(SERIAL_B, 56700, '10.0.0.2');
 
-    const discovery = discover(router, devices, { intervalMs: 5 });
+    const discovery = discover(router, devices, { intervalMs: 1 });
     for await (const device of discovery) {
       expect(device.serialNumber).toBe(SERIAL_A);
       break;
@@ -165,7 +200,8 @@ describe('discovery', () => {
     const after = await discovery.next();
     expect(after.done).toBe(true);
     const sendsAtBreak = sent.length;
-    await sleep(25);
+    // With intervalMs:1 a surviving timer would fire many times in this window.
+    await sleep(20);
     expect(sent.length).toBe(sendsAtBreak);
   });
 
@@ -235,7 +271,7 @@ describe('discovery', () => {
       },
     });
     const devices = Devices();
-    const discovery = discover(router, devices, { intervalMs: 5 });
+    const discovery = discover(router, devices, { intervalMs: 1 });
 
     const result = await discovery.next();
     expect(result.done).toBe(true);
