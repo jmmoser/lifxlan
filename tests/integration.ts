@@ -204,10 +204,7 @@ describe('LIFX Integration Tests', () => {
 
       // Handle incoming UDP messages
       socket.on('message', (message, remote) => {
-        const result = router.receive(message);
-        if (result) {
-          devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
-        }
+        devices.register(remote.port, remote.address, router.receive(message));
       });
 
       // Initialize socket

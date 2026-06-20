@@ -48,12 +48,11 @@ const router = Router({
 // Registry of discovered devices (populated by the message handler below)
 const devices = Devices();
 
-// Handle incoming messages
+// Handle incoming messages. router.receive() decodes the packet (or returns
+// undefined for a malformed one); devices.register() takes that result and the
+// sender's address straight through, registering nothing when it's undefined.
 socket.on('message', (message, remote) => {
-  const result = router.receive(message);
-  if (result) {
-    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
-  }
+  devices.register(remote.port, remote.address, router.receive(message));
 });
 
 // Start the socket
@@ -215,12 +214,10 @@ const devices = Devices({
 });
 
 socket.on('message', (message, remote) => {
-  // Forward received messages to the router. Returns undefined for
-  // malformed packets, which we silently ignore.
-  const result = router.receive(message);
-  if (result) {
-    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
-  }
+  // Forward received messages to the router and register the responder.
+  // router.receive() returns undefined for malformed packets, and
+  // devices.register() registers nothing when handed undefined.
+  devices.register(remote.port, remote.address, router.receive(message));
 });
 
 // Client handles communication with devices
@@ -263,10 +260,7 @@ const devices = Devices({
 const socket = await Bun.udpSocket({
   socket: {
     data(_socket, message, port, address) {
-      const result = router.receive(message);
-      if (result) {
-        devices.register(result.serialNumber, port, address, result.header.target);
-      }
+      devices.register(port, address, router.receive(message));
     },
   },
 });
@@ -349,10 +343,7 @@ setTimeout(() => {
 }, 1000);
 
 for await (const [message, remote] of socket) {
-  const result = router.receive(message);
-  if (result) {
-    devices.register(result.serialNumber, remote.port, remote.hostname, result.header.target);
-  }
+  devices.register(remote.port, remote.hostname, router.receive(message));
 }
 ```
 
@@ -373,10 +364,7 @@ const devices = Devices();
 
 // Registration stays yours: feed received packets into the registry.
 socket.on('message', (msg, remote) => {
-  const result = router.receive(msg);
-  if (result) {
-    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
-  }
+  devices.register(remote.port, remote.address, router.receive(msg));
 });
 
 await new Promise((resolve) => {

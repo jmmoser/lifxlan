@@ -1,6 +1,9 @@
 import { describe, test, spyOn, expect } from 'bun:test';
 import assert from 'node:assert';
 import { Devices, Device } from '../src/devices.js';
+import { Router, type RouterInstance } from '../src/router.js';
+import { encode } from '../src/encoding.js';
+import { Type } from '../src/constants/index.js';
 
 describe('devices', () => {
   const sharedDevice = Device({
@@ -614,5 +617,55 @@ describe('devices subscribe', () => {
 
     expect(a).toEqual(['d073d5aa0001']);
     expect(b).toEqual(['d073d5aa0001', 'd073d5aa0002']);
+  });
+
+  describe('register(port, address, received)', () => {
+    const target = new Uint8Array([0xd0, 0x73, 0xd5, 0xaa, 0x00, 0x01]);
+
+    function stateService(): ReturnType<RouterInstance['receive']> {
+      const router = Router({ onSend() {} });
+      const message = encode(false, 2, target, false, false, 0, Type.StateService, new Uint8Array([1, 0x7c, 0xdd, 0, 0]));
+      return router.receive(message);
+    }
+
+    test('registers the responder of a receive() result', () => {
+      const devices = Devices();
+
+      const device = devices.register(56700, '10.0.0.7', stateService());
+
+      expect(device?.serialNumber).toBe('d073d5aa0001');
+      expect(device?.address).toBe('10.0.0.7');
+      expect(device?.port).toBe(56700);
+      expect(devices.registered.get('d073d5aa0001')).toBe(device);
+    });
+
+    test('derives the target from the received header', () => {
+      const devices = Devices();
+      const device = devices.register(56700, '10.0.0.7', stateService());
+      expect(device?.target).toEqual(target);
+    });
+
+    test('a known device that moves address updates in place and emits onChanged', () => {
+      const changed: string[] = [];
+      const devices = Devices({ onChanged: (device) => changed.push(device.address) });
+
+      devices.register(56700, '10.0.0.7', stateService());
+      const moved = devices.register(56700, '10.0.0.9', stateService());
+
+      expect(moved?.address).toBe('10.0.0.9');
+      expect(devices.registered.size).toBe(1);
+      expect(changed).toEqual(['10.0.0.9']);
+    });
+
+    test('an undefined result (malformed packet) registers nothing', () => {
+      const added: string[] = [];
+      const devices = Devices({ onAdded: (device) => added.push(device.serialNumber) });
+
+      const device = devices.register(56700, '10.0.0.7', undefined);
+
+      expect(device).toBeUndefined();
+      expect(devices.registered.size).toBe(0);
+      expect(added).toEqual([]);
+    });
   });
 });

@@ -52,10 +52,7 @@ const discoveryRouter = Router({
     if (header.type !== Type.GetService) return;
     const payload = new Uint8Array([1, 0x7C, 0xDD, 0x00, 0x00]); // service 1, port 56700
     const reply = encode(false, header.source, device.target, false, false, header.sequence, Type.StateService, payload);
-    const result = discoveryRouter.receive(reply);
-    if (result) {
-      discoveredDevices.register(result.serialNumber, 56700, '127.0.0.1', result.header.target);
-    }
+    discoveredDevices.register(56700, '127.0.0.1', discoveryRouter.receive(reply));
   },
 });
 
