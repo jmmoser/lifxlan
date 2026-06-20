@@ -480,3 +480,139 @@ describe('devices', () => {
     expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
 });
+describe('devices subscribe', () => {
+  test('subscriber callbacks fire alongside constructor callbacks', () => {
+    const constructorEvents: string[] = [];
+    const subscriberEvents: string[] = [];
+    const devices = Devices({
+      onAdded(device) { constructorEvents.push(`added:${device.serialNumber}`); },
+      onChanged(device) { constructorEvents.push(`changed:${device.serialNumber}`); },
+      onRemoved(device) { constructorEvents.push(`removed:${device.serialNumber}`); },
+    });
+    devices.subscribe({
+      onAdded(device) { subscriberEvents.push(`added:${device.serialNumber}`); },
+      onChanged(device) { subscriberEvents.push(`changed:${device.serialNumber}`); },
+      onRemoved(device) { subscriberEvents.push(`removed:${device.serialNumber}`); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register('d073d5aa0001', 56700, '10.0.0.2');
+    devices.remove('d073d5aa0001');
+
+    const expected = ['added:d073d5aa0001', 'changed:d073d5aa0001', 'removed:d073d5aa0001'];
+    expect(constructorEvents).toEqual(expected);
+    expect(subscriberEvents).toEqual(expected);
+  });
+
+  test('unsubscribe stops notifications and is idempotent', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    const unsubscribe = devices.subscribe({
+      onAdded(device) { events.push(device.serialNumber); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    unsubscribe();
+    unsubscribe();
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+
+    expect(events).toEqual(['d073d5aa0001']);
+  });
+
+  test('a throwing subscriber does not block other subscribers', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    devices.subscribe({
+      onAdded() { throw new Error('subscriber bug'); },
+    });
+    devices.subscribe({
+      onAdded(device) { events.push(device.serialNumber); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+
+    expect(events).toEqual(['d073d5aa0001']);
+    expect(devices.registered.size).toBe(1);
+  });
+
+  test('subscribing the same function twice invokes it twice and removes independently', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    const handler = (device: Device) => { events.push(device.serialNumber); };
+    const unsubscribeFirst = devices.subscribe({ onAdded: handler });
+    devices.subscribe({ onAdded: handler });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001']);
+
+    unsubscribeFirst();
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001', 'd073d5aa0002']);
+  });
+
+  test('subscribing from within a handler does not fire for the in-progress event', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    devices.subscribe({
+      onAdded() {
+        devices.subscribe({ onAdded: (device) => events.push(`late:${device.serialNumber}`) });
+      },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    expect(events).toEqual([]);
+
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    expect(events).toEqual(['late:d073d5aa0002']);
+  });
+
+  test('unsubscribing a not-yet-run handler from within a handler skips it for the in-progress event', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    let unsubscribeSecond = () => {};
+    devices.subscribe({
+      onAdded(device) {
+        events.push(`first:${device.serialNumber}`);
+        unsubscribeSecond(); // remove the second handler before it runs
+      },
+    });
+    unsubscribeSecond = devices.subscribe({
+      onAdded(device) { events.push(`second:${device.serialNumber}`); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    // 'second' was unsubscribed during dispatch before running, so it is skipped.
+    expect(events).toEqual(['first:d073d5aa0001']);
+  });
+
+  test('a handler that unsubscribes itself still completes the in-progress event but not the next', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    let unsubscribeSelf = () => {};
+    unsubscribeSelf = devices.subscribe({
+      onAdded(device) {
+        events.push(device.serialNumber);
+        unsubscribeSelf();
+      },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    expect(events).toEqual(['d073d5aa0001']);
+  });
+
+  test('distinct subscriptions are independent', () => {
+    const a: string[] = [];
+    const b: string[] = [];
+    const devices = Devices();
+    const unsubscribeA = devices.subscribe({ onAdded: (device) => a.push(device.serialNumber) });
+    devices.subscribe({ onAdded: (device) => b.push(device.serialNumber) });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    unsubscribeA();
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+
+    expect(a).toEqual(['d073d5aa0001']);
+    expect(b).toEqual(['d073d5aa0001', 'd073d5aa0002']);
+  });
+});

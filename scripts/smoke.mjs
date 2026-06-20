@@ -9,11 +9,13 @@ import {
   Router,
   Client,
   Device,
+  Devices,
   Type,
   GetPowerCommand,
 } from '../dist/esm/index.js';
 import { encode, decodeHeader } from '../dist/esm/encoding.js';
 import { Products } from '../dist/esm/products.js';
+import { discover } from '../dist/esm/discovery.js';
 
 const router = Router({
   onSend(message) {
@@ -38,6 +40,33 @@ const products = Products([
 ]);
 if (products.features(1, 32)?.multizone !== true) {
   throw new Error('products lookup failed');
+}
+
+// Discovery round trip: discover() broadcasts GetService through its own
+// client; this loopback "network" answers with StateService and registers
+// the responder, which the iterator then yields.
+const discoveredDevices = Devices();
+const discoveryRouter = Router({
+  onSend(message) {
+    const header = decodeHeader(message);
+    if (header.type !== Type.GetService) return;
+    const payload = new Uint8Array([1, 0x7C, 0xDD, 0x00, 0x00]); // service 1, port 56700
+    const reply = encode(false, header.source, device.target, false, false, header.sequence, Type.StateService, payload);
+    const result = discoveryRouter.receive(reply);
+    if (result) {
+      discoveredDevices.register(result.serialNumber, 56700, '127.0.0.1', result.header.target);
+    }
+  },
+});
+
+let discovered;
+// break disposes the stream (clearing the interval), so this exits.
+for await (const found of discover(discoveryRouter, discoveredDevices, { timeoutMs: 1000 })) {
+  discovered = found;
+  break;
+}
+if (discovered?.serialNumber !== 'd073d5123456') {
+  throw new Error('discovery round trip failed');
 }
 
 client.dispose();

@@ -358,6 +358,51 @@ for await (const [message, remote] of socket) {
 
 ## Common Patterns
 
+### Discovery Helper
+
+The optional `lifxlan/discovery` subpath packages the broadcast-on-an-interval loop from the Quick Start. `discover()` broadcasts `GetService` immediately and on an interval, yielding devices as your handler registers them — known devices first, then new arrivals. End to end:
+
+```javascript
+import dgram from 'node:dgram';
+import { Devices, Router } from 'lifxlan';
+import { discover } from 'lifxlan/discovery';
+
+const socket = dgram.createSocket('udp4');
+const router = Router({ onSend: (msg, port, address) => socket.send(msg, port, address) });
+const devices = Devices();
+
+// Registration stays yours: feed received packets into the registry.
+socket.on('message', (msg, remote) => {
+  const result = router.receive(msg);
+  if (result) {
+    devices.register(result.serialNumber, remote.port, remote.address, result.header.target);
+  }
+});
+
+await new Promise((resolve) => {
+  socket.once('listening', resolve);
+  socket.bind();
+});
+socket.setBroadcast(true);
+
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
+  console.log('found', device.serialNumber, device.address);
+}
+
+socket.close();
+```
+
+`discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.get()`, where abort *rejects* — there it means the lookup failed; here it just means "stop collecting".)
+
+The iterator is `Disposable`, so `using` stops discovery at end of scope:
+
+```javascript
+using discovery = discover(router, devices);
+const device = await devices.get('d07123456789');
+```
+
+Writing `using` needs TypeScript ≥ 5.2 with `Disposable` in scope (a `lib` that includes `esnext.disposable`, or `@types/node`, which Node ≥ 22 projects already have); otherwise call `dispose()` directly. With no `timeoutMs` it runs until disposed, keeping the registry fresh as DHCP addresses change. Internally it uses the public `devices.subscribe({ onAdded, onChanged, onRemoved })`, which observes registry events and returns an unsubscribe function.
+
 ### Error Handling with Retries
 
 ```javascript
@@ -719,12 +764,13 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 - every export of the package root (`lifxlan`),
 - every export of `lifxlan/encoding`,
 - every export of `lifxlan/products`,
+- every export of `lifxlan/discovery`,
 - documented runtime behavior: zero-copy buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
 
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:
 
 - **Breaking changes** to the surface above only happen in a major version, are documented in the [release notes](https://github.com/jmmoser/lifxlan/releases), and where practical the old API is marked `@deprecated` for at least one minor version first.
-- **Supported runtimes** (Node.js ≥ 18, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
+- **Supported runtimes** (Node.js ≥ 22, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
 - **Prereleases** are published under the `rc` npm dist-tag, so plain `npm install lifxlan` always resolves to the latest stable release.
 
 ## Contributing

@@ -51,6 +51,16 @@
         "default": "./dist/cjs/index.js"
       }
     },
+    "./discovery": {
+      "import": {
+        "types": "./dist/esm/discovery.d.ts",
+        "default": "./dist/esm/discovery.js"
+      },
+      "require": {
+        "types": "./dist/cjs/discovery.d.ts",
+        "default": "./dist/cjs/discovery.js"
+      }
+    },
     "./encoding": {
       "import": {
         "types": "./dist/esm/encoding.d.ts",
@@ -85,7 +95,7 @@
     "url": "https://github.com/jmmoser/lifxlan/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "author": "Justin Moser",
   "license": "MIT",
