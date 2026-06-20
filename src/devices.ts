@@ -80,20 +80,12 @@ export interface GetDeviceOptions {
 export interface DevicesInstance {
   readonly registered: ReadonlyMap<string, Device>;
   /**
-   * Registers (or updates the address of) a device. Two forms:
-   *
-   * - `register(serialNumber, port, address, target?)` — seed a device whose
-   *   serial you already know; the target is derived from the serial when
-   *   omitted.
-   * - `register(port, address, received)` — register the responder of a message
-   *   just decoded by `router.receive()`. Pass that result straight through:
-   *   `received` may be `undefined` (a malformed packet), in which case nothing
-   *   is registered and `undefined` is returned.
-   *
-   * Re-registering a known serial at a new port/address updates it in place and
-   * emits `onChanged`.
+   * Registers (or updates the address of) the responder of a message just
+   * decoded by `router.receive()`. Pass that result straight through:
+   * `received` may be `undefined` (a malformed packet), in which case nothing
+   * is registered and `undefined` is returned. Re-registering a known serial at
+   * a new port/address updates it in place and emits `onChanged`.
    */
-  register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
   register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined;
   remove(serialNumber: string): boolean;
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
@@ -171,44 +163,23 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     return device;
   }
 
-  function registerResolved(serialNumber: string, port: number, address: string, target?: Uint8Array): Device {
-    const device = registerDevice(serialNumber, port, address, target);
+  function register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined {
+    // received comes straight from router.receive(), so an undefined result
+    // (a malformed packet) registers nothing.
+    if (received === undefined) {
+      return undefined;
+    }
+    const device = registerDevice(received.serialNumber, port, address, received.header.target);
 
-    const resolvers = deviceResolvers.get(serialNumber);
+    const resolvers = deviceResolvers.get(received.serialNumber);
     if (resolvers) {
-      deviceResolvers.delete(serialNumber);
+      deviceResolvers.delete(received.serialNumber);
       resolvers.forEach((resolver) => {
         try { resolver(device); } catch { /* one resolver throwing must not block others */ }
       });
     }
 
     return device;
-  }
-
-  function register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
-  function register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined;
-  function register(
-    serialNumberOrPort: string | number,
-    portOrAddress: number | string,
-    addressOrReceived?: string | ReceivedMessage,
-    target?: Uint8Array,
-  ): Device | undefined {
-    // register(port, address, received): register the responder of a message
-    // router.receive() just decoded. The result is passed through verbatim, so
-    // undefined (a malformed packet) registers nothing.
-    if (typeof serialNumberOrPort === 'number') {
-      const received = addressOrReceived;
-      if (received === undefined || typeof received === 'string' || typeof portOrAddress !== 'string') {
-        return undefined;
-      }
-      return registerResolved(received.serialNumber, serialNumberOrPort, portOrAddress, received.header.target);
-    }
-
-    // register(serialNumber, port, address, target?): seed a known device.
-    if (typeof portOrAddress !== 'number' || typeof addressOrReceived !== 'string') {
-      return undefined;
-    }
-    return registerResolved(serialNumberOrPort, portOrAddress, addressOrReceived, target);
   }
 
   return {
