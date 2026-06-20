@@ -566,6 +566,41 @@ describe('devices subscribe', () => {
     expect(events).toEqual(['late:d073d5aa0002']);
   });
 
+  test('unsubscribing a not-yet-run handler from within a handler skips it for the in-progress event', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    let unsubscribeSecond = () => {};
+    devices.subscribe({
+      onAdded(device) {
+        events.push(`first:${device.serialNumber}`);
+        unsubscribeSecond(); // remove the second handler before it runs
+      },
+    });
+    unsubscribeSecond = devices.subscribe({
+      onAdded(device) { events.push(`second:${device.serialNumber}`); },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    // 'second' was unsubscribed during dispatch before running, so it is skipped.
+    expect(events).toEqual(['first:d073d5aa0001']);
+  });
+
+  test('a handler that unsubscribes itself still completes the in-progress event but not the next', () => {
+    const events: string[] = [];
+    const devices = Devices();
+    let unsubscribeSelf = () => {};
+    unsubscribeSelf = devices.subscribe({
+      onAdded(device) {
+        events.push(device.serialNumber);
+        unsubscribeSelf();
+      },
+    });
+
+    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    expect(events).toEqual(['d073d5aa0001']);
+  });
+
   test('distinct subscriptions are independent', () => {
     const a: string[] = [];
     const b: string[] = [];

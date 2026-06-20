@@ -86,9 +86,9 @@ export interface DevicesInstance {
    * call added. For each event the constructor callback runs first, then
    * subscribers in subscription order. Handler errors are swallowed so one
    * cannot starve another. Each call is independent: subscribing the same
-   * function twice invokes it twice per event. Subscribing or unsubscribing
-   * from within a handler takes effect on the next event, not the one in
-   * progress.
+   * function twice invokes it twice per event. Subscribing from within a
+   * handler takes effect on the next event; unsubscribing takes effect at
+   * once — a handler removed mid-dispatch is skipped if it has not run yet.
    */
   subscribe(handlers: DeviceEventHandlers): () => void;
   [Symbol.iterator](): Iterator<Device>;
@@ -121,10 +121,15 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
   if (options.onRemoved) removedListeners.add({ fn: options.onRemoved });
 
   function emit(listeners: Set<ListenerRecord>, device: Device) {
-    // Snapshot so subscribing or unsubscribing from inside a handler takes
-    // effect on the next event, not the one in progress (like addEventListener).
-    // emit() only fires on a genuine add/change/remove, so the copy is rare.
-    for (const listener of [...listeners]) {
+    // Iterate at most the count captured before dispatch — zero allocation, no
+    // per-dispatch copy. A handler subscribed from within a handler is past the
+    // cap, so it isn't seen until the next event (this also stops a
+    // subscribe-in-handler from looping forever); a handler unsubscribed before
+    // it runs is simply skipped.
+    let remaining = listeners.size;
+    if (remaining === 0) return;
+    for (const listener of listeners) {
+      if (remaining-- <= 0) break;
       try { listener.fn(device); } catch { /* user callback errors must not corrupt state */ }
     }
   }
