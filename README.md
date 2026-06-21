@@ -48,9 +48,6 @@ const router = Router({
 // Registry of discovered devices (populated by the message handler below)
 const devices = Devices();
 
-// Handle incoming messages. router.receive() decodes the packet (or returns
-// undefined for a malformed one); devices.register() takes that result and the
-// sender's address straight through, registering nothing when it's undefined.
 socket.on('message', (message, remote) => {
   const result = router.receive(message);
   devices.register(remote.port, remote.address, result);
