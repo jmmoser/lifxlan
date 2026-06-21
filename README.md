@@ -66,14 +66,12 @@ socket.setBroadcast(true);
 
 const client = Client({ router });
 
-// Discover devices in the background (broadcasts GetService on an interval)
-const discovery = discover(router, devices);
+// Discover devices in the background (broadcasts GetService on an interval).
+// `using` stops discovery automatically at the end of scope.
+using discovery = discover(router, devices);
 
 // Wait for a specific device (replace with your device's serial number)
 const device = await devices.get('d07123456789');
-
-// Stop discovering
-discovery.dispose();
 
 // Turn the light on!
 await client.send(SetPowerCommand(true), device);
