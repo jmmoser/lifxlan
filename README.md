@@ -48,6 +48,7 @@ const router = Router({
 // Registry of discovered devices (populated by the message handler below)
 const devices = Devices();
 
+// Handle incoming messages
 socket.on('message', (message, remote) => {
   const result = router.receive(message);
   devices.register(remote.port, remote.address, result);
