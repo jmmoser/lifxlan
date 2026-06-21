@@ -66,8 +66,7 @@ socket.setBroadcast(true);
 
 const client = Client({ router });
 
-// Discover devices in the background (broadcasts GetService on an interval).
-// `using` stops discovery automatically at the end of scope.
+// Discover devices in the background (broadcasts GetService on an interval)
 using discovery = discover(router, devices);
 
 // Wait for a specific device (replace with your device's serial number)
@@ -173,7 +172,7 @@ console.log(response.hue);    // response is typed as LightState
 
 ## Examples by Runtime
 
-Each runtime needs slightly different socket setup but uses the same core abstractions. These examples broadcast `GetService` directly to show the wiring; once the socket is listening you can hand `router` and `devices` to [`discover()`](#discovery-helper) instead of managing the broadcast loop yourself.
+Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples broadcast `GetService` directly to show how each socket is wired up; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
 
 ### Node.js / Bun
 
@@ -397,7 +396,9 @@ const device = await devices.get('d07123456789');
 clearInterval(scan);
 
 // ...or scan for a fixed window, then act on everything discovered:
-//   setTimeout(() => { clearInterval(scan); /* iterate `devices` */ }, 3000);
+//   await new Promise((resolve) => setTimeout(resolve, 3000));
+//   clearInterval(scan);
+//   for (const device of devices) { /* ... */ }
 ```
 
 A single broadcast can be lost (UDP is best-effort), so repeat on an interval until you've found what you're looking for. `devices.get()` resolves as soon as a matching device registers; for "all devices", broadcast for a few seconds, then iterate the `devices` registry. Because `devices.register()` updates a known device's address in place, leaving a slow interval running also tracks devices whose IP changes (DHCP) — the same reason `discover()` keeps broadcasting until disposed.
