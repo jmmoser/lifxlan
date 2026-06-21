@@ -52,7 +52,8 @@ const devices = Devices();
 // undefined for a malformed one); devices.register() takes that result and the
 // sender's address straight through, registering nothing when it's undefined.
 socket.on('message', (message, remote) => {
-  devices.register(remote.port, remote.address, router.receive(message));
+  const result = router.receive(message);
+  devices.register(remote.port, remote.address, result);
 });
 
 // Start the socket
