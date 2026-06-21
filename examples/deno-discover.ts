@@ -38,10 +38,7 @@ setTimeout(() => {
 try {
   for await (const [message, remote] of socket) {
     if (remote.transport !== 'udp') continue;
-    const result = router.receive(message);
-    if (result) {
-      devices.register(result.serialNumber, remote.port, remote.hostname, result.header.target);
-    }
+    devices.register(remote.port, remote.hostname, router.receive(message));
   }
 } catch {
   // socket.close() interrupts the async iterator; that's our normal shutdown

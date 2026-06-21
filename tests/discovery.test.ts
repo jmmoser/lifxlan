@@ -4,6 +4,7 @@ import { Devices } from '../src/devices.js';
 import { discover } from '../src/discovery.js';
 import { Type } from '../src/constants/index.js';
 import { decodeHeader } from '../src/encoding.js';
+import { received } from './helpers.js';
 
 const SERIAL_A = 'd073d5000001';
 const SERIAL_B = 'd073d5000002';
@@ -63,10 +64,10 @@ describe('discovery', () => {
   test('yields devices registered before the call first, then new registrations', async () => {
     const { router } = recordingRouter();
     const devices = Devices();
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
 
     const discovery = discover(router, devices);
-    devices.register(SERIAL_B, 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.2', received(SERIAL_B));
 
     const first = await discovery.next();
     const second = await discovery.next();
@@ -84,7 +85,7 @@ describe('discovery', () => {
     const discovery = discover(router, devices);
 
     const pending = discovery.next();
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
 
     const result = await pending;
     expect(result.done).toBe(false);
@@ -99,8 +100,8 @@ describe('discovery', () => {
     const discovery = discover(router, devices);
 
     const pending = Promise.all([discovery.next(), discovery.next()]);
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
-    devices.register(SERIAL_B, 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
+    devices.register(56700, '10.0.0.2', received(SERIAL_B));
 
     const [first, second] = await pending;
     expect(first.done).toBe(false);
@@ -117,7 +118,7 @@ describe('discovery', () => {
     const controller = new AbortController();
     const discovery = discover(router, devices, { signal: controller.signal });
 
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
     controller.abort();
 
     const first = await discovery.next();
@@ -130,7 +131,7 @@ describe('discovery', () => {
   test('an already-aborted signal drains the registry snapshot then ends, doing no network work', async () => {
     const { router, sent } = recordingRouter();
     const devices = Devices();
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
     const controller = new AbortController();
     controller.abort();
 
@@ -162,8 +163,8 @@ describe('discovery', () => {
     const devices = Devices();
     const discovery = discover(router, devices, { timeoutMs: 5 });
 
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
-    devices.register(SERIAL_B, 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
+    devices.register(56700, '10.0.0.2', received(SERIAL_B));
 
     // The two devices are queued synchronously; the loop yields them, then
     // blocks on next() until the deadline fires finish() — no sleep needed.
@@ -186,8 +187,8 @@ describe('discovery', () => {
   test('breaking out of for-await stops broadcasting and discards the queue', async () => {
     const { router, sent } = recordingRouter();
     const devices = Devices();
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
-    devices.register(SERIAL_B, 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
+    devices.register(56700, '10.0.0.2', received(SERIAL_B));
 
     const discovery = discover(router, devices, { intervalMs: 1 });
     for await (const device of discovery) {
@@ -257,7 +258,7 @@ describe('discovery', () => {
     expect(() => discover(router, devices)).toThrow('socket closed');
     // The owned client and the registry subscription must not leak.
     expect(handlers.size).toBe(0);
-    devices.register(SERIAL_C, 56700, '10.0.0.3');
+    devices.register(56700, '10.0.0.3', received(SERIAL_C));
   });
 
   test('a transport failure on a later tick ends iteration instead of crashing', async () => {
@@ -282,11 +283,11 @@ describe('discovery', () => {
     const devices = Devices();
     const discovery = discover(router, devices);
 
-    devices.register(SERIAL_A, 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received(SERIAL_A));
     expect((await discovery.next()).value?.serialNumber).toBe(SERIAL_A);
 
     devices.remove(SERIAL_A);
-    devices.register(SERIAL_A, 56700, '10.0.0.9');
+    devices.register(56700, '10.0.0.9', received(SERIAL_A));
     const again = await discovery.next();
     expect(again.done).toBe(false);
     expect(again.value?.address).toBe('10.0.0.9');

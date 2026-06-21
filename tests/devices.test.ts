@@ -1,6 +1,7 @@
 import { describe, test, spyOn, expect } from 'bun:test';
 import assert from 'node:assert';
 import { Devices, Device } from '../src/devices.js';
+import { received } from './helpers.js';
 
 describe('devices', () => {
   const sharedDevice = Device({
@@ -41,7 +42,7 @@ describe('devices', () => {
     const onAdded = spyOn(devicesOptions, 'onAdded');
     const devices = Devices(devicesOptions);
 
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
     expect(onAdded).toHaveBeenCalledTimes(1);
   });
@@ -49,8 +50,8 @@ describe('devices', () => {
   test('register same device multiple times only one device is registered', () => {
     const devices = Devices();
 
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
     expect(devices.registered.size).toBe(1);
   });
@@ -64,8 +65,8 @@ describe('devices', () => {
     const onChanged = spyOn(devicesOptions, 'onChanged');
     const devices = Devices(devicesOptions);
 
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address + '1', sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
+    devices.register(sharedDevice.port, sharedDevice.address + '1', received(sharedDevice.serialNumber));
 
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
@@ -76,7 +77,7 @@ describe('devices', () => {
     const devicePromise = devices.get(sharedDevice.serialNumber);
     expect(Bun.peek(devicePromise)).toEqual(devicePromise);
 
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
     const device = await devicePromise;
     expect(device).toEqual(sharedDevice);
@@ -91,7 +92,7 @@ describe('devices', () => {
     const devicePromise = devices.get(sharedDevice.serialNumber, { signal: new AbortController().signal });
     expect(Bun.peek(devicePromise)).toEqual(devicePromise);
 
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
     const device = await devicePromise;
     expect(device).toEqual(sharedDevice);
@@ -118,7 +119,7 @@ describe('devices', () => {
 
     const devices = Devices(devicesOptions);
 
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
     expect(devices.registered.size).toBe(1);
 
     devices.remove(sharedDevice.serialNumber);
@@ -141,7 +142,7 @@ describe('devices', () => {
     controller1.abort();
 
     // Register the device
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
     // First should reject, second should resolve
     await expect(promise1).rejects.toThrow('aborted');
@@ -183,12 +184,12 @@ describe('devices', () => {
     );
 
     // The rejected lookup must not have left a resolver behind.
-    devices.register('abcdef123456', 56700, '1.2.3.4');
+    devices.register(56700, '1.2.3.4', received('abcdef123456'));
   });
 
   test('get device with pre-aborted signal rejects even when the device is known', async () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
-    devices.register(sharedDevice.serialNumber, sharedDevice.port, sharedDevice.address, sharedDevice.target);
+    devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
     // Abort wins over the cache: the caller explicitly cancelled.
     const reason = new Error('already cancelled');
@@ -216,7 +217,7 @@ describe('devices', () => {
     });
 
     // Must not throw
-    devices.register('abcdef123456', 56700, '1.2.3.4');
+    devices.register(56700, '1.2.3.4', received('abcdef123456'));
     expect(devices.registered.size).toBe(1);
   });
 
@@ -227,8 +228,8 @@ describe('devices', () => {
       onChanged() { throw new Error('user bug'); },
     });
 
-    devices.register('abcdef123456', 56700, '1.2.3.4');
-    expect(() => devices.register('abcdef123456', 56700, '5.6.7.8')).not.toThrow();
+    devices.register(56700, '1.2.3.4', received('abcdef123456'));
+    expect(() => devices.register(56700, '5.6.7.8', received('abcdef123456'))).not.toThrow();
     expect(added).toBeDefined();
     expect(added!.address).toBe('5.6.7.8');
   });
@@ -275,7 +276,7 @@ describe('devices', () => {
 
     // Registering now must NOT resolve the dropped promise; the caller's
     // abort/timeout is still the only thing that will settle it.
-    devices.register('abcdef123456', 56700, '1.2.3.4');
+    devices.register(56700, '1.2.3.4', received('abcdef123456'));
 
     c.abort();
     await assert.rejects(p, /aborted/);
@@ -294,7 +295,7 @@ describe('devices', () => {
 
     // p2 must still resolve when the device registers — the c1 abort must
     // only have removed its own resolver, not p2's.
-    devices.register('abcdef123456', 56700, '192.168.1.1');
+    devices.register(56700, '192.168.1.1', received('abcdef123456'));
     const device = await p2;
     expect(device.serialNumber).toBe('abcdef123456');
   });
@@ -356,8 +357,8 @@ describe('devices', () => {
       serialNumber: 'cafebabe5678'
     });
 
-    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
-    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+    devices.register(device1.port, device1.address, received(device1.serialNumber));
+    devices.register(device2.port, device2.address, received(device2.serialNumber));
 
     const iteratedDevices: Device[] = [];
     for (const device of devices) {
@@ -394,7 +395,7 @@ describe('devices', () => {
       serialNumber: 'deadbeef1234'
     });
 
-    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
+    devices.register(device1.port, device1.address, received(device1.serialNumber));
 
     iteratedDevices = [];
     for (const device of devices) {
@@ -417,8 +418,8 @@ describe('devices', () => {
       serialNumber: 'cafebabe5678'  
     });
 
-    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
-    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+    devices.register(device1.port, device1.address, received(device1.serialNumber));
+    devices.register(device2.port, device2.address, received(device2.serialNumber));
 
     let iteratedDevices: Device[] = [];
     for (const device of devices) {
@@ -449,8 +450,8 @@ describe('devices', () => {
       serialNumber: 'cafebabe5678'
     });
 
-    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
-    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+    devices.register(device1.port, device1.address, received(device1.serialNumber));
+    devices.register(device2.port, device2.address, received(device2.serialNumber));
 
     const deviceArray = Array.from(devices);
     expect(deviceArray).toHaveLength(2);
@@ -471,8 +472,8 @@ describe('devices', () => {
       serialNumber: 'cafebabe5678'
     });
 
-    devices.register(device1.serialNumber, device1.port, device1.address, device1.target);
-    devices.register(device2.serialNumber, device2.port, device2.address, device2.target);
+    devices.register(device1.port, device1.address, received(device1.serialNumber));
+    devices.register(device2.port, device2.address, received(device2.serialNumber));
 
     const [...deviceArray] = devices;
     expect(deviceArray).toHaveLength(2);
@@ -495,8 +496,8 @@ describe('devices subscribe', () => {
       onRemoved(device) { subscriberEvents.push(`removed:${device.serialNumber}`); },
     });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
-    devices.register('d073d5aa0001', 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+    devices.register(56700, '10.0.0.2', received('d073d5aa0001'));
     devices.remove('d073d5aa0001');
 
     const expected = ['added:d073d5aa0001', 'changed:d073d5aa0001', 'removed:d073d5aa0001'];
@@ -511,10 +512,10 @@ describe('devices subscribe', () => {
       onAdded(device) { events.push(device.serialNumber); },
     });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
     unsubscribe();
     unsubscribe();
-    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
 
     expect(events).toEqual(['d073d5aa0001']);
   });
@@ -529,7 +530,7 @@ describe('devices subscribe', () => {
       onAdded(device) { events.push(device.serialNumber); },
     });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
 
     expect(events).toEqual(['d073d5aa0001']);
     expect(devices.registered.size).toBe(1);
@@ -542,11 +543,11 @@ describe('devices subscribe', () => {
     const unsubscribeFirst = devices.subscribe({ onAdded: handler });
     devices.subscribe({ onAdded: handler });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
     expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001']);
 
     unsubscribeFirst();
-    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
     expect(events).toEqual(['d073d5aa0001', 'd073d5aa0001', 'd073d5aa0002']);
   });
 
@@ -559,10 +560,10 @@ describe('devices subscribe', () => {
       },
     });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
     expect(events).toEqual([]);
 
-    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
     expect(events).toEqual(['late:d073d5aa0002']);
   });
 
@@ -580,7 +581,7 @@ describe('devices subscribe', () => {
       onAdded(device) { events.push(`second:${device.serialNumber}`); },
     });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
     // 'second' was unsubscribed during dispatch before running, so it is skipped.
     expect(events).toEqual(['first:d073d5aa0001']);
   });
@@ -596,8 +597,8 @@ describe('devices subscribe', () => {
       },
     });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
-    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+    devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
     expect(events).toEqual(['d073d5aa0001']);
   });
 
@@ -608,11 +609,55 @@ describe('devices subscribe', () => {
     const unsubscribeA = devices.subscribe({ onAdded: (device) => a.push(device.serialNumber) });
     devices.subscribe({ onAdded: (device) => b.push(device.serialNumber) });
 
-    devices.register('d073d5aa0001', 56700, '10.0.0.1');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
     unsubscribeA();
-    devices.register('d073d5aa0002', 56700, '10.0.0.2');
+    devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
 
     expect(a).toEqual(['d073d5aa0001']);
     expect(b).toEqual(['d073d5aa0001', 'd073d5aa0002']);
+  });
+
+  describe('register(port, address, received)', () => {
+    const target = new Uint8Array([0xd0, 0x73, 0xd5, 0xaa, 0x00, 0x01]);
+
+    test('registers the device a receive() result came from', () => {
+      const devices = Devices();
+
+      const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+
+      expect(device?.serialNumber).toBe('d073d5aa0001');
+      expect(device?.address).toBe('10.0.0.7');
+      expect(device?.port).toBe(56700);
+      expect(devices.registered.get('d073d5aa0001')).toBe(device);
+    });
+
+    test('derives the target from the received header', () => {
+      const devices = Devices();
+      const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      expect(device?.target).toEqual(target);
+    });
+
+    test('a known device that moves address updates in place and emits onChanged', () => {
+      const changed: string[] = [];
+      const devices = Devices({ onChanged: (device) => changed.push(device.address) });
+
+      devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      const moved = devices.register(56700, '10.0.0.9', received('d073d5aa0001'));
+
+      expect(moved?.address).toBe('10.0.0.9');
+      expect(devices.registered.size).toBe(1);
+      expect(changed).toEqual(['10.0.0.9']);
+    });
+
+    test('an undefined result (malformed packet) registers nothing', () => {
+      const added: string[] = [];
+      const devices = Devices({ onAdded: (device) => added.push(device.serialNumber) });
+
+      const device = devices.register(56700, '10.0.0.7', undefined);
+
+      expect(device).toBeUndefined();
+      expect(devices.registered.size).toBe(0);
+      expect(added).toEqual([]);
+    });
   });
 });

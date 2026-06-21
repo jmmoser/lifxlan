@@ -4,6 +4,18 @@ import { SourceExhaustionError, ValidationError } from './errors.js';
 
 export type { Header };
 
+/**
+ * The decoded message `receive()` returns: the parsed `header`, a zero-copy
+ * `payload` view, and the `serialNumber` derived from `header.target`. Passed
+ * straight to `devices.register(port, address, received)` to register the
+ * device that sent it, so its shape is part of the registration contract.
+ */
+export interface ReceivedMessage {
+  header: Header;
+  payload: Uint8Array;
+  serialNumber: string;
+}
+
 export type MessageHandler = (
   header: Header,
   payload: Uint8Array,
@@ -65,11 +77,7 @@ export interface RouterInstance {
    * results. (Node's dgram and Deno's listenDatagram allocate a fresh buffer
    * per message, so no copy is needed there.)
    */
-  receive(message: Uint8Array): {
-    header: Header;
-    payload: Uint8Array;
-    serialNumber: string;
-  } | undefined;
+  receive(message: Uint8Array): ReceivedMessage | undefined;
 }
 
 /**

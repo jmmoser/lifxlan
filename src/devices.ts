@@ -2,6 +2,8 @@ import { NO_TARGET, PORT } from './constants/index.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
 import { AbortError, TimeoutError, ValidationError } from './errors.js';
 
+import type { ReceivedMessage } from './router.js';
+
 export interface Device {
   address: string;
   port: number;
@@ -77,7 +79,14 @@ export interface GetDeviceOptions {
 
 export interface DevicesInstance {
   readonly registered: ReadonlyMap<string, Device>;
-  register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device;
+  /**
+   * Registers (or updates the address of) the device that sent a message just
+   * decoded by `router.receive()`. Pass that result straight through:
+   * `received` may be `undefined` (a malformed packet), in which case nothing
+   * is registered and `undefined` is returned. Re-registering a known serial at
+   * a new port/address updates it in place and emits `onChanged`.
+   */
+  register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined;
   remove(serialNumber: string): boolean;
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   /**
@@ -154,28 +163,30 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     return device;
   }
 
+  function register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined {
+    // received comes straight from router.receive(), so an undefined result
+    // (a malformed packet) registers nothing.
+    if (received === undefined) {
+      return undefined;
+    }
+    const device = registerDevice(received.serialNumber, port, address, received.header.target);
+
+    const resolvers = deviceResolvers.get(received.serialNumber);
+    if (resolvers) {
+      deviceResolvers.delete(received.serialNumber);
+      resolvers.forEach((resolver) => {
+        try { resolver(device); } catch { /* one resolver throwing must not block others */ }
+      });
+    }
+
+    return device;
+  }
+
   return {
     get registered() {
       return knownDevices;
     },
-    register(serialNumber: string, port: number, address: string, target?: Uint8Array): Device {
-      const device = registerDevice(
-        serialNumber,
-        port,
-        address,
-        target,
-      );
-
-      const resolvers = deviceResolvers.get(serialNumber);
-      if (resolvers) {
-        deviceResolvers.delete(serialNumber);
-        resolvers.forEach((resolver) => {
-          try { resolver(device); } catch { /* one resolver throwing must not block others */ }
-        });
-      }
-
-      return device;
-    },
+    register,
     remove(serialNumber: string): boolean {
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
