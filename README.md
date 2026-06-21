@@ -34,7 +34,8 @@ npm install lifxlan
 
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Devices, Router, GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { Client, Devices, Router, SetPowerCommand } from 'lifxlan';
+import { discover } from 'lifxlan/discovery';
 
 const socket = dgram.createSocket('udp4');
 
@@ -65,17 +66,11 @@ socket.setBroadcast(true);
 
 const client = Client({ router });
 
-// Discover devices
-client.broadcast(GetServiceCommand());
-const scanInterval = setInterval(() => {
-  client.broadcast(GetServiceCommand());
-}, 1000);
+// Discover devices in the background (broadcasts GetService on an interval)
+using discovery = discover(router, devices);
 
 // Wait for a specific device (replace with your device's serial number)
 const device = await devices.get('d07123456789');
-
-// Stop scanning
-clearInterval(scanInterval);
 
 // Turn the light on!
 await client.send(SetPowerCommand(true), device);
@@ -86,24 +81,13 @@ socket.close();
 ### Discover and control all devices
 
 ```javascript
-import { GetServiceCommand, SetPowerCommand } from 'lifxlan';
+import { SetPowerCommand } from 'lifxlan';
+import { discover } from 'lifxlan/discovery';
 
 // ... setup code from above ...
 
-// Discover all devices
-client.broadcast(GetServiceCommand());
-const scanInterval = setInterval(() => {
-  client.broadcast(GetServiceCommand());
-}, 1000);
-
-// Wait a few seconds for discovery
-await new Promise(resolve => setTimeout(resolve, 3000));
-
-// Stop scanning
-clearInterval(scanInterval);
-
-// Turn on all discovered lights
-for (const device of devices) {
+// Discover for a few seconds, turning each light on as it's found
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
   await client.send(SetPowerCommand(true), device);
 }
 ```
@@ -187,6 +171,8 @@ console.log(response.hue);    // response is typed as LightState
 **Type Safety:** The return type changes based on your response mode choice, so no type assertions are needed.
 
 ## Examples by Runtime
+
+Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples broadcast `GetService` directly to show how each socket is wired up; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
 
 ### Node.js / Bun
 
@@ -389,6 +375,33 @@ const device = await devices.get('d07123456789');
 ```
 
 Writing `using` needs TypeScript ≥ 5.2 with `Disposable` in scope (a `lib` that includes `esnext.disposable`, or `@types/node`, which Node ≥ 22 projects already have); otherwise call `dispose()` directly. With no `timeoutMs` it runs until disposed, keeping the registry fresh as DHCP addresses change. Internally it uses the public `devices.subscribe({ onAdded, onChanged, onRemoved })`, which observes registry events and returns an unsubscribe function.
+
+### Manually Controlling Discovery
+
+`discover()` is purely a convenience: it owns a timer and a `Client` and broadcasts `GetService` for you. When you want full control over *when* and *how often* discovery runs — folding it into an existing timer, applying custom backoff, or broadcasting only on demand — drive it yourself with `client.broadcast(GetServiceCommand())`. The only fixed part is registration: however you broadcast, your socket handler feeds `router.receive()` into `devices.register()`, exactly as in the examples above.
+
+```javascript
+import { Client, GetServiceCommand } from 'lifxlan';
+
+// ... router, devices, and socket setup as above ...
+
+const client = Client({ router });
+
+// Broadcast GetService yourself, on whatever schedule you like.
+client.broadcast(GetServiceCommand());
+const scan = setInterval(() => client.broadcast(GetServiceCommand()), 1000);
+
+// Wait for one specific device...
+const device = await devices.get('d07123456789');
+clearInterval(scan);
+
+// ...or scan for a fixed window, then act on everything discovered:
+//   await new Promise((resolve) => setTimeout(resolve, 3000));
+//   clearInterval(scan);
+//   for (const device of devices) { /* ... */ }
+```
+
+A single broadcast can be lost (UDP is best-effort), so repeat on an interval until you've found what you're looking for. `devices.get()` resolves as soon as a matching device registers; for "all devices", broadcast for a few seconds, then iterate the `devices` registry. Because `devices.register()` updates a known device's address in place, leaving a slow interval running also tracks devices whose IP changes (DHCP) — the same reason `discover()` keeps broadcasting until disposed.
 
 ### Error Handling with Retries
 
@@ -720,7 +733,7 @@ const client = Client({
 ### Discovery finds no devices
 
 - **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine.
-- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast on an interval (the Quick Start uses 1 second) until you've found what you're looking for.
+- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast on an interval (`discover()` defaults to every 1 second) until you've found what you're looking for.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
 - **Replies arrive but nothing registers.** Registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples. Verify packets are arriving with `Router({ onMessage })` or a packet capture.
