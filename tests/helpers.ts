@@ -7,7 +7,7 @@ import { convertSerialNumberToTarget } from '../src/utils/index.js';
  * Builds the `ReceivedMessage` that `router.receive()` would produce for a
  * StateService response from `serialNumber`, by encoding a frame addressed to
  * it and decoding it back through a throwaway router — the same path a live
- * responder takes. Feed it straight into `devices.register`:
+ * device takes. Feed it straight into `devices.register`:
  *
  *   devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
  *

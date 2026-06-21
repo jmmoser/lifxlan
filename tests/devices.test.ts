@@ -620,7 +620,7 @@ describe('devices subscribe', () => {
   describe('register(port, address, received)', () => {
     const target = new Uint8Array([0xd0, 0x73, 0xd5, 0xaa, 0x00, 0x01]);
 
-    test('registers the responder of a receive() result', () => {
+    test('registers the device a receive() result came from', () => {
       const devices = Devices();
 
       const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));

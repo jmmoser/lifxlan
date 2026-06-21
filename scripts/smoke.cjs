@@ -44,7 +44,7 @@ async function main() {
 
   // Discovery round trip: discover() broadcasts GetService through its own
   // client; this loopback "network" answers with StateService and registers
-  // the responder, which the iterator then yields.
+  // the device that answered, which the iterator then yields.
   const discoveredDevices = Devices();
   const discoveryRouter = Router({
     onSend(message) {

@@ -80,7 +80,7 @@ export interface GetDeviceOptions {
 export interface DevicesInstance {
   readonly registered: ReadonlyMap<string, Device>;
   /**
-   * Registers (or updates the address of) the responder of a message just
+   * Registers (or updates the address of) the device that sent a message just
    * decoded by `router.receive()`. Pass that result straight through:
    * `received` may be `undefined` (a malformed packet), in which case nothing
    * is registered and `undefined` is returned. Re-registering a known serial at

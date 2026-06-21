@@ -215,7 +215,7 @@ const devices = Devices({
 });
 
 socket.on('message', (message, remote) => {
-  // Forward received messages to the router and register the responder.
+  // Decode each message and register the device it came from.
   // router.receive() returns undefined for malformed packets, and
   // devices.register() registers nothing when handed undefined.
   devices.register(remote.port, remote.address, router.receive(message));

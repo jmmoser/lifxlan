@@ -8,7 +8,7 @@ export type { Header };
  * The decoded message `receive()` returns: the parsed `header`, a zero-copy
  * `payload` view, and the `serialNumber` derived from `header.target`. Passed
  * straight to `devices.register(port, address, received)` to register the
- * responder, so its shape is part of the registration contract.
+ * device that sent it, so its shape is part of the registration contract.
  */
 export interface ReceivedMessage {
   header: Header;
