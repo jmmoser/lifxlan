@@ -788,13 +788,37 @@ describe('client', () => {
     const router = Router({
       onSend() {},
     });
-    
+
     const client = Client({ router });
-    
+
     // Multiple dispose calls should not throw
     client.dispose();
     client.dispose();
     client.dispose();
+  });
+
+  test('Symbol.dispose disposes the client like dispose()', async () => {
+    const handlers = new Map();
+    const router = Router({ onSend() {}, handlers });
+
+    const client = Client({ router });
+
+    assert.strictEqual(typeof client[Symbol.dispose], 'function');
+    assert.strictEqual(handlers.size, 1);
+
+    client[Symbol.dispose]();
+    // The source id is released back to the router...
+    assert.strictEqual(handlers.size, 0);
+    // ...and the client is disposed: further sends reject.
+    const device = Device({
+      serialNumber: 'abcdef123456',
+      port: 1234,
+      address: '1.2.3.4',
+    });
+    await assert.rejects(
+      client.send(GetServiceCommand(), device),
+      (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError',
+    );
   });
 
   test('disposed client throws DisposedClientError on operations', async () => {

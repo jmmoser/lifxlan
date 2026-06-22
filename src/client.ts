@@ -212,9 +212,16 @@ export interface ClientOptions {
   onMessage?: MessageHandler;
 }
 
-export interface ClientInstance {
+export interface ClientInstance extends Disposable {
   readonly router: RouterInstance;
   readonly source: number;
+  /**
+   * Disposes of the client and releases its source identifier back to the
+   * router. Call this when creating many short-lived clients to prevent
+   * source exhaustion. Idempotent. Once disposed, the client cannot be used
+   * for further operations. A `using` declaration does the same through
+   * `Symbol.dispose` at end of scope.
+   */
   dispose(): void;
   broadcast<T>(command: Command<T>): void;
   unicast<T>(command: Command<T>, device: Device): void;
@@ -307,6 +314,28 @@ export function Client(options: ClientOptions): ClientInstance {
 
   const source = router.register(onMessage, options.source);
 
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+
+    // Deregister first so any in-flight messages routed to this client
+    // are dropped before we tear down its pending handlers.
+    router.deregister(source, onMessage);
+
+    const error = new DisposedClientError(source);
+    const deviceMaps = Array.from(responseHandlerMap.values());
+    responseHandlerMap.clear();
+    for (const pendingBySequence of deviceMaps) {
+      for (const entry of Array.from(pendingBySequence.values())) {
+        try {
+          entry.cancel(error);
+        } catch {
+          // Ignore errors during disposal cleanup
+        }
+      }
+    }
+  }
+
   const client: ClientInstance = {
     /**
      * @readonly
@@ -324,10 +353,10 @@ export function Client(options: ClientOptions): ClientInstance {
     },
     /**
      * Disposes of the client and releases its source identifier.
-     * 
+     *
      * Call this when creating many short-lived clients to prevent source exhaustion.
      * Once disposed, the client cannot be used for further operations.
-     * 
+     *
      * @example
      * ```javascript
      * const client = Client({ router });
@@ -335,27 +364,12 @@ export function Client(options: ClientOptions): ClientInstance {
      * client.dispose(); // Free up resources
      * ```
      */
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-
-      // Deregister first so any in-flight messages routed to this client
-      // are dropped before we tear down its pending handlers.
-      router.deregister(source, onMessage);
-
-      const error = new DisposedClientError(source);
-      const deviceMaps = Array.from(responseHandlerMap.values());
-      responseHandlerMap.clear();
-      for (const pendingBySequence of deviceMaps) {
-        for (const entry of Array.from(pendingBySequence.values())) {
-          try {
-            entry.cancel(error);
-          } catch {
-            // Ignore errors during disposal cleanup
-          }
-        }
-      }
-    },
+    dispose,
+    // Enables `using client = Client(...)`: end of scope disposes the client.
+    // Requiring Node >= 22 (where Symbol.dispose exists natively) is what
+    // makes defining this safe — on older runtimes the symbol was undefined
+    // and the computed key silently became the string "undefined".
+    [Symbol.dispose]: dispose,
     /**
      * Broadcast a command to the local network.
      */
