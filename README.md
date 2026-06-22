@@ -492,6 +492,15 @@ while (true) {
 }
 ```
 
+A client also implements `Symbol.dispose`, so a `using` declaration disposes it at the end of scope (same TypeScript ≥ 5.2 / Node ≥ 22 requirements as `discover()`):
+
+```javascript
+{
+  using client = Client({ router });
+  console.log(await client.send(GetPowerCommand(), device));
+} // client.dispose() runs here automatically
+```
+
 ### Response Mode Control Examples
 
 ```javascript
