@@ -523,6 +523,12 @@ console.log('Light is now:', currentState.hue);
 
 ### Device Groups
 
+Groups are defined on the devices themselves (via the LIFX app), not created by
+this library. Each device reports its group (a UUID + label) in response to
+`GetGroupCommand()`. The `Groups` registry collects devices that report the same
+group UUID so you can look them up by group and, if you want, drive your own
+batch operations by iterating `group.devices`.
+
 ```javascript
 import { Groups, GetGroupCommand, GetLabelCommand } from 'lifxlan';
 
