@@ -21,7 +21,7 @@ This is a TypeScript library for the LIFX LAN protocol that works across Node.js
 
 - **Devices** (`src/devices.ts`): Device registry that tracks discovered LIFX devices on the network, maintaining their network addresses and connection state.
 
-- **Groups** (`src/groups.ts`): Registry that tracks LIFX device-group membership. A group (UUID + label) is a property stored on each device, assigned by a `SetGroup` message (sent by the LIFX app, or via this library's `SetGroupCommand()`) and reported through `GetGroupCommand()` as a `StateGroup`. The registry collects devices that report the same group UUID and exposes add/change/remove callbacks. It does not send messages itself — callers can iterate `group.devices` to drive their own batch operations.
+There is deliberately no group registry: a device's group (UUID + label, set by `SetGroupCommand()`, reported as `StateGroup` via `GetGroupCommand()`) is just a device property, and collecting devices by group is left to callers (see the README's Device Groups recipe).
 
 ### Protocol Layer
 

@@ -1,6 +1,6 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { Router, MessageHandler } from '../src/router.js';
+import { Router } from '../src/router.js';
 import { encode, Header } from '../src/encoding.js';
 import { Type } from '../src/constants/index.js';
 import { ValidationError } from '../src/errors.js';
@@ -213,16 +213,14 @@ describe('router', () => {
   });
 
   test('register keeps allocating distinct sources past a pre-filled range', () => {
-    // Pre-fill sources 2..99 so allocation must skip past them.
-    const handlers = new Map<number, MessageHandler>();
-    for (let i = 2; i < 100; i++) {
-      handlers.set(i, () => {});
-    }
-
     const router = Router({
       onSend() {},
-      handlers,
     });
+
+    // Reserve sources 2..99 explicitly so allocation must skip past them.
+    for (let i = 2; i < 100; i++) {
+      router.register(() => {}, i);
+    }
 
     const allocated = new Set<number>();
     for (let i = 0; i < 200; i++) {
@@ -280,17 +278,14 @@ describe('router', () => {
   });
 
   test('register advances past a contiguous filled range', () => {
-    const handlers = new Map<number, MessageHandler>();
-
-    // Fill values 2-100 to force the allocator to advance.
-    for (let i = 2; i <= 100; i++) {
-      handlers.set(i, () => {});
-    }
-
     const router = Router({
       onSend() {},
-      handlers,
     });
+
+    // Reserve values 2-100 to force the allocator to advance.
+    for (let i = 2; i <= 100; i++) {
+      router.register(() => {}, i);
+    }
 
     const source = router.register(() => {});
     assert.ok(source > 100, 'allocated source should be beyond the filled range');
@@ -364,16 +359,14 @@ describe('router', () => {
   });
 
   test('register searches through a large filled range', () => {
-    // Fill a large contiguous range to force the allocator to scan past it.
-    const handlers = new Map<number, MessageHandler>();
-    for (let i = 2; i < 1000; i++) {
-      handlers.set(i, () => {});
-    }
-
     const router = Router({
       onSend() {},
-      handlers,
     });
+
+    // Reserve a large contiguous range to force the allocator to scan past it.
+    for (let i = 2; i < 1000; i++) {
+      router.register(() => {}, i);
+    }
 
     const source = router.register(() => {});
     assert.ok(source >= 1000, 'allocated source should be outside the filled range');

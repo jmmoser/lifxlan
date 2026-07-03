@@ -36,8 +36,6 @@ export { Client } from './client.js';
 export type { ClientInstance, ClientOptions, SendOptions, ResponseMode } from './client.js';
 export { Device, Devices } from './devices.js';
 export type { DeviceConfig, DevicesOptions, DevicesInstance, GetDeviceOptions, DeviceEventHandlers } from './devices.js';
-export { Groups } from './groups.js';
-export type { Group, GroupsOptions, GroupsInstance } from './groups.js';
 
 /** Errors */
 export {

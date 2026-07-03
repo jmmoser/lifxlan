@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { Router } from '../src/router.js';
+import type { RouterInstance, RouterOptions } from '../src/router.js';
 import { Devices } from '../src/devices.js';
 import { discover } from '../src/discovery.js';
 import { Type } from '../src/constants/index.js';
@@ -12,6 +13,27 @@ const SERIAL_C = 'd073d5000003';
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Wraps a real Router so tests can observe, through the public RouterInstance
+// interface alone, how many source ids the code under test currently holds.
+function sourceCountingRouter(onSend: RouterOptions['onSend'] = () => {}) {
+  const inner = Router({ onSend });
+  let active = 0;
+  const router: RouterInstance = {
+    register(handler, source) {
+      const resolved = inner.register(handler, source);
+      active += 1;
+      return resolved;
+    },
+    deregister(source, handler) {
+      inner.deregister(source, handler);
+      active -= 1;
+    },
+    send: inner.send,
+    receive: inner.receive,
+  };
+  return { router, activeSources: () => active };
 }
 
 function recordingRouter() {
@@ -148,14 +170,13 @@ describe('discovery', () => {
   });
 
   test('an already-aborted signal owns no source id', () => {
-    const handlers = new Map();
-    const router = Router({ onSend() {}, handlers });
+    const { router, activeSources } = sourceCountingRouter();
     const devices = Devices();
     const controller = new AbortController();
     controller.abort();
 
     discover(router, devices, { signal: controller.signal });
-    expect(handlers.size).toBe(0);
+    expect(activeSources()).toBe(0);
   });
 
   test('timeoutMs ends iteration normally and drains the queue', async () => {
@@ -207,27 +228,25 @@ describe('discovery', () => {
   });
 
   test('owns and releases its source id', () => {
-    const handlers = new Map();
-    const router = Router({ onSend() {}, handlers });
+    const { router, activeSources } = sourceCountingRouter();
     const devices = Devices();
 
     const discovery = discover(router, devices);
-    expect(handlers.size).toBe(1);
+    expect(activeSources()).toBe(1);
     discovery.dispose();
-    expect(handlers.size).toBe(0);
+    expect(activeSources()).toBe(0);
   });
 
   test('Symbol.dispose stops discovery like dispose()', async () => {
-    const handlers = new Map();
-    const router = Router({ onSend() {}, handlers });
+    const { router, activeSources } = sourceCountingRouter();
     const devices = Devices();
     const discovery = discover(router, devices);
 
     expect(typeof discovery[Symbol.dispose]).toBe('function');
-    expect(handlers.size).toBe(1);
+    expect(activeSources()).toBe(1);
 
     discovery[Symbol.dispose]();
-    expect(handlers.size).toBe(0);
+    expect(activeSources()).toBe(0);
     const result = await discovery.next();
     expect(result.done).toBe(true);
   });
@@ -246,18 +265,14 @@ describe('discovery', () => {
   });
 
   test('a synchronous transport failure on the initial broadcast throws and cleans up', () => {
-    const handlers = new Map();
-    const router = Router({
-      onSend() {
-        throw new Error('socket closed');
-      },
-      handlers,
+    const { router, activeSources } = sourceCountingRouter(() => {
+      throw new Error('socket closed');
     });
     const devices = Devices();
 
     expect(() => discover(router, devices)).toThrow('socket closed');
     // The owned client and the registry subscription must not leak.
-    expect(handlers.size).toBe(0);
+    expect(activeSources()).toBe(0);
     devices.register(56700, '10.0.0.3', received(SERIAL_C));
   });
 
