@@ -798,17 +798,20 @@ describe('client', () => {
   });
 
   test('Symbol.dispose disposes the client like dispose()', async () => {
-    const handlers = new Map();
-    const router = Router({ onSend() {}, handlers });
+    const router = Router({ onSend() {} });
 
     const client = Client({ router });
 
     assert.strictEqual(typeof client[Symbol.dispose], 'function');
-    assert.strictEqual(handlers.size, 1);
+    // While the client is live its source id is held by the router.
+    assert.throws(
+      () => router.register(() => {}, client.source),
+      (error: unknown) => Error.isError(error) && error.name === 'ValidationError',
+    );
 
     client[Symbol.dispose]();
-    // The source id is released back to the router...
-    assert.strictEqual(handlers.size, 0);
+    // The source id is released back to the router: reserving it now succeeds...
+    assert.strictEqual(router.register(() => {}, client.source), client.source);
     // ...and the client is disposed: further sends reject.
     const device = Device({
       serialNumber: 'abcdef123456',

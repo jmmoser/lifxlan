@@ -15,7 +15,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - 🔍 **Discover devices** on your network
 - 💡 **Control lights** (turn on/off, change colors, brightness)
 - 🎯 **Target specific devices** or broadcast to all devices
-- 🔗 **Group devices** for batch operations
+- 🔗 **Read and assign device groups** (see the [Device Groups](#device-groups) recipe for batch operations)
 - ⚡ **High performance** - optimized for speed
 - 🚀 **Zero dependencies** - bring your own UDP socket
 - 🎛️ **Direct packet control** - each client operation sends exactly one packet with no hidden behavior
@@ -532,42 +532,45 @@ console.log('Light is now:', currentState.hue);
 
 ### Device Groups
 
-Groups are a property stored on each device, not created by this library's
-registry. A device's group (a UUID + label) is assigned by sending it a
-`SetGroup` message — the LIFX app does this, and so can this library via
-`SetGroupCommand()`. Each device reports its current group in response to
-`GetGroupCommand()`. The `Groups` registry collects devices that report the same
-group UUID so you can look them up by group and, if you want, drive your own
-batch operations by iterating `group.devices`.
+Groups are a property stored on each device: a UUID + label assigned by a
+`SetGroup` message (the LIFX app does this, and so can this library via
+`SetGroupCommand()`) and reported back through `GetGroupCommand()`. The
+library deliberately has no group registry or group-send helper — collecting
+devices by their reported group is a few lines of your own code, and batch
+operations are just a fan-out over the members:
 
 ```javascript
-import { Groups, GetGroupCommand, GetLabelCommand } from 'lifxlan';
+import { GetGroupCommand, SetPowerCommand } from 'lifxlan';
 
-const groups = Groups({
-  onAdded(group) {
-    console.log('Group added', group);
-  },
-  onChanged(group) {
-    console.log('Group changed', group);
-  },
-});
+const byGroup = new Map(); // group uuid -> { label, devices: Map<serial, Device> }
 
 const devices = Devices({
   async onAdded(device) {
-    const group = await client.send(GetGroupCommand(), device);
-    groups.register(device, group);
+    const state = await client.send(GetGroupCommand(), device);
+    let group = byGroup.get(state.group);
+    if (!group) {
+      group = { label: state.label, devices: new Map() };
+      byGroup.set(state.group, group);
+    }
+    group.devices.set(device.serialNumber, device);
   },
 });
 
-// Send command to all devices in a group
-for (const group of groups) {
+// Send a command to every device in a group
+for (const group of byGroup.values()) {
   await Promise.all(
-    group.devices.map(device => 
-      client.send(GetLabelCommand(), device)
-    )
+    Array.from(group.devices.values(), (device) =>
+      client.send(SetPowerCommand(true), device),
+    ),
   );
 }
 ```
+
+One protocol subtlety if you track labels: devices can disagree about a
+group's label, because a rename only reaches devices that were powered on at
+the time. `StateGroup` carries an `updated_at` timestamp for exactly this —
+the label reported with the newest `updated_at` is the current one, so keep
+the newest timestamp per UUID and ignore label reports older than it.
 
 ### Party Mode (Animated Colors)
 

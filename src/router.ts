@@ -42,7 +42,6 @@ export interface RouterOptions {
    * discarded so a hostile sender cannot crash the host process.
    */
   onError?: (error: unknown, message: Uint8Array) => void;
-  handlers?: Map<number, MessageHandler>;
 }
 
 export interface RouterInstance {
@@ -96,7 +95,7 @@ export interface RouterInstance {
  * each response message.
  */
 export function Router(options: RouterOptions): RouterInstance {
-  const handlers: Map<number, MessageHandler> = options.handlers ?? new Map();
+  const handlers = new Map<number, MessageHandler>();
 
   let sourceCounter = 2;
 
