@@ -2,12 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Setup
+
+Run `bun install` before anything else — tests, lint, and typecheck all need it. In Claude Code on the web this happens automatically via the SessionStart hook (`.claude/hooks/session-start.sh`). Bun is the primary toolchain; the test suite runs on `bun:test`.
+
 ## Development Commands
 
-- **Test**: `bun run test`
-- **Build**: `bun run build`
+- **Test**: `bun run test` (full suite with coverage)
+- **Test one file**: `bun test tests/client.test.ts`
 - **Type Check**: `npx tsc`
-- **Lint**: `bun run lint`
+- **Lint**: `bun run lint` (oxlint)
+- **Build**: `bun run build` (ESM + CJS + minified bundles into `dist/`)
+- **Docs**: `bun run docs` (typedoc — broken `{@link}` references fail CI)
+- **Benchmarks**: `bun run bench`
+
+Do NOT run `bun run test:integration` — it sends UDP traffic to real LIFX devices on the local network and will hang or fail in a sandbox.
+
+## Check code quality
+
+Before committing, this must pass:
+
+```
+bun run lint && npx tsc && bun run test
+```
+
+CI (`.github/workflows/ci.yml`) additionally builds the typedoc site and runs ESM/CJS smoke tests (`scripts/smoke.mjs` / `smoke.cjs`) against the built package on Node 22/24 and Deno.
 
 ## Project Architecture
 
@@ -25,9 +44,18 @@ There is deliberately no group registry: a device's group (UUID + label, set by 
 
 ### Protocol Layer
 
-- **Commands** (`src/commands/index.ts`): LIFX protocol command definitions with encoding/decoding functions
+- **Commands** (`src/commands/`): LIFX protocol command definitions with encoding/decoding functions, split by device capability (`device.ts`, `light.ts`, `multizone.ts`, `tile.ts`, `relay.ts`, `button.ts`, `sensor.ts`)
 - **Encoding** (`src/encoding.ts`): Low-level protocol message encoding/decoding utilities
-- **Constants** (`src/constants/index.ts`): Protocol constants, message types, and network configuration
+- **Constants** (`src/constants/`): Protocol constants, message types, and network configuration
+- **Errors** (`src/errors.ts`): `LifxError` subclasses with a structured `context` object
+
+### Subpath Exports
+
+The package root (`src/index.ts`) contains only passive building blocks. Optional pieces live behind subpath exports so unused code costs nothing:
+
+- `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper — repeats the GetService broadcast on an interval
+- `lifxlan/products` (`src/products.ts`): capability lookup from the official LIFX products.json; takes parsed data, never fetches
+- `lifxlan/encoding`: the low-level encoding utilities
 
 ### Key Patterns
 
@@ -35,15 +63,16 @@ The library uses a "bring your own socket" approach - users provide UDP socket i
 
 Device discovery works by broadcasting `GetServiceCommand()` and registering responses via the Devices registry. Each runtime (Node.js/Bun vs Deno) requires different socket setup but uses the same core abstractions.
 
+### Where Things Live
+
+- `tests/` — unit tests (`*.test.ts`) plus `helpers.ts`, type-level checks (`send-return-types.ts`), and the device-requiring `integration.ts`
+- `examples/` — self-contained runnable scripts (see `examples/README.md`); they import `lifxlan` by self-reference, so `bun run build` first
+- `docs/` — hand-written protocol guides (field types, querying, changing device state)
+- `scripts/` — build minification and the Node/Deno smoke tests CI runs against `dist/`
+
 ## TypeScript Support
 
 The project is written in TypeScript with full type safety. TypeScript declarations and JavaScript files are compiled to the `./dist` directory for publication to npm.
-
-## Check code quality
-
-```
-bun run lint && npx tsc && bun run test
-```
 
 ## Rules
 
