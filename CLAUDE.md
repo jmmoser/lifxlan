@@ -12,7 +12,7 @@ Run `bun install` before anything else — tests, lint, and typecheck all need i
 - **Test one file**: `bun test tests/client.test.ts`
 - **Type Check**: `npx tsc`
 - **Lint**: `bun run lint` (oxlint)
-- **Build**: `bun run build` (ESM + CJS + minified bundles into `dist/`)
+- **Build**: `bun run build` (ESM-only minified bundle into `dist/`; CommonJS consumers rely on Node's require(esm) interop)
 - **Docs**: `bun run docs` (typedoc — broken `{@link}` references fail CI)
 - **Benchmarks**: `bun run bench`
 
@@ -26,7 +26,7 @@ Before committing, this must pass:
 bun run lint && npx tsc && bun run test
 ```
 
-CI (`.github/workflows/ci.yml`) additionally builds the typedoc site and runs ESM/CJS smoke tests (`scripts/smoke.mjs` / `smoke.cjs`) against the built package on Node 22/24 and Deno.
+CI (`.github/workflows/ci.yml`) additionally builds the typedoc site and runs smoke tests (`scripts/smoke.mjs` for ESM import, `scripts/smoke.cjs` for CommonJS require(esm) interop) against the built package on Node 22/24 and Deno.
 
 ## Project Architecture
 

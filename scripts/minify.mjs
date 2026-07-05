@@ -41,7 +41,7 @@ await build({
   bundle: false,
   minify: true,
   target: 'es2022',
-  // No `format` override: keep the ESM/CJS syntax tsc already emitted.
+  // No `format` override: keep the ESM syntax tsc already emitted.
   legalComments: 'none',
   sourcemap: 'linked',
   sourcesContent: true,

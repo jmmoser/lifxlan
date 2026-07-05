@@ -1,6 +1,8 @@
 /**
- * CommonJS smoke test for the built package. Exercises a loopback
- * request/response round trip through Router + Client against `dist/cjs`.
+ * CommonJS interop smoke test for the built package. The published build is
+ * ESM-only; this verifies that CommonJS consumers can still load it via
+ * Node's `require(esm)` support (default since Node 22.12), exercising the
+ * same loopback round trip as the ESM smoke test.
  *
  * Build first: `bun run build`.
  */
@@ -11,10 +13,10 @@ const {
   Devices,
   Type,
   GetPowerCommand,
-} = require('../dist/cjs/index.js');
-const { encode, decodeHeader } = require('../dist/cjs/encoding.js');
-const { Products } = require('../dist/cjs/products.js');
-const { discover } = require('../dist/cjs/discovery.js');
+} = require('../dist/index.js');
+const { encode, decodeHeader } = require('../dist/encoding.js');
+const { Products } = require('../dist/products.js');
+const { discover } = require('../dist/discovery.js');
 
 async function main() {
   const router = Router({

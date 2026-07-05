@@ -790,7 +790,8 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:
 
 - **Breaking changes** to the surface above only happen in a major version, are documented in the [release notes](https://github.com/jmmoser/lifxlan/releases), and where practical the old API is marked `@deprecated` for at least one minor version first.
-- **Supported runtimes** (Node.js ≥ 22, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
+- **Supported runtimes** (Node.js ≥ 22.12, Bun, Deno 2 — all exercised in CI) are part of the contract; dropping one is a breaking change.
+- **Module format**: the package is published as ESM only. CommonJS consumers on supported Node versions can still load it with `require('lifxlan')` via Node's [`require(esm)`](https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require) interop, which CI exercises.
 - **Prereleases** are published under the `rc` npm dist-tag, so plain `npm install lifxlan` always resolves to the latest stable release.
 
 ## Contributing

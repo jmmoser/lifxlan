@@ -25,7 +25,7 @@ jobs:
   node:
     # The test suite runs on bun:test, so other runtimes are covered by
     # building the package and running a loopback round trip against the
-    # published entry points (both ESM and CJS).
+    # published entry points (ESM import and CommonJS require(esm) interop).
     name: Smoke test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
