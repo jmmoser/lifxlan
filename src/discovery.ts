@@ -10,7 +10,7 @@
 import { Client } from './client.js';
 import { GetServiceCommand } from './commands/device.js';
 
-import type { RouterInstance } from './router.js';
+import type { ClientRouter } from './router.js';
 import type { Device, DevicesInstance } from './devices.js';
 
 export interface DiscoveryOptions {
@@ -82,7 +82,7 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
  * ```
  */
 export function discover(
-  router: RouterInstance,
+  router: ClientRouter,
   devices: DevicesInstance,
   options: DiscoveryOptions = {},
 ): DiscoveryInstance {

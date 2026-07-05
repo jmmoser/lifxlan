@@ -2,7 +2,16 @@ import { NO_TARGET, PORT } from './constants/index.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
 import { AbortError, TimeoutError, ValidationError } from './errors.js';
 
-import type { ReceivedMessage } from './router.js';
+/**
+ * The minimal decoded-message shape `register()` reads. `ReceivedMessage`
+ * (what `router.receive()` returns) satisfies it, so the stock wiring passes
+ * straight through; a custom decode pipeline only has to produce these two
+ * fields.
+ */
+export interface RegistrationMessage {
+  serialNumber: string;
+  header: { target: Uint8Array };
+}
 
 export interface Device {
   address: string;
@@ -86,8 +95,14 @@ export interface DevicesInstance {
    * is registered and `undefined` is returned. Re-registering a known serial at
    * a new port/address updates it in place and emits `onChanged`.
    */
-  register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined;
+  register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
   remove(serialNumber: string): boolean;
+  /**
+   * Waits for the device with this serial number to be registered — a
+   * discovery rendezvous, not a lookup. A known device resolves immediately;
+   * otherwise the promise settles on a future `register()`, the timeout, or
+   * the signal. For a synchronous check, use {@link DevicesInstance.registered}.
+   */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   /**
    * Adds observers of registry events alongside the callbacks fixed at
@@ -163,7 +178,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     return device;
   }
 
-  function register(port: number, address: string, received: ReceivedMessage | undefined): Device | undefined {
+  function register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined {
     // received comes straight from router.receive(), so an undefined result
     // (a malformed packet) registers nothing.
     if (received === undefined) {

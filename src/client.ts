@@ -23,7 +23,7 @@ import {
   ValidationError,
 } from './errors.js';
 
-import type { RouterInstance, MessageHandler, Header } from './router.js';
+import type { ClientRouter, MessageHandler, Header } from './router.js';
 
 import type { Device } from './devices.js';
 import type { Decoder, Command } from './commands/index.js';
@@ -200,8 +200,13 @@ export interface SendOptions<A extends ResponseMode = ResponseMode> {
 }
 
 
-export interface ClientOptions {
-  router: RouterInstance;
+export interface ClientOptions<R extends ClientRouter = ClientRouter> {
+  /**
+   * Only the sending half of the router is required — see
+   * {@link ClientRouter}; the client never calls `receive()`. The concrete
+   * type is preserved on {@link ClientInstance.router}.
+   */
+  router: R;
   /**
    * How long send() waits for the device before rejecting with TimeoutError.
    * Applies whether or not a per-call signal is provided; set 0 to disable
@@ -209,11 +214,16 @@ export interface ClientOptions {
    */
   defaultTimeoutMs?: number;
   source?: number;
+  /**
+   * Tap invoked for every inbound message addressed to this client's source.
+   * To observe all traffic regardless of source, use the router-level
+   * `RouterOptions.onMessage` instead.
+   */
   onMessage?: MessageHandler;
 }
 
-export interface ClientInstance extends Disposable {
-  readonly router: RouterInstance;
+export interface ClientInstance<R extends ClientRouter = ClientRouter> extends Disposable {
+  readonly router: R;
   readonly source: number;
   /**
    * Disposes of the client and releases its source identifier back to the
@@ -223,9 +233,20 @@ export interface ClientInstance extends Disposable {
    * `Symbol.dispose` at end of scope.
    */
   dispose(): void;
+  /**
+   * Fire-and-forget to the whole network. No response is correlated —
+   * responses only reach a router-level `onMessage` tap. Throws
+   * synchronously if the transport does.
+   */
   broadcast<T>(command: Command<T>): void;
+  /**
+   * Fire-and-forget to one device: no acknowledgement or response is
+   * requested and delivery is not confirmed. Use it for high-rate updates
+   * where the next packet supersedes the last; use `send()` when the
+   * outcome matters.
+   */
   unicast<T>(command: Command<T>, device: Device): void;
-  
+
   send<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
     command: Command<T> & { defaultResponseMode?: Default },
     device: Device,
@@ -248,7 +269,7 @@ export interface ClientInstance extends Disposable {
  * const response = await client.send(GetColorCommand(), device);
  * ```
  */
-export function Client(options: ClientOptions): ClientInstance {
+export function Client<R extends ClientRouter>(options: ClientOptions<R>): ClientInstance<R> {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   const { router } = options;
 
@@ -336,7 +357,7 @@ export function Client(options: ClientOptions): ClientInstance {
     }
   }
 
-  const client: ClientInstance = {
+  const client: ClientInstance<R> = {
     /**
      * @readonly
      * @returns The router instance

@@ -1,7 +1,7 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { Client } from '../src/client.js';
-import { Router } from '../src/router.js';
+import { Router, type ClientRouter, type MessageHandler } from '../src/router.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
@@ -50,6 +50,49 @@ describe('client', () => {
     const res = await client.send(GetPowerCommand(), device);
 
     assert.equal(res, 0xFFFF);
+  });
+
+  test('works with a custom router that implements only ClientRouter', async () => {
+    // This router has no receive() pipeline — it synthesizes responses in
+    // send() — proving Client needs only ClientRouter, not RouterInstance.
+    const handlers = new Map<number, MessageHandler>();
+    const router: ClientRouter = {
+      register(handler, source) {
+        const resolved = source ?? 2;
+        handlers.set(resolved, handler);
+        return resolved;
+      },
+      deregister(source, handler) {
+        if (handlers.get(source) === handler) {
+          handlers.delete(source);
+        }
+      },
+      send(message, _port, _address, serialNumber) {
+        const request = decodeHeader(message);
+        const payload = new Uint8Array(2);
+        new DataView(payload.buffer).setUint16(0, 0xABCD, true);
+        const response = decodeHeader(encode(
+          false,
+          request.source,
+          request.target,
+          false,
+          false,
+          request.sequence,
+          Type.StatePower,
+          payload,
+        ));
+        handlers.get(request.source)?.(response, payload, serialNumber ?? '');
+      },
+    };
+
+    const client = Client({ router });
+    try {
+      const res = await client.send(GetPowerCommand(), sharedDevice);
+      assert.equal(res, 0xABCD);
+    } finally {
+      client.dispose();
+    }
+    assert.equal(handlers.size, 0);
   });
 
   test('send with ack-only option', async () => {

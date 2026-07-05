@@ -6,9 +6,10 @@ export type { Header };
 
 /**
  * The decoded message `receive()` returns: the parsed `header`, a zero-copy
- * `payload` view, and the `serialNumber` derived from `header.target`. Passed
- * straight to `devices.register(port, address, received)` to register the
- * device that sent it, so its shape is part of the registration contract.
+ * `payload` view, and the `serialNumber` derived from `header.target`. It
+ * satisfies the registry's `RegistrationMessage`, so it passes straight to
+ * `devices.register(port, address, received)` to register the device that
+ * sent it.
  */
 export interface ReceivedMessage {
   header: Header;
@@ -28,6 +29,13 @@ const MAX_SOURCE = 0xFFFFFFFF;
 const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 
 export interface RouterOptions {
+  /**
+   * The outbound transport: called with the encoded packet for every
+   * `send()`. `serialNumber` is a routing hint — present when the sender
+   * knows the destination device (unicast, not broadcast) — letting a
+   * transport with per-device paths pick one without decoding the packet.
+   * A plain UDP transport can ignore it.
+   */
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
   /**
    * Global tap invoked for every successfully decoded inbound message,
@@ -44,7 +52,18 @@ export interface RouterOptions {
   onError?: (error: unknown, message: Uint8Array) => void;
 }
 
-export interface RouterInstance {
+/**
+ * The sending half of the router — all a {@link Client} requires, so a
+ * custom router only has to implement these three methods to drive one;
+ * {@link RouterInstance.receive} is only needed by the socket wiring.
+ *
+ * The contract tying the methods together: the source id returned by
+ * `register()` must be written into the header of every request passed to
+ * `send()` (the `source` argument of `encode()` from `lifxlan/encoding`).
+ * Devices echo it in responses, which is how `receive()` finds the handler
+ * to deliver each response to.
+ */
+export interface ClientRouter {
   /**
    * Allocates a free source id, registers `handler` against it, and returns
    * the source. Allocation and registration happen atomically in this single
@@ -56,7 +75,16 @@ export interface RouterInstance {
    */
   register(handler: MessageHandler, source?: number): number;
   deregister(source: number, handler: MessageHandler): void;
+  /**
+   * Hands an encoded packet to the transport. A pass-through by design: it
+   * gives every sender a single seam to swap or instrument the outbound
+   * transport. `serialNumber` is the per-device routing hint forwarded to
+   * the transport; see {@link RouterOptions.onSend}.
+   */
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+}
+
+export interface RouterInstance extends ClientRouter {
   /**
    * Decodes an inbound message and dispatches it through three channels:
    *
@@ -80,19 +108,11 @@ export interface RouterInstance {
 }
 
 /**
- * Since a client is a source of messages and there may be multiple
- * clients sending messages at the same time, the router receives
- * response messages and routes them to the client (a MessageHandler)
- * that sent the request message.
- *
- * It has the added benefit of allowing callers to send messages
- * messages. With the previous benefit, the router helps associate
- * received messages with previously sent messages.
- *
- * It also decodes the header and converts the target to a serial
- * number string. This helps avoid calling the relatively expensive
- * convertTargetToSerialNumber utility function multiple times for
- * each response message.
+ * Multiplexes one network transport across many concurrent senders. Each
+ * sender registers a handler under a source id and encodes that id into its
+ * requests (see {@link ClientRouter}); `receive()` routes each response to
+ * the handler whose source it echoes, decoding the header — including the
+ * relatively expensive serial number conversion — once per packet.
  */
 export function Router(options: RouterOptions): RouterInstance {
   const handlers = new Map<number, MessageHandler>();

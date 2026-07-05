@@ -31,11 +31,11 @@ export { ButtonGesture, ButtonTargetType } from './constants/button.js';
 
 /** Core abstractions */
 export { Router } from './router.js';
-export type { RouterInstance, RouterOptions, MessageHandler } from './router.js';
+export type { RouterInstance, ClientRouter, RouterOptions, MessageHandler, ReceivedMessage } from './router.js';
 export { Client } from './client.js';
 export type { ClientInstance, ClientOptions, SendOptions, ResponseMode } from './client.js';
 export { Device, Devices } from './devices.js';
-export type { DeviceConfig, DevicesOptions, DevicesInstance, GetDeviceOptions, DeviceEventHandlers } from './devices.js';
+export type { DeviceConfig, DevicesOptions, DevicesInstance, GetDeviceOptions, DeviceEventHandlers, RegistrationMessage } from './devices.js';
 
 /** Errors */
 export {
