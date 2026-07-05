@@ -23,7 +23,7 @@ import {
   ValidationError,
 } from './errors.js';
 
-import type { ClientRouter, MessageHandler, Header } from './router.js';
+import type { ClientRouter, Header } from './router.js';
 
 import type { Device } from './devices.js';
 import type { Decoder, Command } from './commands/index.js';
@@ -214,12 +214,6 @@ export interface ClientOptions<R extends ClientRouter = ClientRouter> {
    */
   defaultTimeoutMs?: number;
   source?: number;
-  /**
-   * Tap invoked for every inbound message addressed to this client's source.
-   * To observe all traffic regardless of source, use the router-level
-   * `RouterOptions.onMessage` instead.
-   */
-  onMessage?: MessageHandler;
 }
 
 export interface ClientInstance<R extends ClientRouter = ClientRouter> extends Disposable {
@@ -321,10 +315,6 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
   // private closure (not exposed on ClientInstance) so callers can't bypass
   // routing by invoking it directly.
   function onMessage(header: Header, payload: Uint8Array, serialNumber: string) {
-    if (options.onMessage) {
-      options.onMessage(header, payload, serialNumber);
-    }
-
     const responseHandlerEntry = responseHandlerMap.get(serialNumber)?.get(header.sequence);
 
     if (responseHandlerEntry) {

@@ -66,7 +66,7 @@ socket.setBroadcast(true);
 
 const client = Client({ router });
 
-// Discover devices in the background (broadcasts GetService on an interval)
+// Discover devices in the background (broadcasts GetService on a backoff)
 using discovery = discover(router, devices);
 
 // Wait for a specific device (replace with your device's serial number)
@@ -336,7 +336,7 @@ for await (const [message, remote] of socket) {
 
 ### Discovery Helper
 
-The optional `lifxlan/discovery` subpath packages the broadcast-on-an-interval loop from the Quick Start. `discover()` broadcasts `GetService` immediately and on an interval, yielding devices as your handler registers them — known devices first, then new arrivals. End to end:
+The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from the Quick Start. `discover()` broadcasts `GetService` immediately and then on a widening backoff — starting at `intervalMs` (default 1s), quadrupling per broadcast, and settling at `maxIntervalMs` (default 1 minute), so with the defaults broadcasts go out immediately, then after 1s, 4s, 16s, and every minute from there — yielding devices as your handler registers them: known devices first, then new arrivals. The burst defeats UDP loss when it matters most; the capped heartbeat keeps a long-lived stream from broadcasting to every device on the network once a second. Set `maxIntervalMs` equal to `intervalMs` for a fixed interval. End to end:
 
 ```javascript
 import dgram from 'node:dgram';
@@ -374,7 +374,7 @@ using discovery = discover(router, devices);
 const device = await devices.get('d07123456789');
 ```
 
-Writing `using` needs TypeScript ≥ 5.2 with `Disposable` in scope (a `lib` that includes `esnext.disposable`, or `@types/node`, which Node ≥ 22 projects already have); otherwise call `dispose()` directly. With no `timeoutMs` it runs until disposed, keeping the registry fresh as DHCP addresses change. Internally it uses the public `devices.subscribe({ onAdded, onChanged, onRemoved })`, which observes registry events and returns an unsubscribe function.
+Writing `using` needs TypeScript ≥ 5.2 with `Disposable` in scope (a `lib` that includes `esnext.disposable`, or `@types/node`, which Node ≥ 22 projects already have); otherwise call `dispose()` directly. With no `timeoutMs` it runs until disposed, broadcasting at the backed-off `maxIntervalMs` cadence and keeping the registry fresh as DHCP addresses change. Internally it uses the public `devices.subscribe({ onAdded, onChanged, onRemoved })`, which observes registry events and returns an unsubscribe function.
 
 ### Manually Controlling Discovery
 
@@ -449,6 +449,15 @@ Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a 
 **`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `unicast()` throw synchronously instead, since they have no promise to reject.)
 
 Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
+
+### Rate Limits
+
+LIFX's guidance is to send **at most 20 messages per second to any single device**. The library deliberately does not throttle — every operation maps to exactly one packet, and pacing policy (drop, queue, coalesce) belongs to your application — so staying under the limit is your code's job:
+
+- For animations, space per-device updates at least 50ms apart; the [Party Mode](#party-mode-animated-colors) example's 100ms cadence stays comfortably inside the limit.
+- Exceeding it doesn't produce an error — the protocol has no signal for overrun. LIFX documents the consequence only as "unexpected device or protocol message behavior"; in practice an overdriven device delays or silently discards messages, which surfaces as `TimeoutError` on acknowledged sends and skipped frames on `unicast()`.
+- Broadcasts multiply: one `GetService` broadcast elicits a reply from *every* device on the network, so discovery traffic scales with fleet size — this is why `discover()` backs its broadcast interval off to once a minute.
+- If you need a real throttle (a token bucket, per-device queues), `Router({ onSend })` is the seam: every outgoing packet passes through it, and the `serialNumber` argument identifies the destination device for per-device pacing. The [`sendMany` batching example](#batching-sends-with-sendmany) uses the same seam for the opposite purpose.
 
 ### Use Without Device Discovery
 
@@ -732,28 +741,50 @@ const router = Router({
 ### Message Callbacks
 
 ```javascript
-// Router-level message callback (all messages)
+// Router-level message callback (every decoded inbound message)
 const router = Router({
   onMessage(header, payload, serialNumber) {
-    console.log('Router received:', header.type);
-  },
-});
-
-// Client-level message callback (messages for this client)
-const client = Client({
-  router,
-  onMessage(header, payload, serialNumber) {
-    console.log('Client received:', header.type);
+    console.log('Received:', header.type, 'from', serialNumber);
   },
 });
 ```
+
+To watch a single client's traffic, compare sources inside the tap: `header.source === client.source`.
+
+To turn tapped messages into typed data, switch on `header.type` and call the matching `decode*` function from `lifxlan/encoding` — every device-to-client message has one (`decodeStateService`, `decodeLightState`, `decodeStateGroup`, …), named after its `Type` constant:
+
+```javascript
+import { Type } from 'lifxlan';
+import { decodeLightState, decodeStateGroup } from 'lifxlan/encoding';
+
+const router = Router({
+  onMessage(header, payload, serialNumber) {
+    switch (header.type) {
+      case Type.LightState: {
+        const state = decodeLightState(payload, { current: 0 });
+        console.log(serialNumber, 'reports power', state.power);
+        break;
+      }
+      case Type.StateGroup: {
+        const group = decodeStateGroup(payload, { current: 0 });
+        console.log(serialNumber, 'is in group', group.label);
+        break;
+      }
+    }
+  },
+});
+```
+
+This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it, and payloads outside your `switch` are never decoded at all. The same pattern works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet results (`StateZone`, `StateMultiZone`, `State64`, `StateDeviceChain`) decode as their single-packet shape here — accumulating a full result across packets is what `client.send()` does for you.
+
+One deliberate redundancy to be aware of: a response that settles a `client.send()` promise is decoded twice on this path — once by the command's decoder for the awaiting caller, once by the tap. Sharing a single decode would couple every client to the tap's lifecycle, and at LAN message rates (bounded by the [rate limit](#rate-limits)) a second zero-copy decode of a ≤100-byte payload is noise.
 
 ## Troubleshooting
 
 ### Discovery finds no devices
 
 - **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine.
-- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast on an interval (`discover()` defaults to every 1 second) until you've found what you're looking for.
+- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
 - **Replies arrive but nothing registers.** Registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples. Verify packets are arriving with `Router({ onMessage })` or a packet capture.
@@ -764,6 +795,7 @@ const client = Client({
 - **A packet was lost.** UDP is lossy even on a healthy network — wrap sends in a retry loop with backoff (see [Error Handling with Retries](#error-handling-with-retries)).
 - **The device's IP changed** (DHCP lease, power cycle). Keep periodic discovery running; `devices.register()` updates the address of a known device in place, and `onChanged` fires when it does.
 - **The network is slow.** Raise the timeout per call (`{ timeoutMs: 10000 }`) or per client (`Client({ router, defaultTimeoutMs })`).
+- **You're sending faster than the device can absorb.** Past the recommended 20 messages per second, LIFX promises only "unexpected behavior" — in practice requests get delayed or silently discarded (see [Rate Limits](#rate-limits)), and a discarded request looks identical to a lost packet.
 
 ### `send()` rejects with `UnhandledCommandError`
 
