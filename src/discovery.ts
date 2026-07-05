@@ -2,7 +2,7 @@
  * Optional discovery helper, exposed as the 'lifxlan/discovery' subpath so
  * the package root keeps only passive building blocks — this is the one
  * piece of the library that acts on a timer. It automates the
- * broadcast-GetService-on-an-interval recipe from the README; receiving is
+ * broadcast-GetService-on-a-backoff recipe from the README; receiving is
  * still the caller's socket handler feeding `router.receive()` into
  * `devices.register()`, exactly as without the helper.
  */
@@ -14,8 +14,19 @@ import type { ClientRouter } from './router.js';
 import type { Device, DevicesInstance } from './devices.js';
 
 export interface DiscoveryOptions {
-  /** How often the GetService broadcast repeats. Defaults to 1000ms. */
+  /**
+   * The delay before the first repeat broadcast. Each subsequent broadcast
+   * doubles the delay until it reaches {@link DiscoveryOptions.maxIntervalMs},
+   * so discovery bursts while UDP loss matters most and then settles into a
+   * slow heartbeat. Defaults to 1000ms.
+   */
   intervalMs?: number;
+  /**
+   * The ceiling of the broadcast backoff. Defaults to 30000ms. Set it equal
+   * to `intervalMs` to disable backoff and broadcast at a fixed interval;
+   * values below `intervalMs` are clamped up to it.
+   */
+  maxIntervalMs?: number;
   /**
    * Ends iteration when aborted. Unlike devices.get() — where abort rejects
    * because the awaited lookup never happened — stopping a discovery stream
@@ -49,7 +60,8 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
 
 /**
  * Discovers LIFX devices by broadcasting GetService immediately and then on
- * an interval, yielding each device exactly once as it lands in `devices`:
+ * a doubling backoff — starting at `intervalMs` and settling at
+ * `maxIntervalMs` — yielding each device exactly once as it lands in `devices`:
  * devices already registered before the call are yielded first, then new
  * registrations as they arrive. (A device removed from the registry and
  * later re-registered counts as a new registration and is yielded again.)
@@ -95,7 +107,7 @@ export function discover(
   // set would drop all but the latest concurrent next() call.
   const waiters = new Set<() => void>();
   let done = false;
-  let timer: ReturnType<typeof setInterval> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let deadline: ReturnType<typeof setTimeout> | undefined;
   let teardown: (() => void) | undefined;
 
@@ -112,7 +124,7 @@ export function discover(
     if (done) return;
     done = true;
     if (timer !== undefined) {
-      clearInterval(timer);
+      clearTimeout(timer);
       timer = undefined;
     }
     if (deadline !== undefined) {
@@ -168,16 +180,34 @@ export function discover(
       finish();
       throw err;
     }
-    timer = setInterval(() => {
-      try {
-        client.broadcast(GetServiceCommand());
-      } catch {
-        // The transport refused the packet (socket closed, router onSend
-        // threw). Inside a timer callback the throw would otherwise be an
-        // uncaught exception every tick; the stream is over, end it.
-        finish();
-      }
-    }, options.intervalMs ?? 1000);
+
+    // Chained timeouts rather than setInterval: the delay doubles after each
+    // broadcast, bursting early — when a lost UDP packet still delays first
+    // contact — and settling at the cap so an open-ended stream left running
+    // (to track DHCP changes) is a slow heartbeat, not once-a-second network
+    // chatter for every device on the LAN.
+    let delayMs = Math.max(1, options.intervalMs ?? 1000);
+    const maxDelayMs = Math.max(delayMs, options.maxIntervalMs ?? 30_000);
+    const scheduleBroadcast = () => {
+      timer = setTimeout(() => {
+        try {
+          client.broadcast(GetServiceCommand());
+        } catch {
+          // The transport refused the packet (socket closed, router onSend
+          // threw). Inside a timer callback the throw would otherwise be an
+          // uncaught exception every tick; the stream is over, end it.
+          finish();
+          return;
+        }
+        // A reentrant finish() — onSend itself invoking dispose() — lands
+        // between the broadcast above and this reschedule; with setInterval
+        // the clear stopped future ticks, with a chain it must be checked.
+        if (done) return;
+        delayMs = Math.min(delayMs * 2, maxDelayMs);
+        scheduleBroadcast();
+      }, delayMs);
+    };
+    scheduleBroadcast();
   }
 
   function disposeNow() {

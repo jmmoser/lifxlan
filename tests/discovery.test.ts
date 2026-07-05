@@ -77,10 +77,42 @@ describe('discovery', () => {
 
     discovery.dispose();
     const sendsAtDispose = sent.length;
-    // With intervalMs:1 a leaked timer would fire ~20 more times in this window,
+    // With intervalMs:1 a leaked timer (delay still single-digit ms this
+    // early in the backoff) would fire several more times in this window,
     // so a cleared timer is asserted by margin, not by luck.
     await sleep(20);
     expect(sent.length).toBe(sendsAtDispose);
+  });
+
+  test('the broadcast delay doubles instead of staying fixed', async () => {
+    const { router, untilSent } = recordingRouter();
+    const devices = Devices();
+    const started = performance.now();
+    const discovery = discover(router, devices, { intervalMs: 1 });
+
+    // Delays after the initial broadcast are 1, 2, 4, 8, 16ms. Timers never
+    // fire early, so the sixth broadcast cannot land before ~31ms have
+    // elapsed — a fixed 1ms interval would reach it in ~5ms. A lower bound
+    // stays robust under CI jitter, which only ever delays timers further.
+    await untilSent(6);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(30);
+
+    discovery.dispose();
+  });
+
+  test('maxIntervalMs caps the backoff', async () => {
+    const { router, sent, untilSent } = recordingRouter();
+    const devices = Devices();
+    const discovery = discover(router, devices, { intervalMs: 1, maxIntervalMs: 1 });
+
+    // Capped at 1ms the delay stays fixed, so eight broadcasts need only
+    // ~7ms; uncapped doubling from 1ms would need at least 127ms. Racing a
+    // generous 100ms window distinguishes the two without depending on
+    // exact timer resolution.
+    await Promise.race([untilSent(8), sleep(100)]);
+    expect(sent.length).toBeGreaterThanOrEqual(8);
+
+    discovery.dispose();
   });
 
   test('yields devices registered before the call first, then new registrations', async () => {
