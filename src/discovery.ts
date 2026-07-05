@@ -22,7 +22,7 @@ export interface DiscoveryOptions {
    */
   intervalMs?: number;
   /**
-   * The ceiling of the broadcast backoff. Defaults to 30000ms. Set it equal
+   * The ceiling of the broadcast backoff. Defaults to 60000ms. Set it equal
    * to `intervalMs` to disable backoff and broadcast at a fixed interval;
    * values below `intervalMs` are clamped up to it.
    */
@@ -187,7 +187,7 @@ export function discover(
     // (to track DHCP changes) is a slow heartbeat, not once-a-second network
     // chatter for every device on the LAN.
     let delayMs = Math.max(1, options.intervalMs ?? 1000);
-    const maxDelayMs = Math.max(delayMs, options.maxIntervalMs ?? 30_000);
+    const maxDelayMs = Math.max(delayMs, options.maxIntervalMs ?? 60_000);
     const scheduleBroadcast = () => {
       timer = setTimeout(() => {
         try {

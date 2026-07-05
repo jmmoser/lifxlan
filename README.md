@@ -336,7 +336,7 @@ for await (const [message, remote] of socket) {
 
 ### Discovery Helper
 
-The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from the Quick Start. `discover()` broadcasts `GetService` immediately and then on a doubling backoff — starting at `intervalMs` (default 1s) and settling at `maxIntervalMs` (default 30s) — yielding devices as your handler registers them: known devices first, then new arrivals. The burst defeats UDP loss when it matters most; the capped heartbeat keeps a long-lived stream from broadcasting to every device on the network once a second. Set `maxIntervalMs` equal to `intervalMs` for a fixed interval. End to end:
+The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from the Quick Start. `discover()` broadcasts `GetService` immediately and then on a doubling backoff — starting at `intervalMs` (default 1s) and settling at `maxIntervalMs` (default 1 minute) — yielding devices as your handler registers them: known devices first, then new arrivals. The burst defeats UDP loss when it matters most; the capped heartbeat keeps a long-lived stream from broadcasting to every device on the network once a second. Set `maxIntervalMs` equal to `intervalMs` for a fixed interval. End to end:
 
 ```javascript
 import dgram from 'node:dgram';
@@ -753,7 +753,7 @@ const client = Client({
 ### Discovery finds no devices
 
 - **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine.
-- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every 30 seconds) until you've found what you're looking for.
+- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
 - **Replies arrive but nothing registers.** Registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples. Verify packets are arriving with `Router({ onMessage })` or a packet capture.
