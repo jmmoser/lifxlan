@@ -1,7 +1,7 @@
 /**
  * ESM smoke test for the built package. Runs on Node and Deno (no runtime
  * APIs beyond standard ECMAScript), exercising a loopback request/response
- * round trip through Router + Client against `dist/esm`.
+ * round trip through Router + Client against `dist`.
  *
  * Build first: `bun run build`.
  */
@@ -12,10 +12,10 @@ import {
   Devices,
   Type,
   GetPowerCommand,
-} from '../dist/esm/index.js';
-import { encode, decodeHeader } from '../dist/esm/encoding.js';
-import { Products } from '../dist/esm/products.js';
-import { discover } from '../dist/esm/discovery.js';
+} from '../dist/index.js';
+import { encode, decodeHeader } from '../dist/encoding.js';
+import { Products } from '../dist/products.js';
+import { discover } from '../dist/discovery.js';
 
 const router = Router({
   onSend(message) {

@@ -4,7 +4,7 @@
     "noEmit": false,
     "declaration": true,
     "rootDir": "./src",
-    "outDir": "./dist/esm",
+    "outDir": "./dist",
     "sourceMap": true,
     "inlineSources": true
   },

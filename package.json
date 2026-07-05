@@ -1,19 +1,15 @@
 {
   "name": "lifxlan",
-  "version": "0.0.85",
+  "version": "1.0.0-rc.1",
   "description": "TypeScript library for controlling LIFX products over LAN",
   "type": "module",
-  "main": "./dist/cjs/index.js",
-  "module": "./dist/esm/index.js",
-  "types": "./dist/cjs/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "sideEffects": false,
   "scripts": {
     "test": "bun test --coverage",
     "test:integration": "bun test ./tests/integration.ts --timeout 30000",
-    "build": "bun run build:esm && bun run build:cjs && bun run build:minify",
-    "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
-    "build:minify": "bun run scripts/minify.mjs",
+    "build": "tsc -p tsconfig.build.json && bun run scripts/minify.mjs",
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
     "docs": "typedoc",
@@ -42,44 +38,20 @@
   ],
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/esm/index.d.ts",
-        "default": "./dist/esm/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.js"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./discovery": {
-      "import": {
-        "types": "./dist/esm/discovery.d.ts",
-        "default": "./dist/esm/discovery.js"
-      },
-      "require": {
-        "types": "./dist/cjs/discovery.d.ts",
-        "default": "./dist/cjs/discovery.js"
-      }
+      "types": "./dist/discovery.d.ts",
+      "default": "./dist/discovery.js"
     },
     "./encoding": {
-      "import": {
-        "types": "./dist/esm/encoding.d.ts",
-        "default": "./dist/esm/encoding.js"
-      },
-      "require": {
-        "types": "./dist/cjs/encoding.d.ts",
-        "default": "./dist/cjs/encoding.js"
-      }
+      "types": "./dist/encoding.d.ts",
+      "default": "./dist/encoding.js"
     },
     "./products": {
-      "import": {
-        "types": "./dist/esm/products.d.ts",
-        "default": "./dist/esm/products.js"
-      },
-      "require": {
-        "types": "./dist/cjs/products.d.ts",
-        "default": "./dist/cjs/products.js"
-      }
+      "types": "./dist/products.d.ts",
+      "default": "./dist/products.js"
     },
     "./package.json": "./package.json"
   },
@@ -95,7 +67,7 @@
     "url": "https://github.com/jmmoser/lifxlan/issues"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "author": "Justin Moser",
   "license": "MIT",
