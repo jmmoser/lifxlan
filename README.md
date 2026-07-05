@@ -697,7 +697,7 @@ console.log(responses.length); // 2
 
 ### Low-Level Protocol Access
 
-The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` and the `getHeader*` accessors take frames apart, and every payload has an `encode*`/`decode*` function (`encodeSetColor`, `decodeStateService`, …) plus the `decodePayload()` dispatcher that picks the right decoder from a message type (see [Message Callbacks](#message-callbacks)). Use it to drive a socket without Router/Client, or to build custom commands from the same primitives the built-in ones use:
+The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` and the `getHeader*` accessors take frames apart, and every payload has an `encode*`/`decode*` function (`encodeSetColor`, `decodeStateService`, …). Use it to drive a socket without Router/Client, or to build custom commands from the same primitives the built-in ones use:
 
 ```javascript
 import { Type, NO_TARGET } from 'lifxlan';
@@ -751,30 +751,33 @@ const router = Router({
 
 To watch a single client's traffic, compare sources inside the tap: `header.source === client.source`.
 
-To turn tapped messages into typed data, `lifxlan/encoding` exports `decodePayload()` — a dispatcher over every device-to-client payload decoder. It returns a discriminated union tagged with the `Type` constant, so switching on `type` narrows `value` with no assertions; requests, acknowledgements, and unknown types return `undefined`:
+To turn tapped messages into typed data, switch on `header.type` and call the matching `decode*` function from `lifxlan/encoding` — every device-to-client message has one (`decodeStateService`, `decodeLightState`, `decodeStateGroup`, …), named after its `Type` constant:
 
 ```javascript
 import { Type } from 'lifxlan';
-import { decodePayload } from 'lifxlan/encoding';
+import { decodeLightState, decodeStateGroup } from 'lifxlan/encoding';
 
 const router = Router({
   onMessage(header, payload, serialNumber) {
-    const message = decodePayload(header.type, payload);
-    switch (message?.type) {
-      case Type.LightState:
-        console.log(serialNumber, 'reports power', message.value.power);
+    switch (header.type) {
+      case Type.LightState: {
+        const state = decodeLightState(payload, { current: 0 });
+        console.log(serialNumber, 'reports power', state.power);
         break;
-      case Type.StateGroup:
-        console.log(serialNumber, 'is in group', message.value.label);
+      }
+      case Type.StateGroup: {
+        const group = decodeStateGroup(payload, { current: 0 });
+        console.log(serialNumber, 'is in group', group.label);
         break;
+      }
     }
   },
 });
 ```
 
-This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it. The same function works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet results (`StateZone`, `StateMultiZone`, `State64`, `StateDeviceChain`) decode as their single-packet shape here — accumulating a full result across packets is what `client.send()` does for you.
+This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it, and payloads outside your `switch` are never decoded at all. The same pattern works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet results (`StateZone`, `StateMultiZone`, `State64`, `StateDeviceChain`) decode as their single-packet shape here — accumulating a full result across packets is what `client.send()` does for you.
 
-One deliberate redundancy to be aware of: a response that settles a `client.send()` promise is decoded twice on this path — once by the command's decoder for the awaiting caller, once by the tap. Sharing a single decode would couple every client to the tap's lifecycle, and at LAN message rates (bounded by the [rate limit](#rate-limits)) a second zero-copy decode of a ≤100-byte payload is noise. If your tap only cares about a few message types, check `header.type` first and unrelated payloads are never decoded at all.
+One deliberate redundancy to be aware of: a response that settles a `client.send()` promise is decoded twice on this path — once by the command's decoder for the awaiting caller, once by the tap. Sharing a single decode would couple every client to the tap's lifecycle, and at LAN message rates (bounded by the [rate limit](#rate-limits)) a second zero-copy decode of a ≤100-byte payload is noise.
 
 ## Troubleshooting
 

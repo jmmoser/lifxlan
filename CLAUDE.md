@@ -55,7 +55,7 @@ The package root (`src/index.ts`) contains only passive building blocks. Optiona
 
 - `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper — repeats the GetService broadcast on a widening backoff (default 1s, ×4 per broadcast, capped at 1 minute)
 - `lifxlan/products` (`src/products.ts`): capability lookup from the official LIFX products.json; takes parsed data, never fetches
-- `lifxlan/encoding`: the low-level encoding utilities, including `decodePayload()`, the type→decoder dispatcher for message taps
+- `lifxlan/encoding`: the low-level encoding utilities
 
 ### Key Patterns
 
