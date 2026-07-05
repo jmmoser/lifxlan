@@ -1477,8 +1477,8 @@ export type DecodedPayload =
 
 /**
  * Dispatches a payload to the decoder for its message type, so a tap —
- * `RouterOptions.onMessage`, `ClientOptions.onMessage`, or the return value
- * of `router.receive()` — can turn observed traffic into typed data without
+ * `RouterOptions.onMessage`, or the return value of `router.receive()` in
+ * the socket handler — can turn observed traffic into typed data without
  * hand-maintaining a switch over the `decodeState*` functions:
  *
  * ```javascript

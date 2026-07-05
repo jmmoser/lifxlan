@@ -455,7 +455,7 @@ Each client can have up to 255 requests in flight per device; sequence numbers a
 LIFX's guidance is to send **at most 20 messages per second to any single device**. The library deliberately does not throttle — every operation maps to exactly one packet, and pacing policy (drop, queue, coalesce) belongs to your application — so staying under the limit is your code's job:
 
 - For animations, space per-device updates at least 50ms apart; the [Party Mode](#party-mode-animated-colors) example's 100ms cadence stays comfortably inside the limit.
-- Exceeding the limit doesn't produce an error. Devices silently drop what they can't absorb, which shows up as `TimeoutError` on acknowledged sends and skipped frames on `unicast()`.
+- Exceeding it doesn't produce an error — the protocol has no signal for overrun. LIFX documents the consequence only as "unexpected device or protocol message behavior"; in practice an overdriven device delays or silently discards messages, which surfaces as `TimeoutError` on acknowledged sends and skipped frames on `unicast()`.
 - Broadcasts multiply: one `GetService` broadcast elicits a reply from *every* device on the network, so discovery traffic scales with fleet size — this is why `discover()` backs its broadcast interval off to once a minute.
 - If you need a real throttle (a token bucket, per-device queues), `Router({ onSend })` is the seam: every outgoing packet passes through it, and the `serialNumber` argument identifies the destination device for per-device pacing. The [`sendMany` batching example](#batching-sends-with-sendmany) uses the same seam for the opposite purpose.
 
@@ -741,23 +741,17 @@ const router = Router({
 ### Message Callbacks
 
 ```javascript
-// Router-level message callback (all messages)
+// Router-level message callback (every decoded inbound message)
 const router = Router({
   onMessage(header, payload, serialNumber) {
-    console.log('Router received:', header.type);
-  },
-});
-
-// Client-level message callback (messages for this client)
-const client = Client({
-  router,
-  onMessage(header, payload, serialNumber) {
-    console.log('Client received:', header.type);
+    console.log('Received:', header.type, 'from', serialNumber);
   },
 });
 ```
 
-To turn tapped messages into typed data, `lifxlan/encoding` exports `decodePayload()` — a dispatcher over every device-to-client payload decoder. It returns a discriminated union tagged with the `Type` constant, so comparing `type` narrows `value` with no assertions; requests, acknowledgements, and unknown types return `undefined`:
+To watch a single client's traffic, compare sources inside the tap: `header.source === client.source`.
+
+To turn tapped messages into typed data, `lifxlan/encoding` exports `decodePayload()` — a dispatcher over every device-to-client payload decoder. It returns a discriminated union tagged with the `Type` constant, so switching on `type` narrows `value` with no assertions; requests, acknowledgements, and unknown types return `undefined`:
 
 ```javascript
 import { Type } from 'lifxlan';
@@ -766,16 +760,21 @@ import { decodePayload } from 'lifxlan/encoding';
 const router = Router({
   onMessage(header, payload, serialNumber) {
     const message = decodePayload(header.type, payload);
-    if (message?.type === Type.LightState) {
-      console.log(serialNumber, 'reports power', message.value.power);
-    } else if (message?.type === Type.StateGroup) {
-      console.log(serialNumber, 'is in group', message.value.label);
+    switch (message?.type) {
+      case Type.LightState:
+        console.log(serialNumber, 'reports power', message.value.power);
+        break;
+      case Type.StateGroup:
+        console.log(serialNumber, 'is in group', message.value.label);
+        break;
     }
   },
 });
 ```
 
 This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it. The same function works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet results (`StateZone`, `StateMultiZone`, `State64`, `StateDeviceChain`) decode as their single-packet shape here — accumulating a full result across packets is what `client.send()` does for you.
+
+One deliberate redundancy to be aware of: a response that settles a `client.send()` promise is decoded twice on this path — once by the command's decoder for the awaiting caller, once by the tap. Sharing a single decode would couple every client to the tap's lifecycle, and at LAN message rates (bounded by the [rate limit](#rate-limits)) a second zero-copy decode of a ≤100-byte payload is noise. If your tap only cares about a few message types, check `header.type` first and unrelated payloads are never decoded at all.
 
 ## Troubleshooting
 
@@ -793,7 +792,7 @@ This is the building block for an event-driven state cache: every `State*` respo
 - **A packet was lost.** UDP is lossy even on a healthy network — wrap sends in a retry loop with backoff (see [Error Handling with Retries](#error-handling-with-retries)).
 - **The device's IP changed** (DHCP lease, power cycle). Keep periodic discovery running; `devices.register()` updates the address of a known device in place, and `onChanged` fires when it does.
 - **The network is slow.** Raise the timeout per call (`{ timeoutMs: 10000 }`) or per client (`Client({ router, defaultTimeoutMs })`).
-- **You're sending faster than the device can absorb.** Devices drop traffic beyond roughly 20 messages per second without any error signal (see [Rate Limits](#rate-limits)), and a dropped request looks identical to a lost packet.
+- **You're sending faster than the device can absorb.** Past the recommended 20 messages per second, LIFX promises only "unexpected behavior" — in practice requests get delayed or silently discarded (see [Rate Limits](#rate-limits)), and a discarded request looks identical to a lost packet.
 
 ### `send()` rejects with `UnhandledCommandError`
 
