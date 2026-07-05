@@ -53,9 +53,9 @@ There is deliberately no group registry: a device's group (UUID + label, set by 
 
 The package root (`src/index.ts`) contains only passive building blocks. Optional pieces live behind subpath exports so unused code costs nothing:
 
-- `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper — repeats the GetService broadcast on a doubling backoff (default 1s, capped at 1 minute)
+- `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper — repeats the GetService broadcast on a widening backoff (default 1s, ×4 per broadcast, capped at 1 minute)
 - `lifxlan/products` (`src/products.ts`): capability lookup from the official LIFX products.json; takes parsed data, never fetches
-- `lifxlan/encoding`: the low-level encoding utilities
+- `lifxlan/encoding`: the low-level encoding utilities, including `decodePayload()`, the type→decoder dispatcher for message taps
 
 ### Key Patterns
 

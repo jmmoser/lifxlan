@@ -84,18 +84,18 @@ describe('discovery', () => {
     expect(sent.length).toBe(sendsAtDispose);
   });
 
-  test('the broadcast delay doubles instead of staying fixed', async () => {
+  test('the broadcast delay widens instead of staying fixed', async () => {
     const { router, untilSent } = recordingRouter();
     const devices = Devices();
     const started = performance.now();
     const discovery = discover(router, devices, { intervalMs: 1 });
 
-    // Delays after the initial broadcast are 1, 2, 4, 8, 16ms. Timers never
-    // fire early, so the sixth broadcast cannot land before ~31ms have
-    // elapsed — a fixed 1ms interval would reach it in ~5ms. A lower bound
-    // stays robust under CI jitter, which only ever delays timers further.
-    await untilSent(6);
-    expect(performance.now() - started).toBeGreaterThanOrEqual(30);
+    // Delays after the initial broadcast are 1, 4, 16ms. Timers never fire
+    // early, so the fourth broadcast cannot land before ~21ms have elapsed —
+    // a fixed 1ms interval would reach it in ~3ms. A lower bound stays
+    // robust under CI jitter, which only ever delays timers further.
+    await untilSent(4);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(20);
 
     discovery.dispose();
   });
@@ -106,9 +106,9 @@ describe('discovery', () => {
     const discovery = discover(router, devices, { intervalMs: 1, maxIntervalMs: 1 });
 
     // Capped at 1ms the delay stays fixed, so eight broadcasts need only
-    // ~7ms; uncapped doubling from 1ms would need at least 127ms. Racing a
-    // generous 100ms window distinguishes the two without depending on
-    // exact timer resolution.
+    // ~7ms; uncapped quadrupling from 1ms would need over five seconds.
+    // Racing a generous 100ms window distinguishes the two without
+    // depending on exact timer resolution.
     await Promise.race([untilSent(8), sleep(100)]);
     expect(sent.length).toBeGreaterThanOrEqual(8);
 

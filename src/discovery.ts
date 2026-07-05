@@ -16,9 +16,11 @@ import type { Device, DevicesInstance } from './devices.js';
 export interface DiscoveryOptions {
   /**
    * The delay before the first repeat broadcast. Each subsequent broadcast
-   * doubles the delay until it reaches {@link DiscoveryOptions.maxIntervalMs},
-   * so discovery bursts while UDP loss matters most and then settles into a
-   * slow heartbeat. Defaults to 1000ms.
+   * quadruples the delay until it reaches
+   * {@link DiscoveryOptions.maxIntervalMs}, so discovery bursts while UDP
+   * loss matters most and then settles into a slow heartbeat — with the
+   * defaults, broadcasts go out immediately, then after 1s, 4s, 16s, and
+   * every minute from there. Defaults to 1000ms.
    */
   intervalMs?: number;
   /**
@@ -60,8 +62,9 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
 
 /**
  * Discovers LIFX devices by broadcasting GetService immediately and then on
- * a doubling backoff — starting at `intervalMs` and settling at
- * `maxIntervalMs` — yielding each device exactly once as it lands in `devices`:
+ * a widening backoff — starting at `intervalMs`, quadrupling per broadcast,
+ * settling at `maxIntervalMs` — yielding each device exactly once as it
+ * lands in `devices`:
  * devices already registered before the call are yielded first, then new
  * registrations as they arrive. (A device removed from the registry and
  * later re-registered counts as a new registration and is yielded again.)
@@ -181,11 +184,12 @@ export function discover(
       throw err;
     }
 
-    // Chained timeouts rather than setInterval: the delay doubles after each
-    // broadcast, bursting early — when a lost UDP packet still delays first
-    // contact — and settling at the cap so an open-ended stream left running
-    // (to track DHCP changes) is a slow heartbeat, not once-a-second network
-    // chatter for every device on the LAN.
+    // Chained timeouts rather than setInterval: the delay quadruples after
+    // each broadcast (1s, 4s, 16s, then the 60s cap, by default), bursting
+    // early — when a lost UDP packet still delays first contact — and
+    // settling at the cap so an open-ended stream left running (to track
+    // DHCP changes) is a slow heartbeat, not once-a-second network chatter
+    // for every device on the LAN.
     let delayMs = Math.max(1, options.intervalMs ?? 1000);
     const maxDelayMs = Math.max(delayMs, options.maxIntervalMs ?? 60_000);
     const scheduleBroadcast = () => {
@@ -203,7 +207,7 @@ export function discover(
         // between the broadcast above and this reschedule; with setInterval
         // the clear stopped future ticks, with a chain it must be checked.
         if (done) return;
-        delayMs = Math.min(delayMs * 2, maxDelayMs);
+        delayMs = Math.min(delayMs * 4, maxDelayMs);
         scheduleBroadcast();
       }, delayMs);
     };

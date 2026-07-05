@@ -336,7 +336,7 @@ for await (const [message, remote] of socket) {
 
 ### Discovery Helper
 
-The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from the Quick Start. `discover()` broadcasts `GetService` immediately and then on a doubling backoff — starting at `intervalMs` (default 1s) and settling at `maxIntervalMs` (default 1 minute) — yielding devices as your handler registers them: known devices first, then new arrivals. The burst defeats UDP loss when it matters most; the capped heartbeat keeps a long-lived stream from broadcasting to every device on the network once a second. Set `maxIntervalMs` equal to `intervalMs` for a fixed interval. End to end:
+The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from the Quick Start. `discover()` broadcasts `GetService` immediately and then on a widening backoff — starting at `intervalMs` (default 1s), quadrupling per broadcast, and settling at `maxIntervalMs` (default 1 minute), so with the defaults broadcasts go out immediately, then after 1s, 4s, 16s, and every minute from there — yielding devices as your handler registers them: known devices first, then new arrivals. The burst defeats UDP loss when it matters most; the capped heartbeat keeps a long-lived stream from broadcasting to every device on the network once a second. Set `maxIntervalMs` equal to `intervalMs` for a fixed interval. End to end:
 
 ```javascript
 import dgram from 'node:dgram';
@@ -449,6 +449,15 @@ Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a 
 **`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `unicast()` throw synchronously instead, since they have no promise to reject.)
 
 Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
+
+### Rate Limits
+
+LIFX's guidance is to send **at most 20 messages per second to any single device**. The library deliberately does not throttle — every operation maps to exactly one packet, and pacing policy (drop, queue, coalesce) belongs to your application — so staying under the limit is your code's job:
+
+- For animations, space per-device updates at least 50ms apart; the [Party Mode](#party-mode-animated-colors) example's 100ms cadence stays comfortably inside the limit.
+- Exceeding the limit doesn't produce an error. Devices silently drop what they can't absorb, which shows up as `TimeoutError` on acknowledged sends and skipped frames on `unicast()`.
+- Broadcasts multiply: one `GetService` broadcast elicits a reply from *every* device on the network, so discovery traffic scales with fleet size — this is why `discover()` backs its broadcast interval off to once a minute.
+- If you need a real throttle (a token bucket, per-device queues), `Router({ onSend })` is the seam: every outgoing packet passes through it, and the `serialNumber` argument identifies the destination device for per-device pacing. The [`sendMany` batching example](#batching-sends-with-sendmany) uses the same seam for the opposite purpose.
 
 ### Use Without Device Discovery
 
@@ -688,7 +697,7 @@ console.log(responses.length); // 2
 
 ### Low-Level Protocol Access
 
-The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` and the `getHeader*` accessors take frames apart, and every payload has an `encode*`/`decode*` function (`encodeSetColor`, `decodeStateService`, …). Use it to drive a socket without Router/Client, or to build custom commands from the same primitives the built-in ones use:
+The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` and the `getHeader*` accessors take frames apart, and every payload has an `encode*`/`decode*` function (`encodeSetColor`, `decodeStateService`, …) plus the `decodePayload()` dispatcher that picks the right decoder from a message type (see [Message Callbacks](#message-callbacks)). Use it to drive a socket without Router/Client, or to build custom commands from the same primitives the built-in ones use:
 
 ```javascript
 import { Type, NO_TARGET } from 'lifxlan';
@@ -748,6 +757,26 @@ const client = Client({
 });
 ```
 
+To turn tapped messages into typed data, `lifxlan/encoding` exports `decodePayload()` — a dispatcher over every device-to-client payload decoder. It returns a discriminated union tagged with the `Type` constant, so comparing `type` narrows `value` with no assertions; requests, acknowledgements, and unknown types return `undefined`:
+
+```javascript
+import { Type } from 'lifxlan';
+import { decodePayload } from 'lifxlan/encoding';
+
+const router = Router({
+  onMessage(header, payload, serialNumber) {
+    const message = decodePayload(header.type, payload);
+    if (message?.type === Type.LightState) {
+      console.log(serialNumber, 'reports power', message.value.power);
+    } else if (message?.type === Type.StateGroup) {
+      console.log(serialNumber, 'is in group', message.value.label);
+    }
+  },
+});
+```
+
+This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it. The same function works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet results (`StateZone`, `StateMultiZone`, `State64`, `StateDeviceChain`) decode as their single-packet shape here — accumulating a full result across packets is what `client.send()` does for you.
+
 ## Troubleshooting
 
 ### Discovery finds no devices
@@ -764,6 +793,7 @@ const client = Client({
 - **A packet was lost.** UDP is lossy even on a healthy network — wrap sends in a retry loop with backoff (see [Error Handling with Retries](#error-handling-with-retries)).
 - **The device's IP changed** (DHCP lease, power cycle). Keep periodic discovery running; `devices.register()` updates the address of a known device in place, and `onChanged` fires when it does.
 - **The network is slow.** Raise the timeout per call (`{ timeoutMs: 10000 }`) or per client (`Client({ router, defaultTimeoutMs })`).
+- **You're sending faster than the device can absorb.** Devices drop traffic beyond roughly 20 messages per second without any error signal (see [Rate Limits](#rate-limits)), and a dropped request looks identical to a lost packet.
 
 ### `send()` rejects with `UnhandledCommandError`
 

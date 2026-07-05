@@ -14,6 +14,7 @@ import type {
   TileEffectType,
   TileEffectSkyType
 } from './constants/index.js';
+import { Type } from './constants/index.js';
 import { ValidationError } from './errors.js';
 import { HEX_BYTES } from './utils/core.js';
 
@@ -1436,4 +1437,98 @@ export function decodeHeader(bytes: Uint8Array, offset = 0): DecodedHeader {
   }
 
   return new DecodedHeader(bytes, offset);
+}
+
+/**
+ * The result of {@link decodePayload}: a discriminated union over every
+ * device-to-client payload this module can decode, tagged with the same
+ * literal values as {@link Type} so a `type` comparison narrows `value`
+ * with no assertions.
+ */
+export type DecodedPayload =
+  | { type: typeof Type.StateService; value: StateService }
+  | { type: typeof Type.StateHostFirmware; value: StateHostFirmware }
+  | { type: typeof Type.StateWifiInfo; value: StateWifiInfo }
+  | { type: typeof Type.StateWifiFirmware; value: StateWifiFirmware }
+  | { type: typeof Type.StatePower; value: number }
+  | { type: typeof Type.StateLabel; value: string }
+  | { type: typeof Type.StateVersion; value: StateVersion }
+  | { type: typeof Type.StateInfo; value: StateInfo }
+  | { type: typeof Type.StateLocation; value: StateLocation }
+  | { type: typeof Type.StateGroup; value: StateGroup }
+  | { type: typeof Type.EchoResponse; value: Uint8Array }
+  | { type: typeof Type.StateUnhandled; value: number }
+  | { type: typeof Type.LightState; value: LightState }
+  | { type: typeof Type.StateLightPower; value: number }
+  | { type: typeof Type.StateInfrared; value: number }
+  | { type: typeof Type.StateHevCycle; value: StateHevCycle }
+  | { type: typeof Type.StateHevCycleConfiguration; value: StateHevCycleConfiguration }
+  | { type: typeof Type.StateLastHevCycleResult; value: number }
+  | { type: typeof Type.StateZone; value: StateZone }
+  | { type: typeof Type.StateMultiZone; value: StateMultiZone }
+  | { type: typeof Type.StateMultiZoneEffect; value: StateMultiZoneEffect }
+  | { type: typeof Type.StateExtendedColorZones; value: StateExtendedColorZones }
+  | { type: typeof Type.StateDeviceChain; value: StateDeviceChain }
+  | { type: typeof Type.State64; value: State64 }
+  | { type: typeof Type.StateTileEffect; value: StateTileEffect }
+  | { type: typeof Type.StateRPower; value: StateRPower }
+  | { type: typeof Type.StateButton; value: StateButton }
+  | { type: typeof Type.SensorStateAmbientLight; value: SensorStateAmbientLight };
+
+/**
+ * Dispatches a payload to the decoder for its message type, so a tap —
+ * `RouterOptions.onMessage`, `ClientOptions.onMessage`, or the return value
+ * of `router.receive()` — can turn observed traffic into typed data without
+ * hand-maintaining a switch over the `decodeState*` functions:
+ *
+ * ```javascript
+ * const message = decodePayload(header.type, payload);
+ * if (message?.type === Type.LightState) {
+ *   message.value.power; // narrowed to LightState
+ * }
+ * ```
+ *
+ * Covers every device-to-client payload (`State*`, `LightState`,
+ * `EchoResponse`, ...). Returns `undefined` for anything else — requests,
+ * `Acknowledgement` (which has no payload), and unknown types — leaving the
+ * caller `header.type` to tell those apart. Throws, like the underlying
+ * decoders, if the payload is truncated or malformed.
+ *
+ * Messages whose full result spans multiple packets (`StateZone`,
+ * `StateMultiZone`, `State64`, `StateDeviceChain`) decode here as their
+ * single-packet shape; accumulating across packets is what `client.send()`
+ * does via a command's `createDecoder`.
+ */
+export function decodePayload(type: number, bytes: Uint8Array, offsetRef: OffsetRef = { current: 0 }): DecodedPayload | undefined {
+  switch (type) {
+    case Type.StateService: return { type: Type.StateService, value: decodeStateService(bytes, offsetRef) };
+    case Type.StateHostFirmware: return { type: Type.StateHostFirmware, value: decodeStateHostFirmware(bytes, offsetRef) };
+    case Type.StateWifiInfo: return { type: Type.StateWifiInfo, value: decodeStateWifiInfo(bytes, offsetRef) };
+    case Type.StateWifiFirmware: return { type: Type.StateWifiFirmware, value: decodeStateWifiFirmware(bytes, offsetRef) };
+    case Type.StatePower: return { type: Type.StatePower, value: decodeStatePower(bytes, offsetRef) };
+    case Type.StateLabel: return { type: Type.StateLabel, value: decodeStateLabel(bytes, offsetRef) };
+    case Type.StateVersion: return { type: Type.StateVersion, value: decodeStateVersion(bytes, offsetRef) };
+    case Type.StateInfo: return { type: Type.StateInfo, value: decodeStateInfo(bytes, offsetRef) };
+    case Type.StateLocation: return { type: Type.StateLocation, value: decodeStateLocation(bytes, offsetRef) };
+    case Type.StateGroup: return { type: Type.StateGroup, value: decodeStateGroup(bytes, offsetRef) };
+    case Type.EchoResponse: return { type: Type.EchoResponse, value: decodeEchoResponse(bytes, offsetRef) };
+    case Type.StateUnhandled: return { type: Type.StateUnhandled, value: decodeStateUnhandled(bytes, offsetRef) };
+    case Type.LightState: return { type: Type.LightState, value: decodeLightState(bytes, offsetRef) };
+    case Type.StateLightPower: return { type: Type.StateLightPower, value: decodeStateLightPower(bytes, offsetRef) };
+    case Type.StateInfrared: return { type: Type.StateInfrared, value: decodeStateInfrared(bytes, offsetRef) };
+    case Type.StateHevCycle: return { type: Type.StateHevCycle, value: decodeStateHevCycle(bytes, offsetRef) };
+    case Type.StateHevCycleConfiguration: return { type: Type.StateHevCycleConfiguration, value: decodeStateHevCycleConfiguration(bytes, offsetRef) };
+    case Type.StateLastHevCycleResult: return { type: Type.StateLastHevCycleResult, value: decodeStateLastHevCycleResult(bytes, offsetRef) };
+    case Type.StateZone: return { type: Type.StateZone, value: decodeStateZone(bytes, offsetRef) };
+    case Type.StateMultiZone: return { type: Type.StateMultiZone, value: decodeStateMultiZone(bytes, offsetRef) };
+    case Type.StateMultiZoneEffect: return { type: Type.StateMultiZoneEffect, value: decodeStateMultiZoneEffect(bytes, offsetRef) };
+    case Type.StateExtendedColorZones: return { type: Type.StateExtendedColorZones, value: decodeStateExtendedColorZones(bytes, offsetRef) };
+    case Type.StateDeviceChain: return { type: Type.StateDeviceChain, value: decodeStateDeviceChain(bytes, offsetRef) };
+    case Type.State64: return { type: Type.State64, value: decodeState64(bytes, offsetRef) };
+    case Type.StateTileEffect: return { type: Type.StateTileEffect, value: decodeStateTileEffect(bytes, offsetRef) };
+    case Type.StateRPower: return { type: Type.StateRPower, value: decodeStateRPower(bytes, offsetRef) };
+    case Type.StateButton: return { type: Type.StateButton, value: decodeStateButton(bytes, offsetRef) };
+    case Type.SensorStateAmbientLight: return { type: Type.SensorStateAmbientLight, value: decodeSensorStateAmbientLight(bytes, offsetRef) };
+    default: return undefined;
+  }
 }
