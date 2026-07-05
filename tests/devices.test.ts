@@ -1,6 +1,6 @@
 import { describe, test, spyOn, expect } from 'bun:test';
 import assert from 'node:assert';
-import { Devices, Device } from '../src/devices.js';
+import { Devices, Device, type RegistrationMessage } from '../src/devices.js';
 import { received } from './helpers.js';
 
 describe('devices', () => {
@@ -647,6 +647,23 @@ describe('devices subscribe', () => {
       expect(moved?.address).toBe('10.0.0.9');
       expect(devices.registered.size).toBe(1);
       expect(changed).toEqual(['10.0.0.9']);
+    });
+
+    test('accepts a minimal RegistrationMessage from a custom decode pipeline', () => {
+      // The parameter type names only the two fields register() reads, so a
+      // caller that decodes packets without the stock Router can drive the
+      // registry without fabricating a full ReceivedMessage/Header.
+      const devices = Devices();
+      const message: RegistrationMessage = {
+        serialNumber: 'd073d5aa0001',
+        header: { target },
+      };
+
+      const device = devices.register(56700, '10.0.0.7', message);
+
+      expect(device?.serialNumber).toBe('d073d5aa0001');
+      expect(device?.target).toEqual(target);
+      expect(devices.registered.get('d073d5aa0001')).toBe(device);
     });
 
     test('an undefined result (malformed packet) registers nothing', () => {

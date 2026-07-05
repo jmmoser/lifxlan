@@ -6,9 +6,10 @@ export type { Header };
 
 /**
  * The decoded message `receive()` returns: the parsed `header`, a zero-copy
- * `payload` view, and the `serialNumber` derived from `header.target`. Passed
- * straight to `devices.register(port, address, received)` to register the
- * device that sent it, so its shape is part of the registration contract.
+ * `payload` view, and the `serialNumber` derived from `header.target`. It
+ * satisfies the registry's `RegistrationMessage`, so it passes straight to
+ * `devices.register(port, address, received)` to register the device that
+ * sent it.
  */
 export interface ReceivedMessage {
   header: Header;
@@ -28,6 +29,14 @@ const MAX_SOURCE = 0xFFFFFFFF;
 const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 
 export interface RouterOptions {
+  /**
+   * The outbound transport: called with the encoded packet for every
+   * `send()`. `serialNumber` is a routing hint — senders that know which
+   * device a packet is for pass its serial number (Client does for unicast
+   * exchanges, and omits it for broadcasts) so a transport that keeps
+   * per-device paths (a socket per device, a mock keyed by serial) can pick
+   * one without decoding the packet. A plain UDP transport can ignore it.
+   */
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
   /**
    * Global tap invoked for every successfully decoded inbound message,
@@ -44,7 +53,20 @@ export interface RouterOptions {
   onError?: (error: unknown, message: Uint8Array) => void;
 }
 
-export interface RouterInstance {
+/**
+ * The sending half of the router: source registration plus the outbound
+ * transport seam. This is all a {@link Client} (or any other message
+ * sender) requires, so a custom router only has to implement these three
+ * methods to drive one — {@link RouterInstance.receive}, which owns the
+ * decode pipeline, is only needed by the code that wires the socket.
+ *
+ * The contract that ties the methods together: the source id returned by
+ * `register()` must be written into the header of every request passed to
+ * `send()` (the `source` argument of `encode()` from `lifxlan/encoding`).
+ * Devices echo it in their responses, and it is how the receiving side finds
+ * the registered handler to deliver the response to.
+ */
+export interface ClientRouter {
   /**
    * Allocates a free source id, registers `handler` against it, and returns
    * the source. Allocation and registration happen atomically in this single
@@ -56,7 +78,18 @@ export interface RouterInstance {
    */
   register(handler: MessageHandler, source?: number): number;
   deregister(source: number, handler: MessageHandler): void;
+  /**
+   * Hands an encoded packet to the transport (the `onSend` callback the
+   * router was constructed with). The router adds nothing on this path — it
+   * exists so every component that sends traffic needs only a router
+   * reference, giving the application a single seam to swap or instrument
+   * the outbound transport. `serialNumber` is the per-device routing hint
+   * forwarded verbatim to `onSend`; see {@link RouterOptions.onSend}.
+   */
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
+}
+
+export interface RouterInstance extends ClientRouter {
   /**
    * Decodes an inbound message and dispatches it through three channels:
    *
@@ -80,19 +113,17 @@ export interface RouterInstance {
 }
 
 /**
- * Since a client is a source of messages and there may be multiple
- * clients sending messages at the same time, the router receives
- * response messages and routes them to the client (a MessageHandler)
- * that sent the request message.
+ * Multiplexes one network transport across many concurrent senders. Each
+ * sender calls `register()` to obtain a source id and encodes it into the
+ * headers of the requests it passes to `send()` (via `encode()` from
+ * `lifxlan/encoding` — the router itself never encodes); devices echo the
+ * source in their responses, and `receive()` uses it to route each response
+ * back to the handler registered by the sender of the originating request.
  *
- * It has the added benefit of allowing callers to send messages
- * messages. With the previous benefit, the router helps associate
- * received messages with previously sent messages.
- *
- * It also decodes the header and converts the target to a serial
- * number string. This helps avoid calling the relatively expensive
- * convertTargetToSerialNumber utility function multiple times for
- * each response message.
+ * `receive()` also decodes the header once — including converting the
+ * target to a serial number string, which is relatively expensive — so the
+ * per-source handler, the `onMessage` tap, and the caller all share one
+ * decode per packet.
  */
 export function Router(options: RouterOptions): RouterInstance {
   const handlers = new Map<number, MessageHandler>();
