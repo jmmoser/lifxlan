@@ -203,11 +203,8 @@ export interface SendOptions<A extends ResponseMode = ResponseMode> {
 export interface ClientOptions<R extends ClientRouter = ClientRouter> {
   /**
    * Only the sending half of the router is required — see
-   * {@link ClientRouter}. A full `Router` satisfies it, and so does a
-   * custom implementation of just those three methods; the client never
-   * calls `receive()`. The concrete type is preserved on
-   * {@link ClientInstance.router}, so passing a full `RouterInstance` keeps
-   * `receive()` reachable through the client.
+   * {@link ClientRouter}; the client never calls `receive()`. The concrete
+   * type is preserved on {@link ClientInstance.router}.
    */
   router: R;
   /**
@@ -218,10 +215,8 @@ export interface ClientOptions<R extends ClientRouter = ClientRouter> {
   defaultTimeoutMs?: number;
   source?: number;
   /**
-   * Tap invoked for every inbound message addressed to this client's source
-   * — i.e. responses to requests this client sent — before response
-   * correlation runs. For a tap that observes *all* traffic regardless of
-   * source (e.g. discovery responses), use the router-level
+   * Tap invoked for every inbound message addressed to this client's source.
+   * To observe all traffic regardless of source, use the router-level
    * `RouterOptions.onMessage` instead.
    */
   onMessage?: MessageHandler;
@@ -239,19 +234,16 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    */
   dispose(): void;
   /**
-   * Fire-and-forget to the whole network: encodes `command` addressed to all
-   * devices and hands it to the transport. Nothing is awaited and no
-   * response is correlated — responses only reach a router-level `onMessage`
-   * tap. Throws synchronously if the transport does.
+   * Fire-and-forget to the whole network. No response is correlated —
+   * responses only reach a router-level `onMessage` tap. Throws
+   * synchronously if the transport does.
    */
   broadcast<T>(command: Command<T>): void;
   /**
-   * Fire-and-forget to one device. Despite the addressing-flavored name,
-   * what distinguishes this from `send()` is reliability, not addressing:
-   * the packet requests no acknowledgement or response, nothing is awaited,
-   * and delivery is not confirmed — UDP loss goes unnoticed. Use it for
-   * high-rate updates (e.g. streaming color changes) where the next packet
-   * supersedes the last; use `send()` when the outcome matters.
+   * Fire-and-forget to one device: no acknowledgement or response is
+   * requested and delivery is not confirmed. Use it for high-rate updates
+   * where the next packet supersedes the last; use `send()` when the
+   * outcome matters.
    */
   unicast<T>(command: Command<T>, device: Device): void;
 

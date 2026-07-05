@@ -650,9 +650,8 @@ describe('devices subscribe', () => {
     });
 
     test('accepts a minimal RegistrationMessage from a custom decode pipeline', () => {
-      // The parameter type names only the two fields register() reads, so a
-      // caller that decodes packets without the stock Router can drive the
-      // registry without fabricating a full ReceivedMessage/Header.
+      // register() reads only these two fields, so a custom decode pipeline
+      // can drive the registry without fabricating a full ReceivedMessage.
       const devices = Devices();
       const message: RegistrationMessage = {
         serialNumber: 'd073d5aa0001',

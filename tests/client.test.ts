@@ -53,12 +53,8 @@ describe('client', () => {
   });
 
   test('works with a custom router that implements only ClientRouter', async () => {
-    // Client's contract is the sending half of the router: register a
-    // handler under a source, deregister it, hand packets to the transport.
-    // This router has no receive() pipeline at all — it decodes requests in
-    // send() and delivers a synthesized response straight to the registered
-    // handler — proving a custom router doesn't have to implement
-    // RouterInstance to drive a Client.
+    // This router has no receive() pipeline — it synthesizes responses in
+    // send() — proving Client needs only ClientRouter, not RouterInstance.
     const handlers = new Map<number, MessageHandler>();
     const router: ClientRouter = {
       register(handler, source) {

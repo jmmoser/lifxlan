@@ -3,11 +3,10 @@ import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithRe
 import { AbortError, TimeoutError, ValidationError } from './errors.js';
 
 /**
- * The minimal decoded-message shape `register()` reads: the sender's serial
- * number plus the raw target bytes from the header. `ReceivedMessage` — what
- * `router.receive()` returns — satisfies it, so the stock wiring passes the
- * result straight through; a custom router (or any other decode pipeline)
- * only has to produce these two fields to feed the registry.
+ * The minimal decoded-message shape `register()` reads. `ReceivedMessage`
+ * (what `router.receive()` returns) satisfies it, so the stock wiring passes
+ * straight through; a custom decode pipeline only has to produce these two
+ * fields.
  */
 export interface RegistrationMessage {
   serialNumber: string;
@@ -94,18 +93,15 @@ export interface DevicesInstance {
    * decoded by `router.receive()`. Pass that result straight through:
    * `received` may be `undefined` (a malformed packet), in which case nothing
    * is registered and `undefined` is returned. Re-registering a known serial at
-   * a new port/address updates it in place and emits `onChanged`. Only the
-   * fields named by {@link RegistrationMessage} are read, so any decode
-   * pipeline that produces a serial number and target can drive the registry.
+   * a new port/address updates it in place and emits `onChanged`.
    */
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
   remove(serialNumber: string): boolean;
   /**
-   * Waits for the device with this serial number to be registered — it is a
-   * discovery rendezvous, not a lookup. A device already in the registry
-   * resolves immediately; otherwise the promise settles on a future
-   * `register()` call, the timeout, or the signal. For a synchronous check
-   * of what is known right now, use {@link DevicesInstance.registered}.
+   * Waits for the device with this serial number to be registered — a
+   * discovery rendezvous, not a lookup. A known device resolves immediately;
+   * otherwise the promise settles on a future `register()`, the timeout, or
+   * the signal. For a synchronous check, use {@link DevicesInstance.registered}.
    */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   /**

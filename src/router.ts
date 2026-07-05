@@ -31,11 +31,10 @@ const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 export interface RouterOptions {
   /**
    * The outbound transport: called with the encoded packet for every
-   * `send()`. `serialNumber` is a routing hint — senders that know which
-   * device a packet is for pass its serial number (Client does for unicast
-   * exchanges, and omits it for broadcasts) so a transport that keeps
-   * per-device paths (a socket per device, a mock keyed by serial) can pick
-   * one without decoding the packet. A plain UDP transport can ignore it.
+   * `send()`. `serialNumber` is a routing hint — present when the sender
+   * knows the destination device (unicast, not broadcast) — letting a
+   * transport with per-device paths pick one without decoding the packet.
+   * A plain UDP transport can ignore it.
    */
   onSend: (message: Uint8Array, port: number, address: string, serialNumber?: string) => void;
   /**
@@ -54,17 +53,15 @@ export interface RouterOptions {
 }
 
 /**
- * The sending half of the router: source registration plus the outbound
- * transport seam. This is all a {@link Client} (or any other message
- * sender) requires, so a custom router only has to implement these three
- * methods to drive one — {@link RouterInstance.receive}, which owns the
- * decode pipeline, is only needed by the code that wires the socket.
+ * The sending half of the router — all a {@link Client} requires, so a
+ * custom router only has to implement these three methods to drive one;
+ * {@link RouterInstance.receive} is only needed by the socket wiring.
  *
- * The contract that ties the methods together: the source id returned by
+ * The contract tying the methods together: the source id returned by
  * `register()` must be written into the header of every request passed to
  * `send()` (the `source` argument of `encode()` from `lifxlan/encoding`).
- * Devices echo it in their responses, and it is how the receiving side finds
- * the registered handler to deliver the response to.
+ * Devices echo it in responses, which is how `receive()` finds the handler
+ * to deliver each response to.
  */
 export interface ClientRouter {
   /**
@@ -79,12 +76,10 @@ export interface ClientRouter {
   register(handler: MessageHandler, source?: number): number;
   deregister(source: number, handler: MessageHandler): void;
   /**
-   * Hands an encoded packet to the transport (the `onSend` callback the
-   * router was constructed with). The router adds nothing on this path — it
-   * exists so every component that sends traffic needs only a router
-   * reference, giving the application a single seam to swap or instrument
-   * the outbound transport. `serialNumber` is the per-device routing hint
-   * forwarded verbatim to `onSend`; see {@link RouterOptions.onSend}.
+   * Hands an encoded packet to the transport. A pass-through by design: it
+   * gives every sender a single seam to swap or instrument the outbound
+   * transport. `serialNumber` is the per-device routing hint forwarded to
+   * the transport; see {@link RouterOptions.onSend}.
    */
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
 }
@@ -114,16 +109,10 @@ export interface RouterInstance extends ClientRouter {
 
 /**
  * Multiplexes one network transport across many concurrent senders. Each
- * sender calls `register()` to obtain a source id and encodes it into the
- * headers of the requests it passes to `send()` (via `encode()` from
- * `lifxlan/encoding` — the router itself never encodes); devices echo the
- * source in their responses, and `receive()` uses it to route each response
- * back to the handler registered by the sender of the originating request.
- *
- * `receive()` also decodes the header once — including converting the
- * target to a serial number string, which is relatively expensive — so the
- * per-source handler, the `onMessage` tap, and the caller all share one
- * decode per packet.
+ * sender registers a handler under a source id and encodes that id into its
+ * requests (see {@link ClientRouter}); `receive()` routes each response to
+ * the handler whose source it echoes, decoding the header — including the
+ * relatively expensive serial number conversion — once per packet.
  */
 export function Router(options: RouterOptions): RouterInstance {
   const handlers = new Map<number, MessageHandler>();
