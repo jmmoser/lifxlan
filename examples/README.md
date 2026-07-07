@@ -1,6 +1,6 @@
 # Examples
 
-Runnable scripts showing the library in real use. Each file is self-contained, so you can copy any of them straight into your own project. The Node/Bun scripts use [`openLan()`](../README.md#the-lifxlannode-helper) from `lifxlan/node` for socket setup; the Deno script shows the manual bring-your-own-socket wiring.
+Runnable scripts showing the library in real use. Each file is self-contained, so you can copy any of them straight into your own project. The Node/Bun scripts use [`openLan()`](../README.md#the-openlan-helper) from `lifxlan/node` for socket setup; the Deno script shows the manual bring-your-own-socket wiring (`lifxlan/deno` packages the same wiring).
 
 | Example | What it does |
 | --- | --- |

@@ -17,7 +17,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - 🎯 **Target specific devices** or broadcast to all devices
 - 🔗 **Read and assign device groups** (see the [Device Groups](#device-groups) recipe for batch operations)
 - ⚡ **High performance** - optimized for speed
-- 🚀 **Zero dependencies** - one-call socket setup on Node.js/Bun, bring your own UDP socket anywhere else
+- 🚀 **Zero dependencies** - batteries-included socket setup for Node.js, Bun, and Deno — or bring your own UDP socket if you want
 - 🎛️ **Direct packet control** - each client operation sends exactly one packet with no hidden behavior
 
 Runnable scripts for every runtime live in [`examples/`](examples/).
@@ -52,7 +52,7 @@ await lan.client.send(SetPowerCommand(true), device);
 await lan.close();
 ```
 
-[`openLan()`](#the-lifxlannode-helper) is the Node.js/Bun shortcut: one call binds a `node:dgram` socket and returns the library's three building blocks connected to it. It adds no abstraction of its own — the whole helper is [a screenful of the same public API](#the-lifxlannode-helper) you can just as well write yourself, which is how the library runs on Deno or over a custom transport (see [Examples by Runtime](#examples-by-runtime)). Everything below the socket is identical either way.
+[`openLan()`](#the-openlan-helper) is the shortcut: one call binds a UDP socket and returns the library's three building blocks connected to it (`lifxlan/node` on Node.js/Bun, `lifxlan/deno` on Deno — same call, same shape). It adds no abstraction of its own — the whole helper is [a screenful of the same public API](#the-openlan-helper) you can just as well write yourself, which is how the library runs over a custom transport (see [Examples by Runtime](#examples-by-runtime)). Everything below the socket is identical either way.
 
 ### Discover and control all devices
 
@@ -109,7 +109,7 @@ The core library doesn't include a UDP socket implementation - you provide it. T
 - **Bun**: Use `Bun.udpSocket()` (or `node:dgram`, which Bun also implements)
 - **Deno**: Use `Deno.listenDatagram()`
 
-On Node.js and Bun the optional [`lifxlan/node`](#the-lifxlannode-helper) subpath packages that wiring behind one call — `openLan()` — so providing your own socket is a choice (custom transports, per-device sockets, batching), not a prerequisite.
+The optional [`lifxlan/node`](#the-openlan-helper) (Node.js/Bun) and [`lifxlan/deno`](#the-openlan-helper) (Deno) subpaths package that wiring behind one call — `openLan()` — so providing your own socket is a choice (custom transports, per-device sockets, batching), not a prerequisite.
 
 ### Buffer Ownership
 
@@ -153,7 +153,7 @@ console.log(response.hue);    // response is typed as LightState
 
 ## Examples by Runtime
 
-Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples show the manual wiring — the library's actual surface; on Node.js and Bun, [`openLan()`](#the-lifxlannode-helper) is nothing more than this wiring, packaged. They broadcast `GetService` directly; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
+Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples show the manual wiring — the library's actual surface; [`openLan()`](#the-openlan-helper) is nothing more than this wiring, packaged per runtime. They broadcast `GetService` directly; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
 
 ### Node.js / Bun
 
@@ -279,6 +279,8 @@ whether it is worth wiring up.
 
 ### Deno
 
+`openLan()` from [`lifxlan/deno`](#the-openlan-helper) packages this wiring; here is the manual equivalent:
+
 ```javascript
 import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
 
@@ -315,9 +317,9 @@ for await (const [message, remote] of socket) {
 
 ## Common Patterns
 
-### The `lifxlan/node` Helper
+### The `openLan()` Helper
 
-The optional `lifxlan/node` subpath removes the socket boilerplate on Node.js and Bun. `openLan()` creates a `node:dgram` socket, wires it up — `Router` sends through it, inbound datagrams flow through `router.receive()` into `devices.register()` — binds it (an ephemeral port by default), enables broadcast so discovery works, and resolves once it's listening:
+The optional `lifxlan/node` (Node.js/Bun) and `lifxlan/deno` (Deno) subpaths remove the socket boilerplate. Each exports the same `openLan()`: it creates the runtime's UDP socket (`node:dgram` or `Deno.listenDatagram`), wires it up — `Router` sends through it, inbound datagrams flow through `router.receive()` into `devices.register()` — binds it (an ephemeral port by default), and resolves to the same three building blocks. On Deno it needs `--allow-net --unstable-net`, exactly like the manual wiring it replaces.
 
 ```javascript
 import { openLan } from 'lifxlan/node';
@@ -334,7 +336,7 @@ const lan = await openLan({
 await lan.close();
 ```
 
-**Which should you use — the helper or the core?** On Node.js or Bun, when one plain UDP socket is all you need (which is almost everyone, almost always): `openLan()`. Wire the socket yourself the moment you want the seam — [batching](#batching-sends-with-sendmany), [throttling](#rate-limits), [split sockets](#separate-sockets-for-broadcastunicast), Bun's [native socket API](#bun-native-socket), [Deno](#deno), or any custom transport. There is no third consideration, and no migration cost in either direction: both paths hand you the same `Router`, `Devices`, and `Client`, so nothing you build or learn is specific to one of them.
+**Which should you use — the helper or the core?** When one plain UDP socket is all you need (which is almost everyone, almost always): `openLan()`. Wire the socket yourself the moment you want the seam — [batching](#batching-sends-with-sendmany), [throttling](#rate-limits), [split sockets](#separate-sockets-for-broadcastunicast), Bun's [native socket API](#bun-native-socket), or any custom transport. There is no third consideration, and no migration cost in either direction: both paths hand you the same `Router`, `Devices`, and `Client`, so nothing you build or learn is specific to one of them.
 
 That works because `openLan()` is not a layer over the library — it *is* the library, applied. Aside from option forwarding and `close()` bookkeeping, this is the whole helper, written in the same public API you'd otherwise write yourself:
 
@@ -366,7 +368,7 @@ socket.setBroadcast(true);
 const client = Client({ router });
 ```
 
-Outgrow the helper and that block is the exit: paste it, delete the import, keep everything else.
+Outgrow the helper and that block is the exit: paste it, delete the import, keep everything else. (The Deno flavor is the same dozen lines over `Deno.listenDatagram` — shown in [Examples by Runtime](#deno).)
 
 Everything `openLan()` returns is the ordinary public API, so every recipe in this README composes with it unchanged: pass `lan.router` and `lan.devices` to [`discover()`](#discovery-helper), create extra clients with `Client({ router: lan.router })`, iterate `lan.devices`, tap traffic with the `onMessage` option. The options:
 
@@ -374,11 +376,11 @@ Everything `openLan()` returns is the ordinary public API, so every recipe in th
 - `defaultTimeoutMs` — forwarded to the [`Client`](#timeouts-and-cancellation).
 - `onAdded` / `onChanged` / `onRemoved` — forwarded to the [`Devices`](#discovery-helper) registry.
 - `onMessage` — the router-level [message tap](#message-callbacks).
-- `onSocketError` — observes asynchronous send failures and post-bind socket errors. When omitted they're discarded, matching the library's UDP-is-best-effort semantics: a lost packet already surfaces as `TimeoutError` on acknowledged sends. (Bind failures instead reject the `openLan()` promise.)
+- `onSocketError` — observes asynchronous send failures and socket errors after setup. When omitted they're discarded, matching the library's UDP-is-best-effort semantics: a lost packet already surfaces as `TimeoutError` on acknowledged sends. (Setup failures — a bind error, missing Deno permissions — instead reject the `openLan()` promise.)
 
-The raw socket is exposed as `lan.socket` for anything the options don't cover (multicast, TTL, `lan.socket.address()` for the bound port). `lan.close()` disposes the client — pending sends reject with `DisposedClientError` rather than dangling until their timeouts — and closes the socket; it's idempotent, and `Symbol.asyncDispose` means `await using lan = await openLan()` closes at end of scope (same TypeScript ≥ 5.2 requirement as `using`). The zero-copy [buffer ownership](#buffer-ownership) caveat never applies here, because `node:dgram` allocates a fresh buffer per datagram.
+The raw socket is exposed as `lan.socket` for anything the options don't cover (multicast, TTL, the bound port via `lan.socket.address()` on Node/Bun or `lan.socket.addr` on Deno). `lan.close()` disposes the client — pending sends reject with `DisposedClientError` rather than dangling until their timeouts — and closes the socket; it's idempotent, and `Symbol.asyncDispose` means `await using lan = await openLan()` closes at end of scope (same TypeScript ≥ 5.2 requirement as `using`). The zero-copy [buffer ownership](#buffer-ownership) caveat never applies here, because both runtimes allocate a fresh buffer per datagram.
 
-Bun runs this module through its `node:dgram` implementation, so the helper works there unchanged.
+Bun runs the `lifxlan/node` module through its `node:dgram` implementation, so the helper works there unchanged.
 
 ### Discovery Helper
 
@@ -815,12 +817,12 @@ One deliberate redundancy to be aware of: a response that settles a `client.send
 
 ### Discovery finds no devices
 
-- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine. ([`openLan()`](#the-lifxlannode-helper) handles this for you.)
+- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine. ([`openLan()`](#the-openlan-helper) handles this for you.)
 - **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
 - **Replies arrive but nothing registers.** With manual socket wiring, registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples (`openLan()` attaches this handler for you). Verify packets are arriving with `Router({ onMessage })` (the `onMessage` option of `openLan()`) or a packet capture.
-- **Deno needs permissions.** `Deno.listenDatagram` requires `--allow-net --unstable-net`.
+- **Deno needs permissions.** `Deno.listenDatagram` — and therefore `openLan()` from `lifxlan/deno` — requires `--allow-net --unstable-net`.
 
 ### `client.send()` rejects with `TimeoutError`
 
@@ -850,6 +852,7 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 - every export of `lifxlan/products`,
 - every export of `lifxlan/discovery`,
 - every export of `lifxlan/node`,
+- every export of `lifxlan/deno`,
 - documented runtime behavior: zero-copy buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
 
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:

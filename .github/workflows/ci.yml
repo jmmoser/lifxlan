@@ -58,3 +58,5 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: deno run scripts/smoke.mjs
+      # Loopback UDP round trip through the lifxlan/deno helper.
+      - run: deno run --allow-net=127.0.0.1 --unstable-net scripts/smoke-deno.mjs

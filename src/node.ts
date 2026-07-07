@@ -8,9 +8,9 @@
  * same router) still works; and nothing here is required — any runtime can
  * keep wiring its own socket exactly as before.
  *
- * Bun runs this module through its `node:dgram` implementation; Deno users
- * should keep using `Deno.listenDatagram` with the manual wiring (this
- * module is never loaded unless imported).
+ * Bun runs this module through its `node:dgram` implementation; the Deno
+ * counterpart lives in 'lifxlan/deno' (neither module is ever loaded unless
+ * imported).
  */
 
 import dgram from 'node:dgram';
