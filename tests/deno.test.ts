@@ -142,17 +142,19 @@ describe('openLan (deno)', () => {
       conn.push(reply, { transport: 'udp', hostname: addr.hostname, port: addr.port });
     };
 
-    const lan = await openLan({ address: '127.0.0.1', port: 41000 });
+    // Destructured on purpose: the documented contract is that nothing on
+    // the instance relies on `this`, so unbound use must keep working.
+    const { client, devices, close } = await openLan({ address: '127.0.0.1', port: 41000 });
     assert.deepEqual(listenOptions, { hostname: '127.0.0.1', port: 41000, transport: 'udp' });
 
     const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
-    const power = await lan.client.send(GetPowerCommand(), device);
+    const power = await client.send(GetPowerCommand(), device);
     assert.equal(power, 0xffff);
     assert.deepEqual(conn.sent[0]?.addr, DEVICE_ADDR);
     // The reply flowed through the read loop, so the device registered too.
-    assert.equal(lan.devices.registered.get(SERIAL)?.address, DEVICE_ADDR.hostname);
+    assert.equal(devices.registered.get(SERIAL)?.address, DEVICE_ADDR.hostname);
 
-    await lan.close();
+    await close();
   });
 
   test('read loop registers unsolicited udp datagrams and skips other transports', async () => {

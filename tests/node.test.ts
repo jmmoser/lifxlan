@@ -65,16 +65,18 @@ async function openFakeDevice(): Promise<{ socket: dgram.Socket; port: number }>
 describe('openLan', () => {
   test('request/response round trip over loopback UDP', async () => {
     const fake = await openFakeDevice();
-    const lan = await openLan({ address: '127.0.0.1' });
+    // Destructured on purpose: the documented contract is that nothing on
+    // the instance relies on `this`, so unbound use must keep working.
+    const { client, devices, close } = await openLan({ address: '127.0.0.1' });
     try {
       const device = Device({ serialNumber: SERIAL, address: '127.0.0.1', port: fake.port });
-      const power = await lan.client.send(GetPowerCommand(), device);
+      const power = await client.send(GetPowerCommand(), device);
       assert.equal(power, 0xffff);
       // The reply flowed through the built-in wiring, so the fake device is
       // now also in the registry.
-      assert.equal(lan.devices.registered.get(SERIAL)?.port, fake.port);
+      assert.equal(devices.registered.get(SERIAL)?.port, fake.port);
     } finally {
-      await lan.close();
+      await close();
       await closeSocket(fake.socket);
     }
   });

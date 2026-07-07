@@ -77,7 +77,9 @@ export interface LanInstance extends AsyncDisposable {
    * instead of dangling until their timeouts) and closes the socket,
    * resolving once the socket has closed. Idempotent — every call returns
    * the same promise. An `await using` declaration does the same through
-   * `Symbol.asyncDispose` at end of scope.
+   * `Symbol.asyncDispose` at end of scope. A freestanding closure (nothing
+   * on this instance relies on `this`), so destructuring it off the
+   * instance is safe.
    */
   close(): Promise<void>;
 }
@@ -99,11 +101,11 @@ export interface LanInstance extends AsyncDisposable {
  * import { openLan } from 'lifxlan/node';
  * import { discover } from 'lifxlan/discovery';
  *
- * const lan = await openLan();
- * using discovery = discover(lan.router, lan.devices);
- * const device = await lan.devices.get('d07123456789');
- * await lan.client.send(SetPowerCommand(true), device);
- * await lan.close();
+ * const { client, devices, router, close } = await openLan();
+ * using discovery = discover(router, devices);
+ * const device = await devices.get('d07123456789');
+ * await client.send(SetPowerCommand(true), device);
+ * await close();
  * ```
  */
 export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance> {

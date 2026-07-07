@@ -11,13 +11,13 @@ import { GetPowerCommand, SetPowerCommand } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
-const lan = await openLan();
+const { client, devices, router, close } = await openLan();
 
 console.log('Scanning for 3 seconds...');
-for await (const device of discover(lan.router, lan.devices, { timeoutMs: 3000 })) {
-  const level = await lan.client.send(GetPowerCommand(), device);
-  await lan.client.send(SetPowerCommand(level === 0), device);
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
+  const level = await client.send(GetPowerCommand(), device);
+  await client.send(SetPowerCommand(level === 0), device);
   console.log(`${device.serialNumber}: turned ${level === 0 ? 'on' : 'off'}`);
 }
 
-await lan.close();
+await close();

@@ -38,18 +38,18 @@ import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
 // Bind a UDP socket and get a router, device registry, and client wired to it
-const lan = await openLan();
+const { client, devices, router, close } = await openLan();
 
 // Discover devices in the background (broadcasts GetService on a backoff)
-using discovery = discover(lan.router, lan.devices);
+using discovery = discover(router, devices);
 
 // Wait for a specific device (replace with your device's serial number)
-const device = await lan.devices.get('d07123456789');
+const device = await devices.get('d07123456789');
 
 // Turn the light on!
-await lan.client.send(SetPowerCommand(true), device);
+await client.send(SetPowerCommand(true), device);
 
-await lan.close();
+await close();
 ```
 
 [`openLan()`](#the-openlan-helper) is the shortcut: one call binds a UDP socket and returns the library's three building blocks connected to it (`lifxlan/node` on Node.js/Bun, `lifxlan/deno` on Deno — same call, same shape). It adds no abstraction of its own — the whole helper is [a screenful of the same public API](#the-openlan-helper) you can just as well write yourself, which is how the library runs over a custom transport (see [Examples by Runtime](#examples-by-runtime)). Everything below the socket is identical either way.
@@ -61,14 +61,14 @@ import { SetPowerCommand } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
-const lan = await openLan();
+const { client, devices, router, close } = await openLan();
 
 // Discover for a few seconds, turning each light on as it's found
-for await (const device of discover(lan.router, lan.devices, { timeoutMs: 3000 })) {
-  await lan.client.send(SetPowerCommand(true), device);
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
+  await client.send(SetPowerCommand(true), device);
 }
 
-await lan.close();
+await close();
 ```
 
 ### Change light color
@@ -77,13 +77,13 @@ await lan.close();
 import { SetColorCommand } from 'lifxlan';
 
 // Set to bright red
-await lan.client.send(
+await client.send(
   SetColorCommand(0, 65535, 65535, 3500, 0), // hue, saturation, brightness, kelvin, duration
   device
 );
 
 // Set to blue with 2-second transition
-await lan.client.send(
+await client.send(
   SetColorCommand(43690, 65535, 65535, 3500, 2000),
   device
 );
@@ -368,9 +368,9 @@ socket.setBroadcast(true);
 const client = Client({ router });
 ```
 
-Outgrow the helper and that block is the exit: paste it, delete the import, keep everything else. (The Deno flavor is the same dozen lines over `Deno.listenDatagram` — shown in [Examples by Runtime](#deno).)
+Outgrow the helper and that block is the exit: paste it, delete the import, keep everything else — if you destructured (`const { client, devices, router } = await openLan()`), even the variable names line up. (The Deno flavor is the same dozen lines over `Deno.listenDatagram` — shown in [Examples by Runtime](#deno).)
 
-Everything `openLan()` returns is the ordinary public API, so every recipe in this README composes with it unchanged: pass `lan.router` and `lan.devices` to [`discover()`](#discovery-helper), create extra clients with `Client({ router: lan.router })`, iterate `lan.devices`, tap traffic with the `onMessage` option. The options:
+Everything `openLan()` returns is the ordinary public API, so every recipe in this README composes with it unchanged: pass the router and registry to [`discover()`](#discovery-helper), create extra clients with `Client({ router })`, iterate the registry, tap traffic with the `onMessage` option. Nothing on the returned object relies on `this`, so destructuring is always safe (including `close`) — that's how the Quick Start writes it; keep the object form when you want `await using` or the `socket` escape hatch. The options:
 
 - `port` / `address` — the local bind; the default (ephemeral port, all interfaces) is right for almost everyone, since devices reply to whatever port the request came from.
 - `defaultTimeoutMs` — forwarded to the [`Client`](#timeouts-and-cancellation).
@@ -390,13 +390,13 @@ The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
-const lan = await openLan(); // or wire the socket yourself — discover() only needs a router and a registry
+const { devices, router, close } = await openLan(); // or wire the socket yourself — discover() only needs a router and a registry
 
-for await (const device of discover(lan.router, lan.devices, { timeoutMs: 3000 })) {
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
   console.log('found', device.serialNumber, device.address);
 }
 
-await lan.close();
+await close();
 ```
 
 `discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.get()`, where abort *rejects* — there it means the lookup failed; here it just means "stop collecting".)
@@ -499,7 +499,7 @@ LIFX's guidance is to send **at most 20 messages per second to any single device
 import { Device, SetPowerCommand } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 
-const lan = await openLan();
+const { client, close } = await openLan();
 
 // Create the device directly — no discovery round trip needed
 const device = Device({
@@ -507,8 +507,8 @@ const device = Device({
   address: '192.168.1.50',
 });
 
-await lan.client.send(SetPowerCommand(true), device);
-await lan.close();
+await client.send(SetPowerCommand(true), device);
+await close();
 ```
 
 ### Multiple Clients
