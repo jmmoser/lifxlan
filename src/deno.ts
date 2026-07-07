@@ -91,11 +91,13 @@ export interface LanInstance extends AsyncDisposable {
   /**
    * Disposes the client (pending sends reject with DisposedClientError
    * instead of dangling until their timeouts) and closes the socket,
-   * resolving once the read loop has ended. Idempotent — every call returns
-   * the same promise. An `await using` declaration does the same through
-   * `Symbol.asyncDispose` at end of scope. A freestanding closure (nothing
-   * on this instance relies on `this`), so destructuring it off the
-   * instance is safe.
+   * resolving once the read loop has ended — the settled promise is the
+   * guarantee that no further datagram handling (registration, onMessage)
+   * will run; awaiting is optional, since teardown starts synchronously.
+   * Idempotent — every call returns the same promise. An `await using`
+   * declaration does the same through `Symbol.asyncDispose` at end of
+   * scope. A freestanding closure (nothing on this instance relies on
+   * `this`), so destructuring it off the instance is safe.
    */
   close(): Promise<void>;
 }
