@@ -17,7 +17,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - 🎯 **Target specific devices** or broadcast to all devices
 - 🔗 **Read and assign device groups** (see the [Device Groups](#device-groups) recipe for batch operations)
 - ⚡ **High performance** - optimized for speed
-- 🚀 **Zero dependencies** - bring your own UDP socket
+- 🚀 **Zero dependencies** - one-call socket setup on Node.js/Bun, bring your own UDP socket anywhere else
 - 🎛️ **Direct packet control** - each client operation sends exactly one packet with no hidden behavior
 
 Runnable scripts for every runtime live in [`examples/`](examples/).
@@ -33,63 +33,42 @@ npm install lifxlan
 ### Turn a light on
 
 ```javascript
-import dgram from 'node:dgram';
-import { Client, Devices, Router, SetPowerCommand } from 'lifxlan';
+import { SetPowerCommand } from 'lifxlan';
+import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
-const socket = dgram.createSocket('udp4');
-
-// Set up the router to send messages
-const router = Router({
-  onSend(message, port, address) {
-    socket.send(message, port, address);
-  },
-});
-
-// Registry of discovered devices (populated by the message handler below)
-const devices = Devices();
-
-// Handle incoming messages
-socket.on('message', (message, remote) => {
-  const result = router.receive(message);
-  devices.register(remote.port, remote.address, result);
-});
-
-// Start the socket
-await new Promise((resolve, reject) => {
-  socket.once('error', reject);
-  socket.once('listening', resolve);
-  socket.bind();
-});
-
-socket.setBroadcast(true);
-
-const client = Client({ router });
+// Bind a UDP socket and get a router, device registry, and client wired to it
+const lan = await openLan();
 
 // Discover devices in the background (broadcasts GetService on a backoff)
-using discovery = discover(router, devices);
+using discovery = discover(lan.router, lan.devices);
 
 // Wait for a specific device (replace with your device's serial number)
-const device = await devices.get('d07123456789');
+const device = await lan.devices.get('d07123456789');
 
 // Turn the light on!
-await client.send(SetPowerCommand(true), device);
+await lan.client.send(SetPowerCommand(true), device);
 
-socket.close();
+await lan.close();
 ```
+
+[`openLan()`](#the-lifxlannode-helper) is the Node.js/Bun shortcut: one call binds a `node:dgram` socket and returns the library's three building blocks connected to it. Nothing about the library requires it — every runtime can do the same wiring by hand in a dozen lines (that's how it runs on Deno or over a custom transport; see [Examples by Runtime](#examples-by-runtime)), and everything below the socket is identical either way.
 
 ### Discover and control all devices
 
 ```javascript
 import { SetPowerCommand } from 'lifxlan';
+import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
-// ... setup code from above ...
+const lan = await openLan();
 
 // Discover for a few seconds, turning each light on as it's found
-for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
-  await client.send(SetPowerCommand(true), device);
+for await (const device of discover(lan.router, lan.devices, { timeoutMs: 3000 })) {
+  await lan.client.send(SetPowerCommand(true), device);
 }
+
+await lan.close();
 ```
 
 ### Change light color
@@ -98,13 +77,13 @@ for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
 import { SetColorCommand } from 'lifxlan';
 
 // Set to bright red
-await client.send(
+await lan.client.send(
   SetColorCommand(0, 65535, 65535, 3500, 0), // hue, saturation, brightness, kelvin, duration
   device
 );
 
 // Set to blue with 2-second transition
-await client.send(
+await lan.client.send(
   SetColorCommand(43690, 65535, 65535, 3500, 2000),
   device
 );
@@ -124,11 +103,13 @@ Each `Client` gets a unique **source** id from the `Router` and tracks a per-dev
 
 ### Bring Your Own Socket
 
-This library doesn't include UDP socket implementation - you provide it. This makes it work across different server-side JavaScript runtimes:
+The core library doesn't include a UDP socket implementation - you provide it. This makes it work across different server-side JavaScript runtimes:
 
 - **Node.js**: Use `dgram.createSocket('udp4')`
 - **Bun**: Use `Bun.udpSocket()` (or `node:dgram`, which Bun also implements)
 - **Deno**: Use `Deno.listenDatagram()`
+
+On Node.js and Bun the optional [`lifxlan/node`](#the-lifxlannode-helper) subpath packages that wiring behind one call — `openLan()` — so providing your own socket is a choice (custom transports, per-device sockets, batching), not a prerequisite.
 
 ### Buffer Ownership
 
@@ -172,7 +153,7 @@ console.log(response.hue);    // response is typed as LightState
 
 ## Examples by Runtime
 
-Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples broadcast `GetService` directly to show how each socket is wired up; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
+Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples show the manual wiring — on Node.js and Bun, [`openLan()`](#the-lifxlannode-helper) does all of it for you — and broadcast `GetService` directly; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
 
 ### Node.js / Bun
 
@@ -334,35 +315,53 @@ for await (const [message, remote] of socket) {
 
 ## Common Patterns
 
+### The `lifxlan/node` Helper
+
+The optional `lifxlan/node` subpath removes the socket boilerplate on Node.js and Bun. `openLan()` creates a `node:dgram` socket, wires it up — `Router` sends through it, inbound datagrams flow through `router.receive()` into `devices.register()` — binds it (an ephemeral port by default), enables broadcast so discovery works, and resolves once it's listening:
+
+```javascript
+import { GetColorCommand } from 'lifxlan';
+import { openLan } from 'lifxlan/node';
+
+const lan = await openLan({
+  onAdded(device) {
+    console.log('registered', device.serialNumber);
+  },
+});
+
+// lan.router, lan.devices, lan.client — the same three building blocks
+// every other section of this README uses.
+
+await lan.close();
+```
+
+Everything it returns is the ordinary public API, so every recipe in this README composes with it unchanged: pass `lan.router` and `lan.devices` to [`discover()`](#discovery-helper), create extra clients with `Client({ router: lan.router })`, iterate `lan.devices`, tap traffic with the `onMessage` option. The options:
+
+- `port` / `address` — the local bind; the default (ephemeral port, all interfaces) is right for almost everyone, since devices reply to whatever port the request came from.
+- `defaultTimeoutMs` — forwarded to the [`Client`](#timeouts-and-cancellation).
+- `onAdded` / `onChanged` / `onRemoved` — forwarded to the [`Devices`](#discovery-helper) registry.
+- `onMessage` — the router-level [message tap](#message-callbacks).
+- `onSocketError` — observes asynchronous send failures and post-bind socket errors. When omitted they're discarded, matching the library's UDP-is-best-effort semantics: a lost packet already surfaces as `TimeoutError` on acknowledged sends. (Bind failures instead reject the `openLan()` promise.)
+
+The raw socket is exposed as `lan.socket` for anything the options don't cover (multicast, TTL, `lan.socket.address()` for the bound port). `lan.close()` disposes the client — pending sends reject with `DisposedClientError` rather than dangling until their timeouts — and closes the socket; it's idempotent, and `Symbol.asyncDispose` means `await using lan = await openLan()` closes at end of scope (same TypeScript ≥ 5.2 requirement as `using`). The zero-copy [buffer ownership](#buffer-ownership) caveat never applies here, because `node:dgram` allocates a fresh buffer per datagram.
+
+Bun runs this module through its `node:dgram` implementation; for Bun-native sockets or Deno, wire the socket yourself as shown in [Examples by Runtime](#examples-by-runtime) — the helper is a convenience, not a requirement.
+
 ### Discovery Helper
 
 The optional `lifxlan/discovery` subpath packages the repeat-broadcast loop from the Quick Start. `discover()` broadcasts `GetService` immediately and then on a widening backoff — starting at `intervalMs` (default 1s), quadrupling per broadcast, and settling at `maxIntervalMs` (default 1 minute), so with the defaults broadcasts go out immediately, then after 1s, 4s, 16s, and every minute from there — yielding devices as your handler registers them: known devices first, then new arrivals. The burst defeats UDP loss when it matters most; the capped heartbeat keeps a long-lived stream from broadcasting to every device on the network once a second. Set `maxIntervalMs` equal to `intervalMs` for a fixed interval. End to end:
 
 ```javascript
-import dgram from 'node:dgram';
-import { Devices, Router } from 'lifxlan';
+import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
-const socket = dgram.createSocket('udp4');
-const router = Router({ onSend: (msg, port, address) => socket.send(msg, port, address) });
-const devices = Devices();
+const lan = await openLan(); // or wire the socket yourself — discover() only needs a router and a registry
 
-// Registration stays yours: feed received packets into the registry.
-socket.on('message', (msg, remote) => {
-  devices.register(remote.port, remote.address, router.receive(msg));
-});
-
-await new Promise((resolve) => {
-  socket.once('listening', resolve);
-  socket.bind();
-});
-socket.setBroadcast(true);
-
-for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
+for await (const device of discover(lan.router, lan.devices, { timeoutMs: 3000 })) {
   console.log('found', device.serialNumber, device.address);
 }
 
-socket.close();
+await lan.close();
 ```
 
 `discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.get()`, where abort *rejects* — there it means the lookup failed; here it just means "stop collecting".)
@@ -462,19 +461,19 @@ LIFX's guidance is to send **at most 20 messages per second to any single device
 ### Use Without Device Discovery
 
 ```javascript
-import { Client, Device, Router, SetPowerCommand } from 'lifxlan';
+import { Device, SetPowerCommand } from 'lifxlan';
+import { openLan } from 'lifxlan/node';
 
-// ... socket setup ...
+const lan = await openLan();
 
-const client = Client({ router });
-
-// Create the device directly
+// Create the device directly — no discovery round trip needed
 const device = Device({
   serialNumber: 'd07123456789',
   address: '192.168.1.50',
 });
 
-await client.send(SetPowerCommand(true), device);
+await lan.client.send(SetPowerCommand(true), device);
+await lan.close();
 ```
 
 ### Multiple Clients
@@ -783,11 +782,11 @@ One deliberate redundancy to be aware of: a response that settles a `client.send
 
 ### Discovery finds no devices
 
-- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine.
+- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine. ([`openLan()`](#the-lifxlannode-helper) handles this for you.)
 - **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
-- **Replies arrive but nothing registers.** Registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples. Verify packets are arriving with `Router({ onMessage })` or a packet capture.
+- **Replies arrive but nothing registers.** With manual socket wiring, registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples (`openLan()` attaches this handler for you). Verify packets are arriving with `Router({ onMessage })` (the `onMessage` option of `openLan()`) or a packet capture.
 - **Deno needs permissions.** `Deno.listenDatagram` requires `--allow-net --unstable-net`.
 
 ### `client.send()` rejects with `TimeoutError`
@@ -817,6 +816,7 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 - every export of `lifxlan/encoding`,
 - every export of `lifxlan/products`,
 - every export of `lifxlan/discovery`,
+- every export of `lifxlan/node`,
 - documented runtime behavior: zero-copy buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
 
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:

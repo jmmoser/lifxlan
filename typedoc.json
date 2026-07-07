@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["src/index.ts", "src/encoding.ts", "src/products.ts", "src/discovery.ts"],
+  "entryPoints": ["src/index.ts", "src/encoding.ts", "src/products.ts", "src/discovery.ts", "src/node.ts"],
   "out": "docs/api",
   "readme": "none",
   "includeVersion": true,

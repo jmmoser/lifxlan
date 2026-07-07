@@ -7,7 +7,8 @@
  * The wire-format encode/decode functions live in the 'lifxlan/encoding'
  * subpath entry point; the optional products.json registry lives in
  * 'lifxlan/products'; the optional discovery helper lives in
- * 'lifxlan/discovery'. All are equally part of the semver surface.
+ * 'lifxlan/discovery'; the optional Node.js/Bun socket wiring lives in
+ * 'lifxlan/node'. All are equally part of the semver surface.
  */
 
 /** Protocol constants */
