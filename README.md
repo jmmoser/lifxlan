@@ -52,7 +52,7 @@ await lan.client.send(SetPowerCommand(true), device);
 await lan.close();
 ```
 
-[`openLan()`](#the-lifxlannode-helper) is the Node.js/Bun shortcut: one call binds a `node:dgram` socket and returns the library's three building blocks connected to it. Nothing about the library requires it — every runtime can do the same wiring by hand in a dozen lines (that's how it runs on Deno or over a custom transport; see [Examples by Runtime](#examples-by-runtime)), and everything below the socket is identical either way.
+[`openLan()`](#the-lifxlannode-helper) is the Node.js/Bun shortcut: one call binds a `node:dgram` socket and returns the library's three building blocks connected to it. It adds no abstraction of its own — the whole helper is [a screenful of the same public API](#the-lifxlannode-helper) you can just as well write yourself, which is how the library runs on Deno or over a custom transport (see [Examples by Runtime](#examples-by-runtime)). Everything below the socket is identical either way.
 
 ### Discover and control all devices
 
@@ -153,7 +153,7 @@ console.log(response.hue);    // response is typed as LightState
 
 ## Examples by Runtime
 
-Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples show the manual wiring — on Node.js and Bun, [`openLan()`](#the-lifxlannode-helper) does all of it for you — and broadcast `GetService` directly; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
+Each runtime has a different socket API, but the `Router`, `Devices`, and `Client` abstractions stay the same. These examples show the manual wiring — the library's actual surface; on Node.js and Bun, [`openLan()`](#the-lifxlannode-helper) is nothing more than this wiring, packaged. They broadcast `GetService` directly; in your own code you can pass `router` and `devices` to [`discover()`](#discovery-helper) once the socket is listening rather than managing the broadcast loop by hand.
 
 ### Node.js / Bun
 
@@ -320,7 +320,6 @@ for await (const [message, remote] of socket) {
 The optional `lifxlan/node` subpath removes the socket boilerplate on Node.js and Bun. `openLan()` creates a `node:dgram` socket, wires it up — `Router` sends through it, inbound datagrams flow through `router.receive()` into `devices.register()` — binds it (an ephemeral port by default), enables broadcast so discovery works, and resolves once it's listening:
 
 ```javascript
-import { GetColorCommand } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 
 const lan = await openLan({
@@ -335,7 +334,41 @@ const lan = await openLan({
 await lan.close();
 ```
 
-Everything it returns is the ordinary public API, so every recipe in this README composes with it unchanged: pass `lan.router` and `lan.devices` to [`discover()`](#discovery-helper), create extra clients with `Client({ router: lan.router })`, iterate `lan.devices`, tap traffic with the `onMessage` option. The options:
+**Which should you use — the helper or the core?** On Node.js or Bun, when one plain UDP socket is all you need (which is almost everyone, almost always): `openLan()`. Wire the socket yourself the moment you want the seam — [batching](#batching-sends-with-sendmany), [throttling](#rate-limits), [split sockets](#separate-sockets-for-broadcastunicast), Bun's [native socket API](#bun-native-socket), [Deno](#deno), or any custom transport. There is no third consideration, and no migration cost in either direction: both paths hand you the same `Router`, `Devices`, and `Client`, so nothing you build or learn is specific to one of them.
+
+That works because `openLan()` is not a layer over the library — it *is* the library, applied. Aside from option forwarding and `close()` bookkeeping, this is the whole helper, written in the same public API you'd otherwise write yourself:
+
+```javascript
+import dgram from 'node:dgram';
+import { Client, Devices, Router } from 'lifxlan';
+
+const socket = dgram.createSocket('udp4');
+
+const router = Router({
+  onSend(message, port, address) {
+    socket.send(message, port, address);
+  },
+});
+
+const devices = Devices();
+
+socket.on('message', (message, remote) => {
+  devices.register(remote.port, remote.address, router.receive(message));
+});
+
+await new Promise((resolve, reject) => {
+  socket.once('error', reject);
+  socket.once('listening', resolve);
+  socket.bind();
+});
+socket.setBroadcast(true);
+
+const client = Client({ router });
+```
+
+Outgrow the helper and that block is the exit: paste it, delete the import, keep everything else.
+
+Everything `openLan()` returns is the ordinary public API, so every recipe in this README composes with it unchanged: pass `lan.router` and `lan.devices` to [`discover()`](#discovery-helper), create extra clients with `Client({ router: lan.router })`, iterate `lan.devices`, tap traffic with the `onMessage` option. The options:
 
 - `port` / `address` — the local bind; the default (ephemeral port, all interfaces) is right for almost everyone, since devices reply to whatever port the request came from.
 - `defaultTimeoutMs` — forwarded to the [`Client`](#timeouts-and-cancellation).
@@ -345,7 +378,7 @@ Everything it returns is the ordinary public API, so every recipe in this README
 
 The raw socket is exposed as `lan.socket` for anything the options don't cover (multicast, TTL, `lan.socket.address()` for the bound port). `lan.close()` disposes the client — pending sends reject with `DisposedClientError` rather than dangling until their timeouts — and closes the socket; it's idempotent, and `Symbol.asyncDispose` means `await using lan = await openLan()` closes at end of scope (same TypeScript ≥ 5.2 requirement as `using`). The zero-copy [buffer ownership](#buffer-ownership) caveat never applies here, because `node:dgram` allocates a fresh buffer per datagram.
 
-Bun runs this module through its `node:dgram` implementation; for Bun-native sockets or Deno, wire the socket yourself as shown in [Examples by Runtime](#examples-by-runtime) — the helper is a convenience, not a requirement.
+Bun runs this module through its `node:dgram` implementation, so the helper works there unchanged.
 
 ### Discovery Helper
 
