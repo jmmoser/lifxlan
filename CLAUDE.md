@@ -26,7 +26,7 @@ Before committing, this must pass:
 bun run lint && npx tsc && bun run test
 ```
 
-CI (`.github/workflows/ci.yml`) additionally builds the typedoc site and runs smoke tests (`scripts/smoke.mjs` for ESM import, `scripts/smoke.cjs` for CommonJS require(esm) interop) against the built package on Node 22/24 and Deno.
+CI (`.github/workflows/ci.yml`) additionally builds the typedoc site and runs smoke tests (`scripts/smoke.mjs` for ESM import, `scripts/smoke.cjs` for CommonJS require(esm) interop, `scripts/smoke-node.mjs` and `scripts/smoke-deno.mjs` for the `lifxlan/node` / `lifxlan/deno` helpers over loopback UDP) against the built package on Node 22/24 and Deno.
 
 ## Project Architecture
 
@@ -53,13 +53,15 @@ There is deliberately no group registry: a device's group (UUID + label, set by 
 
 The package root (`src/index.ts`) contains only passive building blocks. Optional pieces live behind subpath exports so unused code costs nothing:
 
+- `lifxlan/node` (`src/node.ts`): batteries-included socket wiring for Node.js/Bun — `openLan()` binds a `node:dgram` socket and returns a Router + Devices + Client connected to it
+- `lifxlan/deno` (`src/deno.ts`): the Deno twin of `lifxlan/node`, over `Deno.listenDatagram`; declares its own minimal structural Deno types so the Node toolchain typechecks it (unit-tested in bun via a mocked `Deno` global, runtime-tested by `scripts/smoke-deno.mjs`)
 - `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper — repeats the GetService broadcast on a widening backoff (default 1s, ×4 per broadcast, capped at 1 minute)
 - `lifxlan/products` (`src/products.ts`): capability lookup from the official LIFX products.json; takes parsed data, never fetches
 - `lifxlan/encoding`: the low-level encoding utilities
 
 ### Key Patterns
 
-The library uses a "bring your own socket" approach - users provide UDP socket implementations for their runtime. The Router handles message routing using source IDs to correlate requests with responses across multiple concurrent clients.
+The library uses a "bring your own socket" approach - users provide UDP socket implementations for their runtime (or use `lifxlan/node`, which does that wiring with `node:dgram` for Node.js/Bun). The Router handles message routing using source IDs to correlate requests with responses across multiple concurrent clients.
 
 Device discovery works by broadcasting `GetServiceCommand()` and registering responses via the Devices registry. Each runtime (Node.js/Bun vs Deno) requires different socket setup but uses the same core abstractions.
 

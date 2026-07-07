@@ -42,6 +42,9 @@ jobs:
       - run: bun run build
       - run: node scripts/smoke.mjs
       - run: node scripts/smoke.cjs
+      # Loopback UDP round trip through the lifxlan/node helper (Node/Bun
+      # only, so the Deno job doesn't run it).
+      - run: node scripts/smoke-node.mjs
 
   deno:
     name: Smoke test (Deno)
@@ -55,3 +58,5 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: deno run scripts/smoke.mjs
+      # Loopback UDP round trip through the lifxlan/deno helper.
+      - run: deno run --allow-net=127.0.0.1 --unstable-net scripts/smoke-deno.mjs

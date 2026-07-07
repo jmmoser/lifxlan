@@ -1,5 +1,7 @@
 /**
  * Discover LIFX devices on the local network using Deno's datagram API.
+ * This shows the manual bring-your-own-socket wiring; `openLan()` from
+ * `npm:lifxlan/deno` packages these same lines behind one call.
  *
  * Run:
  *   deno run --allow-net --unstable-net examples/deno-discover.ts

@@ -9,42 +9,20 @@
  *   bun examples/color-cycle.ts
  *   node examples/color-cycle.ts   (Node 22.18+ runs TypeScript directly)
  */
-import dgram from 'node:dgram';
-import { Client, Devices, Router, GetServiceCommand, SetColorCommand } from 'lifxlan';
+import { SetColorCommand } from 'lifxlan';
+import { openLan } from 'lifxlan/node';
+import { discover } from 'lifxlan/discovery';
 
 const RUN_MS = 10_000;
 const FRAME_MS = 100;
 const HUE_CYCLE_MS = 3_600; // one full trip around the color wheel every 3.6s
 
-const socket = dgram.createSocket('udp4');
-
-const router = Router({
-  onSend(message, port, address) {
-    socket.send(message, port, address);
-  },
-});
-
-const devices = Devices();
-
-socket.on('message', (message, remote) => {
-  devices.register(remote.port, remote.address, router.receive(message));
-});
-
-await new Promise((resolve, reject) => {
-  socket.once('error', reject);
-  socket.once('listening', resolve);
-  socket.bind();
-});
-
-socket.setBroadcast(true);
-
-const client = Client({ router });
+const { client, devices, router, close } = await openLan();
 
 console.log('Scanning for 3 seconds...');
-client.broadcast(GetServiceCommand());
-const scanInterval = setInterval(() => client.broadcast(GetServiceCommand()), 1000);
-await new Promise((resolve) => setTimeout(resolve, 3000));
-clearInterval(scanInterval);
+for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
+  console.log(`found ${device.serialNumber}`);
+}
 
 console.log('Party mode for 10 seconds...');
 const start = Date.now();
@@ -57,4 +35,4 @@ while (Date.now() - start < RUN_MS) {
   await new Promise((resolve) => setTimeout(resolve, FRAME_MS));
 }
 
-socket.close();
+await close();

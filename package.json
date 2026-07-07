@@ -45,6 +45,14 @@
       "types": "./dist/discovery.d.ts",
       "default": "./dist/discovery.js"
     },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./deno": {
+      "types": "./dist/deno.d.ts",
+      "default": "./dist/deno.js"
+    },
     "./encoding": {
       "types": "./dist/encoding.d.ts",
       "default": "./dist/encoding.js"
