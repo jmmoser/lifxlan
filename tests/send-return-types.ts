@@ -50,9 +50,13 @@ export type _setPowerBothIsNumber = Expect<Equal<Awaited<ReturnType<typeof setPo
 const getColorAckOnly = () => client.send(GetColor(), device, { responseMode: 'ack-only' });
 export type _getColorAckOnlyIsVoid = Expect<Equal<Awaited<ReturnType<typeof getColorAckOnly>>, void>>;
 
-// Explicit 'auto' behaves exactly like omitting options (uses the default).
-const setPowerAuto = () => client.send(SetPower(true), device, { responseMode: 'auto' });
-export type _setPowerAutoIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerAuto>>, void>>;
+// Passing options without a responseMode leaves the command default in charge.
+const setPowerOtherOptions = () => client.send(SetPower(true), device, { timeoutMs: 1000 });
+export type _setPowerOtherOptionsIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerOtherOptions>>, void>>;
+
+// An explicit `responseMode: undefined` also means "use the command default".
+const setPowerUndefinedMode = () => client.send(SetPower(true), device, { responseMode: undefined });
+export type _setPowerUndefinedModeIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerUndefinedMode>>, void>>;
 
 // --- Multi-response commands (createDecoder) --------------------------------
 
