@@ -5,7 +5,7 @@ import type { Decoder } from './index.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
 
-export function GetColorZonesCommand(
+export function GetColorZones(
   startIndex: number,
   endIndex: number,
   onResponse?: (response: ColorZoneResponse) => boolean | void
@@ -66,7 +66,7 @@ export function GetColorZonesCommand(
   };
 }
 
-export function SetColorZonesCommand(
+export function SetColorZones(
   startIndex: number, 
   endIndex: number, 
   hue: number, 
@@ -84,7 +84,7 @@ export function SetColorZonesCommand(
   };
 }
 
-export function GetMultiZoneEffectCommand() {
+export function GetMultiZoneEffect() {
   return {
     type: Type.GetMultiZoneEffect,
     decode: Encoding.decodeStateMultiZoneEffect,
@@ -92,7 +92,7 @@ export function GetMultiZoneEffectCommand() {
   };
 }
 
-export function SetMultiZoneEffectCommand(
+export function SetMultiZoneEffect(
   instanceid: number, 
   effectType: MultiZoneEffectType, 
   speed: number, 
@@ -107,7 +107,7 @@ export function SetMultiZoneEffectCommand(
   };
 }
 
-export function GetExtendedColorZonesCommand(
+export function GetExtendedColorZones(
   onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void
 ) {
   // Accumulation state lives inside createDecoder so each send() gets a
@@ -167,7 +167,7 @@ export function GetExtendedColorZonesCommand(
   };
 }
 
-export function SetExtendedColorZonesCommand(
+export function SetExtendedColorZones(
   duration: number, 
   apply: MultiZoneExtendedApplicationRequest, 
   zoneIndex: number, 

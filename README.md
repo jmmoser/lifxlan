@@ -33,7 +33,7 @@ npm install lifxlan
 ### Turn a light on
 
 ```javascript
-import { SetPowerCommand } from 'lifxlan';
+import { SetPower } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
@@ -47,7 +47,7 @@ using discovery = discover(router, devices);
 const device = await devices.get('d07123456789');
 
 // Turn the light on!
-await client.send(SetPowerCommand(true), device);
+await client.send(SetPower(true), device);
 
 await close();
 ```
@@ -57,7 +57,7 @@ await close();
 ### Discover and control all devices
 
 ```javascript
-import { SetPowerCommand } from 'lifxlan';
+import { SetPower } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
@@ -65,7 +65,7 @@ const { client, devices, router, close } = await openLan();
 
 // Discover for a few seconds, turning each light on as it's found
 for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
-  await client.send(SetPowerCommand(true), device);
+  await client.send(SetPower(true), device);
 }
 
 await close();
@@ -74,17 +74,17 @@ await close();
 ### Change light color
 
 ```javascript
-import { SetColorCommand } from 'lifxlan';
+import { SetColor } from 'lifxlan';
 
 // Set to bright red
 await client.send(
-  SetColorCommand(0, 65535, 65535, 3500, 0), // hue, saturation, brightness, kelvin, duration
+  SetColor(0, 65535, 65535, 3500, 0), // hue, saturation, brightness, kelvin, duration
   device
 );
 
 // Set to blue with 2-second transition
 await client.send(
-  SetColorCommand(43690, 65535, 65535, 3500, 2000),
+  SetColor(43690, 65535, 65535, 3500, 2000),
   device
 );
 ```
@@ -121,8 +121,8 @@ The `client.send()` method supports flexible response modes with **full type saf
 
 ```javascript
 // Use command defaults (recommended)
-const color = await client.send(GetColorCommand(), device);     // Promise<LightState>
-await client.send(SetPowerCommand(true), device);              // Promise<void> (Set commands default to ack-only)
+const color = await client.send(GetColor(), device);     // Promise<LightState>
+await client.send(SetPower(true), device);              // Promise<void> (Set commands default to ack-only)
 
 // Override response behavior with type-safe returns
 await client.send(command, device, { responseMode: 'ack-only' });  // Promise<void>
@@ -130,7 +130,7 @@ const data = await client.send(command, device, { responseMode: 'response' }); /
 const result = await client.send(command, device, { responseMode: 'both' });   // Promise<T>
 
 // With abort signal
-const response = await client.send(GetColorCommand(), device, { 
+const response = await client.send(GetColor(), device, { 
   responseMode: 'both',     // returns Promise<LightState>
   signal: abortController.signal 
 });
@@ -159,7 +159,7 @@ Each runtime has a different socket API, but the `Router`, `Devices`, and `Clien
 
 ```javascript
 import dgram from 'node:dgram';
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetService } from 'lifxlan';
 
 const socket = dgram.createSocket('udp4');
 
@@ -192,7 +192,7 @@ const client = Client({ router });
 socket.once('listening', () => {
   socket.setBroadcast(true);
   // Discover devices on the network
-  client.broadcast(GetServiceCommand());
+  client.broadcast(GetService());
 });
 
 socket.bind();
@@ -209,7 +209,7 @@ UDP socket API. Incoming datagrams arrive through the `data` callback instead
 of a `'message'` event:
 
 ```javascript
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetService } from 'lifxlan';
 
 const router = Router({
   onSend(message, port, address) {
@@ -235,7 +235,7 @@ socket.setBroadcast(true);
 
 const client = Client({ router });
 
-client.broadcast(GetServiceCommand());
+client.broadcast(GetService());
 
 setTimeout(() => {
   socket.close();
@@ -282,7 +282,7 @@ whether it is worth wiring up.
 `openLan()` from [`lifxlan/deno`](#the-openlan-helper) packages this wiring; here is the manual equivalent:
 
 ```javascript
-import { Client, Router, Devices, GetServiceCommand } from 'lifxlan';
+import { Client, Router, Devices, GetService } from 'lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -304,7 +304,7 @@ const devices = Devices({
 
 const client = Client({ router });
 
-client.broadcast(GetServiceCommand());
+client.broadcast(GetService());
 
 setTimeout(() => {
   socket.close();
@@ -412,18 +412,18 @@ Writing `using` needs TypeScript ≥ 5.2 with `Disposable` in scope (a `lib` tha
 
 ### Manually Controlling Discovery
 
-`discover()` is purely a convenience: it owns a timer and a `Client` and broadcasts `GetService` for you. When you want full control over *when* and *how often* discovery runs — folding it into an existing timer, applying custom backoff, or broadcasting only on demand — drive it yourself with `client.broadcast(GetServiceCommand())`. The only fixed part is registration: however you broadcast, your socket handler feeds `router.receive()` into `devices.register()`, exactly as in the examples above.
+`discover()` is purely a convenience: it owns a timer and a `Client` and broadcasts `GetService` for you. When you want full control over *when* and *how often* discovery runs — folding it into an existing timer, applying custom backoff, or broadcasting only on demand — drive it yourself with `client.broadcast(GetService())`. The only fixed part is registration: however you broadcast, your socket handler feeds `router.receive()` into `devices.register()`, exactly as in the examples above.
 
 ```javascript
-import { Client, GetServiceCommand } from 'lifxlan';
+import { Client, GetService } from 'lifxlan';
 
 // ... router, devices, and socket setup as above ...
 
 const client = Client({ router });
 
 // Broadcast GetService yourself, on whatever schedule you like.
-client.broadcast(GetServiceCommand());
-const scan = setInterval(() => client.broadcast(GetServiceCommand()), 1000);
+client.broadcast(GetService());
+const scan = setInterval(() => client.broadcast(GetService()), 1000);
 
 // Wait for one specific device...
 const device = await devices.get('d07123456789');
@@ -442,7 +442,7 @@ A single broadcast can be lost (UDP is best-effort), so repeat on an interval un
 ```javascript
 for (let i = 0; i < 3; i++) {
   try {
-    console.log(await client.send(GetColorCommand(), device));
+    console.log(await client.send(GetColor(), device));
     break;
   } catch (err) {
     const delay = Math.random() * Math.min(Math.pow(2, i) * 1000, 30 * 1000);
@@ -459,7 +459,7 @@ Every `client.send()` is covered by a timeout (3 seconds by default — UDP pack
 const client = Client({ router, defaultTimeoutMs: 5000 });
 
 // Per-call override
-await client.send(GetColorCommand(), device, { timeoutMs: 100 });
+await client.send(GetColor(), device, { timeoutMs: 100 });
 ```
 
 An `AbortSignal` can be passed for cancellation. The signal is *additive* to the timeout — it does not replace it — and the promise rejects with the signal's reason:
@@ -467,7 +467,7 @@ An `AbortSignal` can be passed for cancellation. The signal is *additive* to the
 ```javascript
 const controller = new AbortController();
 
-const promise = client.send(GetColorCommand(), device, { signal: controller.signal });
+const promise = client.send(GetColor(), device, { signal: controller.signal });
 
 controller.abort(new Error('user navigated away'));
 
@@ -496,7 +496,7 @@ LIFX's guidance is to send **at most 20 messages per second to any single device
 ### Use Without Device Discovery
 
 ```javascript
-import { Device, SetPowerCommand } from 'lifxlan';
+import { Device, SetPower } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 
 const { client, close } = await openLan();
@@ -507,7 +507,7 @@ const device = Device({
   address: '192.168.1.50',
 });
 
-await client.send(SetPowerCommand(true), device);
+await client.send(SetPower(true), device);
 await close();
 ```
 
@@ -518,8 +518,8 @@ const client1 = Client({ router });
 const client2 = Client({ router });
 
 // Both clients share the same router and can operate independently
-client1.broadcast(GetServiceCommand());
-await client2.send(SetPowerCommand(true), device);
+client1.broadcast(GetService());
+await client2.send(SetPower(true), device);
 ```
 
 ### Resource Management for Many Clients
@@ -528,7 +528,7 @@ await client2.send(SetPowerCommand(true), device);
 while (true) {
   const client = Client({ router });
 
-  console.log(await client.send(GetPowerCommand(), device));
+  console.log(await client.send(GetPower(), device));
 
   // When creating a lot of clients, call dispose to avoid running out of source values
   client.dispose();
@@ -540,7 +540,7 @@ A client also implements `Symbol.dispose`, so a `using` declaration disposes it 
 ```javascript
 {
   using client = Client({ router });
-  console.log(await client.send(GetPowerCommand(), device));
+  console.log(await client.send(GetPower(), device));
 } // client.dispose() runs here automatically
 ```
 
@@ -548,24 +548,24 @@ A client also implements `Symbol.dispose`, so a `using` declaration disposes it 
 
 ```javascript
 // High-reliability mode: wait for both ack and response (typed return)
-const state = await client.send(SetColorCommand(120, 100, 100, 3500, 1000), device, { 
+const state = await client.send(SetColor(120, 100, 100, 3500, 1000), device, { 
   responseMode: 'both'     // returns Promise<LightState>
 });
 console.log('Confirmed color:', state.hue);
 
 // Fast mode: fire-and-forget for animations (no promise)
 for (let i = 0; i < 360; i += 10) {
-  client.unicast(SetColorCommand(i * 182, 65535, 65535, 3500, 100), device);
+  client.unicast(SetColor(i * 182, 65535, 65535, 3500, 100), device);
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
 // Confirmation only (void return)
-await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
+await client.send(SetColor(120, 100, 100, 3500, 0), device, { 
   responseMode: 'ack-only' // returns Promise<void>
 });
 
 // Get response data (typed return)
-const currentState = await client.send(SetColorCommand(120, 100, 100, 3500, 0), device, { 
+const currentState = await client.send(SetColor(120, 100, 100, 3500, 0), device, { 
   responseMode: 'response' // returns Promise<LightState>
 });
 console.log('Light is now:', currentState.hue);
@@ -577,19 +577,19 @@ console.log('Light is now:', currentState.hue);
 
 Groups are a property stored on each device: a UUID + label assigned by a
 `SetGroup` message (the LIFX app does this, and so can this library via
-`SetGroupCommand()`) and reported back through `GetGroupCommand()`. The
+`SetGroup()`) and reported back through `GetGroup()`. The
 library deliberately has no group registry or group-send helper — collecting
 devices by their reported group is a few lines of your own code, and batch
 operations are just a fan-out over the members:
 
 ```javascript
-import { GetGroupCommand, SetPowerCommand } from 'lifxlan';
+import { GetGroup, SetPower } from 'lifxlan';
 
 const byGroup = new Map(); // group uuid -> { label, devices: Map<serial, Device> }
 
 const devices = Devices({
   async onAdded(device) {
-    const state = await client.send(GetGroupCommand(), device);
+    const state = await client.send(GetGroup(), device);
     let group = byGroup.get(state.group);
     if (!group) {
       group = { label: state.label, devices: new Map() };
@@ -603,7 +603,7 @@ const devices = Devices({
 for (const group of byGroup.values()) {
   await Promise.all(
     Array.from(group.devices.values(), (device) =>
-      client.send(SetPowerCommand(true), device),
+      client.send(SetPower(true), device),
     ),
   );
 }
@@ -632,7 +632,7 @@ while (true) {
       PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
     
     client.unicast(
-      SetColorCommand(hue, saturation, brightness, kelvin, 1000), 
+      SetColor(hue, saturation, brightness, kelvin, 1000), 
       device
     );
     
@@ -643,35 +643,35 @@ while (true) {
 
 ### Product Capabilities
 
-Not every device supports every command — multizone, extended multizone, HEV, infrared, relays, and buttons are all product-specific. The optional `lifxlan/products` subpath resolves the vendor/product ids from a `GetVersionCommand` (plus, optionally, the firmware version from `GetHostFirmwareCommand`) against the official [products.json](https://github.com/LIFX/products) registry:
+Not every device supports every command — multizone, extended multizone, HEV, infrared, relays, and buttons are all product-specific. The optional `lifxlan/products` subpath resolves the vendor/product ids from a `GetVersion` (plus, optionally, the firmware version from `GetHostFirmware`) against the official [products.json](https://github.com/LIFX/products) registry:
 
 ```javascript
-import { PRODUCTS_URL, GetVersionCommand, GetHostFirmwareCommand } from 'lifxlan';
+import { PRODUCTS_URL, GetVersion, GetHostFirmware } from 'lifxlan';
 import { Products } from 'lifxlan/products';
 
 // Bring your own data: fetch it at runtime or vendor the file.
 const products = Products(await (await fetch(PRODUCTS_URL)).json());
 
-const version = await client.send(GetVersionCommand(), device);
-const firmware = await client.send(GetHostFirmwareCommand(), device);
+const version = await client.send(GetVersion(), device);
+const firmware = await client.send(GetHostFirmware(), device);
 
 const features = products.features(version.vendor, version.product, firmware);
 if (features?.extended_multizone) {
-  // safe to use SetExtendedColorZonesCommand
+  // safe to use SetExtendedColorZones
 }
 ```
 
 ### LIFX Switch (Relays and Buttons)
 
 ```javascript
-import { GetRPowerCommand, SetRPowerCommand, GetButtonCommand, SetButtonCommand, ButtonGesture, ButtonTargetType } from 'lifxlan';
+import { GetRPower, SetRPower, GetButton, SetButton, ButtonGesture, ButtonTargetType } from 'lifxlan';
 
 // Toggle relay 0
-const { level } = await client.send(GetRPowerCommand(0), device);
-await client.send(SetRPowerCommand(0, level > 0 ? 0 : 65535), device);
+const { level } = await client.send(GetRPower(0), device);
+await client.send(SetRPower(0, level > 0 ? 0 : 65535), device);
 
 // Read the button configuration
-const state = await client.send(GetButtonCommand(), device);
+const state = await client.send(GetButton(), device);
 console.log(state.count, state.buttons[0].actions[0].gesture);
 ```
 
@@ -703,7 +703,7 @@ console.log(res.val1, res.val2);
 
 ### Custom Multi-Response Commands
 
-For commands whose result spans *multiple* response packets, provide `createDecoder` instead of `decode`. It is called once per `send()`, so every exchange gets its own accumulation state and the command object stays safe to reuse. This is how the built-in `GetColorZonesCommand`, `GetExtendedColorZonesCommand`, and `Get64Command` work.
+For commands whose result spans *multiple* response packets, provide `createDecoder` instead of `decode`. It is called once per `send()`, so every exchange gets its own accumulation state and the command object stays safe to reuse. This is how the built-in `GetColorZones`, `GetExtendedColorZones`, and `Get64` work.
 
 ```javascript
 function CustomMultiResponseCommand(expectedResponses) {
@@ -817,8 +817,8 @@ One deliberate redundancy to be aware of: a response that settles a `client.send
 
 ### Discovery finds no devices
 
-- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetServiceCommand` broadcast to `255.255.255.255:56700` never leaves the machine. ([`openLan()`](#the-openlan-helper) handles this for you.)
-- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetServiceCommand())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
+- **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetService` broadcast to `255.255.255.255:56700` never leaves the machine. ([`openLan()`](#the-openlan-helper) handles this for you.)
+- **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetService())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
 - **Replies arrive but nothing registers.** With manual socket wiring, registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples (`openLan()` attaches this handler for you). Verify packets are arriving with `Router({ onMessage })` (the `onMessage` option of `openLan()`) or a packet capture.

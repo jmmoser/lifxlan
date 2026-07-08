@@ -7,7 +7,7 @@
  *   bun examples/toggle-power.ts
  *   node examples/toggle-power.ts   (Node 22.18+ runs TypeScript directly)
  */
-import { GetPowerCommand, SetPowerCommand } from 'lifxlan';
+import { GetPower, SetPower } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
@@ -15,8 +15,8 @@ const { client, devices, router, close } = await openLan();
 
 console.log('Scanning for 3 seconds...');
 for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
-  const level = await client.send(GetPowerCommand(), device);
-  await client.send(SetPowerCommand(level === 0), device);
+  const level = await client.send(GetPower(), device);
+  await client.send(SetPower(level === 0), device);
   console.log(`${device.serialNumber}: turned ${level === 0 ? 'on' : 'off'}`);
 }
 

@@ -15,7 +15,7 @@
 import type { ClientInstance } from '../src/client.js';
 import type { Device } from '../src/devices.js';
 import type { LightState } from '../src/encoding.js';
-import { SetPowerCommand, GetColorCommand } from '../src/commands/index.js';
+import { SetPower, GetColor } from '../src/commands/index.js';
 
 /** True iff X and Y are the exact same type. */
 type Equal<X, Y> =
@@ -30,36 +30,36 @@ declare const device: Device;
 // --- Command defaults ------------------------------------------------------
 
 // GetColor defaults to 'response' → resolves the decoded LightState.
-const getColor = () => client.send(GetColorCommand(), device);
+const getColor = () => client.send(GetColor(), device);
 export type _getColorIsLightState = Expect<Equal<Awaited<ReturnType<typeof getColor>>, LightState>>;
 
 // SetPower defaults to 'ack-only' → resolves nothing, matching runtime.
-const setPower = () => client.send(SetPowerCommand(true), device);
+const setPower = () => client.send(SetPower(true), device);
 export type _setPowerIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPower>>, void>>;
 
 // --- Explicit overrides win over the command default -----------------------
 
 // Force a response out of a Set command → the decoded payload (number here).
-const setPowerResponse = () => client.send(SetPowerCommand(true), device, { responseMode: 'response' });
+const setPowerResponse = () => client.send(SetPower(true), device, { responseMode: 'response' });
 export type _setPowerResponseIsNumber = Expect<Equal<Awaited<ReturnType<typeof setPowerResponse>>, number>>;
 
-const setPowerBoth = () => client.send(SetPowerCommand(true), device, { responseMode: 'both' });
+const setPowerBoth = () => client.send(SetPower(true), device, { responseMode: 'both' });
 export type _setPowerBothIsNumber = Expect<Equal<Awaited<ReturnType<typeof setPowerBoth>>, number>>;
 
 // Downgrade a Get command to ack-only → void.
-const getColorAckOnly = () => client.send(GetColorCommand(), device, { responseMode: 'ack-only' });
+const getColorAckOnly = () => client.send(GetColor(), device, { responseMode: 'ack-only' });
 export type _getColorAckOnlyIsVoid = Expect<Equal<Awaited<ReturnType<typeof getColorAckOnly>>, void>>;
 
 // Explicit 'auto' behaves exactly like omitting options (uses the default).
-const setPowerAuto = () => client.send(SetPowerCommand(true), device, { responseMode: 'auto' });
+const setPowerAuto = () => client.send(SetPower(true), device, { responseMode: 'auto' });
 export type _setPowerAutoIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerAuto>>, void>>;
 
 // --- Multi-response commands (createDecoder) --------------------------------
 
 // A createDecoder-based command infers its payload type the same way decode
 // does: GetColorZones resolves the accumulated response array.
-import { GetColorZonesCommand } from '../src/commands/multizone.js';
+import { GetColorZones } from '../src/commands/multizone.js';
 import type { ColorZoneResponse } from '../src/commands/multizone.js';
 
-const getZones = () => client.send(GetColorZonesCommand(0, 1), device);
+const getZones = () => client.send(GetColorZones(0, 1), device);
 export type _getZonesIsResponseArray = Expect<Equal<Awaited<ReturnType<typeof getZones>>, ColorZoneResponse[]>>;

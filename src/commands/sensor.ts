@@ -1,7 +1,7 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 
-export function SensorGetAmbientLightCommand() {
+export function SensorGetAmbientLight() {
   return {
     type: Type.SensorGetAmbientLight,
     decode: Encoding.decodeSensorStateAmbientLight,

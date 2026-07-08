@@ -2,7 +2,7 @@ import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import type { Waveform } from '../constants/index.js';
 
-export function GetColorCommand() {
+export function GetColor() {
   return {
     type: Type.GetColor,
     decode: Encoding.decodeLightState,
@@ -10,7 +10,7 @@ export function GetColorCommand() {
   };
 }
 
-export function SetColorCommand(hue: number, saturation: number, brightness: number, kelvin: number, duration: number) {
+export function SetColor(hue: number, saturation: number, brightness: number, kelvin: number, duration: number) {
   return {
     type: Type.SetColor,
     payload: Encoding.encodeSetColor(hue, saturation, brightness, kelvin, duration),
@@ -19,7 +19,7 @@ export function SetColorCommand(hue: number, saturation: number, brightness: num
   };
 }
 
-export function SetWaveformCommand(
+export function SetWaveform(
   transient: boolean,
   hue: number,
   saturation: number,
@@ -48,7 +48,7 @@ export function SetWaveformCommand(
   };
 }
 
-export function GetLightPowerCommand() {
+export function GetLightPower() {
   return {
     type: Type.GetLightPower,
     decode: Encoding.decodeStateLightPower,
@@ -56,7 +56,7 @@ export function GetLightPowerCommand() {
   };
 }
 
-export function SetLightPowerCommand(level: number | boolean, duration: number) {
+export function SetLightPower(level: number | boolean, duration: number) {
   return {
     type: Type.SetLightPower,
     payload: Encoding.encodeSetLightPower(level, duration),
@@ -65,7 +65,7 @@ export function SetLightPowerCommand(level: number | boolean, duration: number) 
   };
 }
 
-export function SetWaveformOptionalCommand(
+export function SetWaveformOptional(
   transient: boolean,
   hue: number,
   saturation: number,
@@ -102,7 +102,7 @@ export function SetWaveformOptionalCommand(
   };
 }
 
-export function GetInfraredCommand() {
+export function GetInfrared() {
   return {
     type: Type.GetInfrared,
     decode: Encoding.decodeStateInfrared,
@@ -110,7 +110,7 @@ export function GetInfraredCommand() {
   };
 }
 
-export function SetInfraredCommand(brightness: number) {
+export function SetInfrared(brightness: number) {
   return {
     type: Type.SetInfrared,
     payload: Encoding.encodeSetInfrared(brightness),
@@ -119,7 +119,7 @@ export function SetInfraredCommand(brightness: number) {
   };
 }
 
-export function GetHevCycleCommand() {
+export function GetHevCycle() {
   return {
     type: Type.GetHevCycle,
     decode: Encoding.decodeStateHevCycle,
@@ -127,7 +127,7 @@ export function GetHevCycleCommand() {
   };
 }
 
-export function SetHevCycleCommand(enable: boolean, durationSeconds: number) {
+export function SetHevCycle(enable: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycle,
     payload: Encoding.encodeSetHevCycle(enable, durationSeconds),
@@ -136,7 +136,7 @@ export function SetHevCycleCommand(enable: boolean, durationSeconds: number) {
   };
 }
 
-export function GetHevCycleConfigurationCommand() {
+export function GetHevCycleConfiguration() {
   return {
     type: Type.GetHevCycleConfiguration,
     decode: Encoding.decodeStateHevCycleConfiguration,
@@ -144,7 +144,7 @@ export function GetHevCycleConfigurationCommand() {
   };
 }
 
-export function SetHevCycleConfigurationCommand(indication: boolean, durationSeconds: number) {
+export function SetHevCycleConfiguration(indication: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycleConfiguration,
     payload: Encoding.encodeSetHevCycleConfiguration(indication, durationSeconds),
@@ -153,7 +153,7 @@ export function SetHevCycleConfigurationCommand(indication: boolean, durationSec
   };
 }
 
-export function GetLastHevCycleResultCommand() {
+export function GetLastHevCycleResult() {
   return {
     type: Type.GetLastHevCycleResult,
     decode: Encoding.decodeStateLastHevCycleResult,

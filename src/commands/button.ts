@@ -1,7 +1,7 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 
-export function GetButtonCommand() {
+export function GetButton() {
   return {
     type: Type.GetButton,
     decode: Encoding.decodeStateButton,
@@ -9,7 +9,7 @@ export function GetButtonCommand() {
   };
 }
 
-export function SetButtonCommand(index: number, buttons: readonly Encoding.ButtonInput[]) {
+export function SetButton(index: number, buttons: readonly Encoding.ButtonInput[]) {
   return {
     type: Type.SetButton,
     payload: Encoding.encodeSetButton(index, buttons),

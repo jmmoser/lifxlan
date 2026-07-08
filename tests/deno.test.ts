@@ -13,7 +13,7 @@ import { openLan, type DenoDatagramConn, type DenoNetAddr } from '../src/deno.js
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPowerCommand } from '../src/commands/index.js';
+import { GetPower } from '../src/commands/index.js';
 import { DisposedClientError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 
@@ -148,7 +148,7 @@ describe('openLan (deno)', () => {
     assert.deepEqual(listenOptions, { hostname: '127.0.0.1', port: 41000, transport: 'udp' });
 
     const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
-    const power = await client.send(GetPowerCommand(), device);
+    const power = await client.send(GetPower(), device);
     assert.equal(power, 0xffff);
     assert.deepEqual(conn.sent[0]?.addr, DEVICE_ADDR);
     // The reply flowed through the read loop, so the device registered too.
@@ -186,7 +186,7 @@ describe('openLan (deno)', () => {
     });
 
     const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
-    const pending = lan.client.send(GetPowerCommand(), device, { timeoutMs: 10_000 });
+    const pending = lan.client.send(GetPower(), device, { timeoutMs: 10_000 });
 
     const first = lan.close();
     assert.equal(lan.close(), first);
@@ -209,7 +209,7 @@ describe('openLan (deno)', () => {
 
     const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
     conn.failNextSend(new Error('NetworkUnreachable'));
-    lan.client.unicast(GetPowerCommand(), device); // fire-and-forget: nothing to await
+    lan.client.unicast(GetPower(), device); // fire-and-forget: nothing to await
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(errors.length, 1);

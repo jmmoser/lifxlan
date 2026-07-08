@@ -9,7 +9,7 @@
  *   bun examples/color-cycle.ts
  *   node examples/color-cycle.ts   (Node 22.18+ runs TypeScript directly)
  */
-import { SetColorCommand } from 'lifxlan';
+import { SetColor } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
@@ -30,7 +30,7 @@ while (Date.now() - start < RUN_MS) {
   const elapsed = Date.now() - start;
   const hue = Math.round(((elapsed % HUE_CYCLE_MS) / HUE_CYCLE_MS) * 65535);
   for (const device of devices) {
-    client.unicast(SetColorCommand(hue, 65535, 65535, 3500, FRAME_MS), device);
+    client.unicast(SetColor(hue, 65535, 65535, 3500, FRAME_MS), device);
   }
   await new Promise((resolve) => setTimeout(resolve, FRAME_MS));
 }

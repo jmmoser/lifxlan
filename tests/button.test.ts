@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import * as Encoding from '../src/encoding.js';
 import { ValidationError } from '../src/errors.js';
 import { ButtonGesture, ButtonTargetType, Type } from '../src/constants/index.js';
-import { GetButtonCommand, SetButtonCommand } from '../src/commands/index.js';
+import { GetButton, SetButton } from '../src/commands/index.js';
 
 describe('button messages', () => {
   test('encodeSetButton layout', () => {
@@ -92,11 +92,11 @@ describe('button messages', () => {
   });
 
   test('commands carry the right packet types and defaults', () => {
-    const get = GetButtonCommand();
+    const get = GetButton();
     assert.equal(get.type, Type.GetButton);
     assert.equal(get.defaultResponseMode, 'response');
 
-    const set = SetButtonCommand(0, [{ actions: [] }]);
+    const set = SetButton(0, [{ actions: [] }]);
     assert.equal(set.type, Type.SetButton);
     assert.equal(set.defaultResponseMode, 'ack-only');
     assert.equal(set.payload.length, 810);

@@ -40,7 +40,7 @@ This is a TypeScript library for the LIFX LAN protocol that works across Node.js
 
 - **Devices** (`src/devices.ts`): Device registry that tracks discovered LIFX devices on the network, maintaining their network addresses and connection state.
 
-There is deliberately no group registry: a device's group (UUID + label, set by `SetGroupCommand()`, reported as `StateGroup` via `GetGroupCommand()`) is just a device property, and collecting devices by group is left to callers (see the README's Device Groups recipe).
+There is deliberately no group registry: a device's group (UUID + label, set by `SetGroup()`, reported as `StateGroup` via `GetGroup()`) is just a device property, and collecting devices by group is left to callers (see the README's Device Groups recipe).
 
 ### Protocol Layer
 
@@ -63,7 +63,7 @@ The package root (`src/index.ts`) contains only passive building blocks. Optiona
 
 The library uses a "bring your own socket" approach - users provide UDP socket implementations for their runtime (or use `lifxlan/node`, which does that wiring with `node:dgram` for Node.js/Bun). The Router handles message routing using source IDs to correlate requests with responses across multiple concurrent clients.
 
-Device discovery works by broadcasting `GetServiceCommand()` and registering responses via the Devices registry. Each runtime (Node.js/Bun vs Deno) requires different socket setup but uses the same core abstractions.
+Device discovery works by broadcasting `GetService()` and registering responses via the Devices registry. Each runtime (Node.js/Bun vs Deno) requires different socket setup but uses the same core abstractions.
 
 ### Where Things Live
 

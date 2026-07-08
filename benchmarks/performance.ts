@@ -22,7 +22,7 @@ import {
 import { Router } from '../src/router.js';
 import { Client } from '../src/client.js';
 import { Devices, Device } from '../src/devices.js';
-import { GetColorCommand, SetColorCommand, GetServiceCommand, SetPowerCommand, GetPowerCommand } from '../src/commands/index.js';
+import { GetColor, SetColor, GetService, SetPower, GetPower } from '../src/commands/index.js';
 import { NO_TARGET } from '../src/constants/core.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber } from '../src/utils/index.js';
 import { hsbToRgb, rgbToHsb } from '../src/utils/color.js';
@@ -41,12 +41,12 @@ import { Type } from '../src/constants/types.js';
 // });
 
 // group('Command Creation', () => {
-//   bench('GetColorCommand Creation', () => {
-//     GetColorCommand();
+//   bench('GetColor Creation', () => {
+//     GetColor();
 //   });
 
-//   bench('SetColorCommand Creation', () => {
-//     SetColorCommand(32768, 65535, 32768, 3500, 1000);
+//   bench('SetColor Creation', () => {
+//     SetColor(32768, 65535, 32768, 3500, 1000);
 //   });
 // });
 
@@ -78,7 +78,7 @@ import { Type } from '../src/constants/types.js';
 //   const client = Client({ router });
 
 //   bench('Client Broadcast Command', () => {
-//     const command = GetServiceCommand();
+//     const command = GetService();
 //     // Benchmark just the command creation and encoding setup
 //     client.broadcast(command);
 //   });
@@ -89,7 +89,7 @@ import { Type } from '../src/constants/types.js';
 //       serialNumber: 'd073d5123456'
 //     });
     
-//     const command = GetColorCommand();
+//     const command = GetColor();
 //     // Benchmark the message preparation (without network I/O)
 //     client.unicast(command, device);
 //   });
@@ -124,12 +124,12 @@ import { Type } from '../src/constants/types.js';
 // });
 
 // group('Additional Commands', () => {
-//   bench('GetServiceCommand Creation', () => {
-//     GetServiceCommand();
+//   bench('GetService Creation', () => {
+//     GetService();
 //   });
 
-//   bench('SetPowerCommand Creation', () => {
-//     SetPowerCommand(65535);
+//   bench('SetPower Creation', () => {
+//     SetPower(65535);
 //   });
 // });
 
@@ -165,7 +165,7 @@ group('Client', () => {
     address: '1.2.3.4',
   });
   
-  const cmd = GetPowerCommand();
+  const cmd = GetPower();
 
   // 128ns
   bench('encode', () => {

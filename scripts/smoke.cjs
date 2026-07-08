@@ -12,7 +12,7 @@ const {
   Device,
   Devices,
   Type,
-  GetPowerCommand,
+  GetPower,
 } = require('../dist/index.js');
 const { encode, decodeHeader } = require('../dist/encoding.js');
 const { Products } = require('../dist/products.js');
@@ -32,7 +32,7 @@ async function main() {
   const client = Client({ router });
   const device = Device({ serialNumber: 'd073d5123456', address: '127.0.0.1' });
 
-  const power = await client.send(GetPowerCommand(), device);
+  const power = await client.send(GetPower(), device);
   if (power !== 0xFFFF) {
     throw new Error(`round trip returned ${power}, expected 65535`);
   }

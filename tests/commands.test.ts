@@ -5,165 +5,165 @@ import { Type, Waveform, MultiZoneApplicationRequest, MultiZoneExtendedApplicati
 import { State64, StateExtendedColorZones } from '../src/encoding.js';
 
 describe('commands', () => {
-  test('GetServiceCommand', () => {
-    const cmd = Commands.GetServiceCommand();
+  test('GetService', () => {
+    const cmd = Commands.GetService();
     assert.equal(cmd.type, Type.GetService);
     assert.ok(!('payload' in cmd));
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetHostFirmwareCommand', () => {
-    const cmd = Commands.GetHostFirmwareCommand();
+  test('GetHostFirmware', () => {
+    const cmd = Commands.GetHostFirmware();
     assert.equal(cmd.type, Type.GetHostFirmware);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetWifiInfoCommand', () => {
-    const cmd = Commands.GetWifiInfoCommand();
+  test('GetWifiInfo', () => {
+    const cmd = Commands.GetWifiInfo();
     assert.equal(cmd.type, Type.GetWifiInfo);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetWifiFirmwareCommand', () => {
-    const cmd = Commands.GetWifiFirmwareCommand();
+  test('GetWifiFirmware', () => {
+    const cmd = Commands.GetWifiFirmware();
     assert.equal(cmd.type, Type.GetWifiFirmware);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetPowerCommand with boolean true', () => {
-    const cmd = Commands.SetPowerCommand(true);
+  test('SetPower with boolean true', () => {
+    const cmd = Commands.SetPower(true);
     assert.equal(cmd.type, Type.SetPower);
     assert.equal(cmd.payload.length, 2);
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint16(0, true), 65535);
   });
 
-  test('SetPowerCommand with boolean false', () => {
-    const cmd = Commands.SetPowerCommand(false);
+  test('SetPower with boolean false', () => {
+    const cmd = Commands.SetPower(false);
     assert.equal(cmd.type, Type.SetPower);
     assert.equal(cmd.payload.length, 2);
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint16(0, true), 0);
   });
 
-  test('SetPowerCommand with number', () => {
-    const cmd = Commands.SetPowerCommand(32768);
+  test('SetPower with number', () => {
+    const cmd = Commands.SetPower(32768);
     assert.equal(cmd.type, Type.SetPower);
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint16(0, true), 32768);
   });
 
-  test('GetLabelCommand', () => {
-    const cmd = Commands.GetLabelCommand();
+  test('GetLabel', () => {
+    const cmd = Commands.GetLabel();
     assert.equal(cmd.type, Type.GetLabel);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetLabelCommand', () => {
-    const cmd = Commands.SetLabelCommand('Test Label');
+  test('SetLabel', () => {
+    const cmd = Commands.SetLabel('Test Label');
     assert.equal(cmd.type, Type.SetLabel);
     assert.equal(cmd.payload.length, 32);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetVersionCommand', () => {
-    const cmd = Commands.GetVersionCommand();
+  test('GetVersion', () => {
+    const cmd = Commands.GetVersion();
     assert.equal(cmd.type, Type.GetVersion);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetInfoCommand', () => {
-    const cmd = Commands.GetInfoCommand();
+  test('GetInfo', () => {
+    const cmd = Commands.GetInfo();
     assert.equal(cmd.type, Type.GetInfo);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetRebootCommand', () => {
-    const cmd = Commands.SetRebootCommand();
+  test('SetReboot', () => {
+    const cmd = Commands.SetReboot();
     assert.equal(cmd.type, Type.SetReboot);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetLocationCommand', () => {
-    const cmd = Commands.GetLocationCommand();
+  test('GetLocation', () => {
+    const cmd = Commands.GetLocation();
     assert.equal(cmd.type, Type.GetLocation);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetLocationCommand with string UUID', () => {
+  test('SetLocation with string UUID', () => {
     const uuid = '4e0352bf-1994-4ff2-b425-1c4455479f33';
     const label = 'Living Room';
     const updatedAt = new Date('2023-01-01T00:00:00Z');
     
-    const cmd = Commands.SetLocationCommand(uuid, label, updatedAt);
+    const cmd = Commands.SetLocation(uuid, label, updatedAt);
     assert.equal(cmd.type, Type.SetLocation);
     assert.equal(cmd.payload.length, 56);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetLocationCommand with Uint8Array UUID', () => {
+  test('SetLocation with Uint8Array UUID', () => {
     const uuid = new Uint8Array([0x4e, 0x03, 0x52, 0xbf, 0x19, 0x94, 0x4f, 0xf2, 0xb4, 0x25, 0x1c, 0x44, 0x55, 0x47, 0x9f, 0x33]);
     const label = 'Kitchen';
     const updatedAt = new Date('2023-01-01T00:00:00Z');
     
-    const cmd = Commands.SetLocationCommand(uuid, label, updatedAt);
+    const cmd = Commands.SetLocation(uuid, label, updatedAt);
     assert.equal(cmd.type, Type.SetLocation);
     assert.equal(cmd.payload.length, 56);
     assert.deepEqual(cmd.payload.subarray(0, 16), uuid);
   });
 
-  test('GetGroupCommand', () => {
-    const cmd = Commands.GetGroupCommand();
+  test('GetGroup', () => {
+    const cmd = Commands.GetGroup();
     assert.equal(cmd.type, Type.GetGroup);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetGroupCommand with string UUID', () => {
+  test('SetGroup with string UUID', () => {
     const uuid = '4e0352bf-1994-4ff2-b425-1c4455479f33';
     const label = 'Bedroom Lights';
     const updatedAt = new Date('2023-01-01T00:00:00Z');
     
-    const cmd = Commands.SetGroupCommand(uuid, label, updatedAt);
+    const cmd = Commands.SetGroup(uuid, label, updatedAt);
     assert.equal(cmd.type, Type.SetGroup);
     assert.equal(cmd.payload.length, 56);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetGroupCommand with Uint8Array UUID', () => {
+  test('SetGroup with Uint8Array UUID', () => {
     const uuid = new Uint8Array([0x4e, 0x03, 0x52, 0xbf, 0x19, 0x94, 0x4f, 0xf2, 0xb4, 0x25, 0x1c, 0x44, 0x55, 0x47, 0x9f, 0x33]);
     const label = 'Kitchen Lights';
     const updatedAt = new Date('2023-01-01T00:00:00Z');
     
-    const cmd = Commands.SetGroupCommand(uuid, label, updatedAt);
+    const cmd = Commands.SetGroup(uuid, label, updatedAt);
     assert.equal(cmd.type, Type.SetGroup);
     assert.equal(cmd.payload.length, 56);
     assert.deepEqual(cmd.payload.subarray(0, 16), uuid);
   });
 
-  test('EchoRequestCommand', () => {
+  test('EchoRequest', () => {
     const echoing = new Uint8Array([1, 2, 3, 4, 5]);
-    const cmd = Commands.EchoRequestCommand(echoing);
+    const cmd = Commands.EchoRequest(echoing);
     assert.equal(cmd.type, Type.EchoRequest);
     assert.equal(cmd.payload.length, 64);
     assert.deepEqual(cmd.payload.subarray(0, 5), echoing);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetColorCommand', () => {
-    const cmd = Commands.GetColorCommand();
+  test('GetColor', () => {
+    const cmd = Commands.GetColor();
     assert.equal(cmd.type, Type.GetColor);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetColorCommand', () => {
-    const cmd = Commands.SetColorCommand(120, 65535, 32768, 3500, 1000);
+  test('SetColor', () => {
+    const cmd = Commands.SetColor(120, 65535, 32768, 3500, 1000);
     assert.equal(cmd.type, Type.SetColor);
     assert.ok(cmd.payload instanceof Uint8Array);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetWaveformCommand', () => {
-    const cmd = Commands.SetWaveformCommand(
+  test('SetWaveform', () => {
+    const cmd = Commands.SetWaveform(
       true, // transient
       120, // hue
       65535, // saturation
@@ -189,14 +189,14 @@ describe('commands', () => {
     assert.equal(view.getUint8(20), Waveform.SINE); // waveform
   });
 
-  test('GetLightPowerCommand', () => {
-    const cmd = Commands.GetLightPowerCommand();
+  test('GetLightPower', () => {
+    const cmd = Commands.GetLightPower();
     assert.equal(cmd.type, Type.GetLightPower);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetLightPowerCommand with boolean', () => {
-    const cmd = Commands.SetLightPowerCommand(true, 1000);
+  test('SetLightPower with boolean', () => {
+    const cmd = Commands.SetLightPower(true, 1000);
     assert.equal(cmd.type, Type.SetLightPower);
     assert.equal(cmd.payload.length, 6);
     
@@ -205,8 +205,8 @@ describe('commands', () => {
     assert.equal(view.getUint32(2, true), 1000);
   });
 
-  test('SetLightPowerCommand with number', () => {
-    const cmd = Commands.SetLightPowerCommand(32768, 500);
+  test('SetLightPower with number', () => {
+    const cmd = Commands.SetLightPower(32768, 500);
     assert.equal(cmd.type, Type.SetLightPower);
     
     const view = new DataView(cmd.payload.buffer);
@@ -214,8 +214,8 @@ describe('commands', () => {
     assert.equal(view.getUint32(2, true), 500);
   });
 
-  test('SetWaveformOptionalCommand', () => {
-    const cmd = Commands.SetWaveformOptionalCommand(
+  test('SetWaveformOptional', () => {
+    const cmd = Commands.SetWaveformOptional(
       false, // transient
       240, // hue
       32768, // saturation
@@ -250,14 +250,14 @@ describe('commands', () => {
     assert.equal(cmd.payload[24], 0); // setKelvin false
   });
 
-  test('GetInfraredCommand', () => {
-    const cmd = Commands.GetInfraredCommand();
+  test('GetInfrared', () => {
+    const cmd = Commands.GetInfrared();
     assert.equal(cmd.type, Type.GetInfrared);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetInfraredCommand', () => {
-    const cmd = Commands.SetInfraredCommand(32768);
+  test('SetInfrared', () => {
+    const cmd = Commands.SetInfrared(32768);
     assert.equal(cmd.type, Type.SetInfrared);
     assert.equal(cmd.payload.length, 2);
     
@@ -265,14 +265,14 @@ describe('commands', () => {
     assert.equal(view.getUint16(0, true), 32768);
   });
 
-  test('GetHevCycleCommand', () => {
-    const cmd = Commands.GetHevCycleCommand();
+  test('GetHevCycle', () => {
+    const cmd = Commands.GetHevCycle();
     assert.equal(cmd.type, Type.GetHevCycle);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetHevCycleCommand', () => {
-    const cmd = Commands.SetHevCycleCommand(true, 3600);
+  test('SetHevCycle', () => {
+    const cmd = Commands.SetHevCycle(true, 3600);
     assert.equal(cmd.type, Type.SetHevCycle);
     assert.equal(cmd.payload.length, 5);
     
@@ -281,14 +281,14 @@ describe('commands', () => {
     assert.equal(view.getUint32(1, true), 3600);
   });
 
-  test('GetHevCycleConfigurationCommand', () => {
-    const cmd = Commands.GetHevCycleConfigurationCommand();
+  test('GetHevCycleConfiguration', () => {
+    const cmd = Commands.GetHevCycleConfiguration();
     assert.equal(cmd.type, Type.GetHevCycleConfiguration);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetHevCycleConfigurationCommand', () => {
-    const cmd = Commands.SetHevCycleConfigurationCommand(false, 1800);
+  test('SetHevCycleConfiguration', () => {
+    const cmd = Commands.SetHevCycleConfiguration(false, 1800);
     assert.equal(cmd.type, Type.SetHevCycleConfiguration);
     assert.equal(cmd.payload.length, 5);
     
@@ -297,14 +297,14 @@ describe('commands', () => {
     assert.equal(view.getUint32(1, true), 1800);
   });
 
-  test('GetLastHevCycleResultCommand', () => {
-    const cmd = Commands.GetLastHevCycleResultCommand();
+  test('GetLastHevCycleResult', () => {
+    const cmd = Commands.GetLastHevCycleResult();
     assert.equal(cmd.type, Type.GetLastHevCycleResult);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('GetRPowerCommand', () => {
-    const cmd = Commands.GetRPowerCommand(2);
+  test('GetRPower', () => {
+    const cmd = Commands.GetRPower(2);
     assert.equal(cmd.type, Type.GetRPower);
     assert.equal(cmd.payload.length, 1);
     
@@ -312,8 +312,8 @@ describe('commands', () => {
     assert.equal(view.getUint8(0), 2);
   });
 
-  test('SetRPowerCommand', () => {
-    const cmd = Commands.SetRPowerCommand(1, 65535);
+  test('SetRPower', () => {
+    const cmd = Commands.SetRPower(1, 65535);
     assert.equal(cmd.type, Type.SetRPower);
     assert.equal(cmd.payload.length, 3);
     
@@ -322,14 +322,14 @@ describe('commands', () => {
     assert.equal(view.getUint16(1, true), 65535);
   });
 
-  test('GetDeviceChainCommand', () => {
-    const cmd = Commands.GetDeviceChainCommand();
+  test('GetDeviceChain', () => {
+    const cmd = Commands.GetDeviceChain();
     assert.equal(cmd.type, Type.GetDeviceChain);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('Get64Command', () => {
-    const cmd = Commands.Get64Command(0, 8, 2, 3, 4);
+  test('Get64', () => {
+    const cmd = Commands.Get64(0, 8, 2, 3, 4);
     assert.equal(cmd.type, Type.Get64);
     assert.equal(cmd.payload.length, 6);
     
@@ -342,14 +342,14 @@ describe('commands', () => {
     assert.equal(view.getUint8(5), 4); // width
   });
 
-  test('Get64Command with callback', () => {
-    const cmd = Commands.Get64Command(0, 3, 0, 0, 8);
+  test('Get64 with callback', () => {
+    const cmd = Commands.Get64(0, 3, 0, 0, 8);
     assert.equal(cmd.type, Type.Get64);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
-  test('Get64Command decode handles State64 responses', () => {
-    const cmd = Commands.Get64Command(0, 2, 0, 0, 8);
+  test('Get64 decode handles State64 responses', () => {
+    const cmd = Commands.Get64(0, 2, 0, 0, 8);
     
     // Mock State64 response (Type.State64 = 711)
     const state64Bytes = new Uint8Array(36 + 5 + 64 * 8); // header + basic payload + 64 colors
@@ -388,9 +388,9 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Should expect more tiles (0, 1)
   });
 
-  test('Get64Command callback receives responses', () => {
+  test('Get64 callback receives responses', () => {
     const receivedResponses: State64[] = [];
-    const cmd = Commands.Get64Command(0, 2, 0, 0, 8, (response) => {
+    const cmd = Commands.Get64(0, 2, 0, 0, 8, (response) => {
       receivedResponses.push(response);
     });
     
@@ -415,10 +415,10 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting tile 1
   });
 
-  test('Get64Command callback can stop early', () => {
+  test('Get64 callback can stop early', () => {
     const receivedResponses: State64[] = [];
     
-    const cmd = Commands.Get64Command(0, 3, 0, 0, 8, (response) => {
+    const cmd = Commands.Get64(0, 3, 0, 0, 8, (response) => {
       receivedResponses.push(response);
       return false; // Stop early
     });
@@ -439,8 +439,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Stopped early due to callback returning false
   });
 
-  test('Get64Command accumulates responses correctly', () => {
-    const cmd = Commands.Get64Command(0, 2, 0, 0, 8);
+  test('Get64 accumulates responses correctly', () => {
+    const cmd = Commands.Get64(0, 2, 0, 0, 8);
     
     // First call should return array with 1 item
     const state64Bytes1 = new Uint8Array(36 + 5 + 64 * 8);
@@ -472,8 +472,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Complete
   });
 
-  test('Get64Command ignores unknown response types', () => {
-    const cmd = Commands.Get64Command(0, 1, 0, 0, 8);
+  test('Get64 ignores unknown response types', () => {
+    const cmd = Commands.Get64(0, 1, 0, 0, 8);
     
     // Mock unknown response type
     const unknownBytes = new Uint8Array(36 + 10);
@@ -490,8 +490,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting responses
   });
 
-  test('GetColorZonesCommand basic usage without callback', () => {
-    const cmd = Commands.GetColorZonesCommand(0, 15);
+  test('GetColorZones basic usage without callback', () => {
+    const cmd = Commands.GetColorZones(0, 15);
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(cmd.payload.length, 2);
     
@@ -501,17 +501,17 @@ describe('commands', () => {
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
-  test('GetColorZonesCommand with callback', () => {
+  test('GetColorZones with callback', () => {
     const responses: Commands.ColorZoneResponse[] = [];
-    const cmd = Commands.GetColorZonesCommand(0, 3, (response) => {
+    const cmd = Commands.GetColorZones(0, 3, (response) => {
       responses.push(response);
     });
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
-  test('GetColorZonesCommand decode handles StateZone responses', () => {
-    const cmd = Commands.GetColorZonesCommand(0, 2);
+  test('GetColorZones decode handles StateZone responses', () => {
+    const cmd = Commands.GetColorZones(0, 2);
     
     // Mock StateZone response (Type.StateZone = 503)
     const stateZoneBytes = new Uint8Array(36 + 13); // header + payload
@@ -542,8 +542,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Should expect more zones (0, 1, 2)
   });
 
-  test('GetColorZonesCommand decode handles StateMultiZone responses', () => {
-    const cmd = Commands.GetColorZonesCommand(0, 2);
+  test('GetColorZones decode handles StateMultiZone responses', () => {
+    const cmd = Commands.GetColorZones(0, 2);
     
     // Mock StateMultiZone response (Type.StateMultiZone = 506)
     // StateMultiZone always contains 8 colors (fixed size)
@@ -580,9 +580,9 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // All zones covered (0-7, more than we requested 0-2)
   });
 
-  test('GetColorZonesCommand callback receives responses', () => {
+  test('GetColorZones callback receives responses', () => {
     const receivedResponses: Commands.ColorZoneResponse[] = [];
-    const cmd = Commands.GetColorZonesCommand(0, 1, (response) => {
+    const cmd = Commands.GetColorZones(0, 1, (response) => {
       receivedResponses.push(response);
     });
     
@@ -612,10 +612,10 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting zone 1
   });
 
-  test('GetColorZonesCommand callback can stop early', () => {
+  test('GetColorZones callback can stop early', () => {
     const receivedResponses: Commands.ColorZoneResponse[] = [];
     
-    const cmd = Commands.GetColorZonesCommand(0, 5, (response) => {
+    const cmd = Commands.GetColorZones(0, 5, (response) => {
       receivedResponses.push(response);
       return false; // Stop early
     });
@@ -642,8 +642,8 @@ describe('commands', () => {
   });
 
 
-  test('GetColorZonesCommand accumulates responses correctly', () => {
-    const cmd = Commands.GetColorZonesCommand(0, 2);
+  test('GetColorZones accumulates responses correctly', () => {
+    const cmd = Commands.GetColorZones(0, 2);
     
     // First call should return array with 1 item
     const stateZoneBytes1 = new Uint8Array(36 + 13);
@@ -692,8 +692,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Complete
   });
 
-  test('GetColorZonesCommand ignores unknown response types', () => {
-    const cmd = Commands.GetColorZonesCommand(0, 1);
+  test('GetColorZones ignores unknown response types', () => {
+    const cmd = Commands.GetColorZones(0, 1);
     
     // Mock unknown response type
     const unknownBytes = new Uint8Array(36 + 10);
@@ -710,8 +710,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting responses
   });
 
-  test('SetColorZonesCommand', () => {
-    const cmd = Commands.SetColorZonesCommand(0, 7, 120, 65535, 32768, 3500, 1000, MultiZoneApplicationRequest.APPLY);
+  test('SetColorZones', () => {
+    const cmd = Commands.SetColorZones(0, 7, 120, 65535, 32768, 3500, 1000, MultiZoneApplicationRequest.APPLY);
     assert.equal(cmd.type, Type.SetColorZones);
     assert.equal(cmd.payload.length, 15);
     
@@ -726,15 +726,15 @@ describe('commands', () => {
     assert.equal(view.getUint8(14), MultiZoneApplicationRequest.APPLY); // apply
   });
 
-  test('GetMultiZoneEffectCommand', () => {
-    const cmd = Commands.GetMultiZoneEffectCommand();
+  test('GetMultiZoneEffect', () => {
+    const cmd = Commands.GetMultiZoneEffect();
     assert.equal(cmd.type, Type.GetMultiZoneEffect);
     assert.equal(typeof cmd.decode, 'function');
   });
 
-  test('SetMultiZoneEffectCommand', () => {
+  test('SetMultiZoneEffect', () => {
     const parameters = new Uint8Array(32).fill(0xAB);
-    const cmd = Commands.SetMultiZoneEffectCommand(12345, MultiZoneEffectType.MOVE, 5, 10000n, parameters);
+    const cmd = Commands.SetMultiZoneEffect(12345, MultiZoneEffectType.MOVE, 5, 10000n, parameters);
     assert.equal(cmd.type, Type.SetMultiZoneEffect);
     assert.equal(cmd.payload.length, 59);
     
@@ -748,20 +748,20 @@ describe('commands', () => {
     assert.deepEqual(cmd.payload.subarray(27, 59), parameters); // parameters
   });
 
-  test('GetExtendedColorZonesCommand', () => {
-    const cmd = Commands.GetExtendedColorZonesCommand();
+  test('GetExtendedColorZones', () => {
+    const cmd = Commands.GetExtendedColorZones();
     assert.equal(cmd.type, Type.GetExtendedColorZones);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
-  test('GetExtendedColorZonesCommand with callback', () => {
-    const cmd = Commands.GetExtendedColorZonesCommand();
+  test('GetExtendedColorZones with callback', () => {
+    const cmd = Commands.GetExtendedColorZones();
     assert.equal(cmd.type, Type.GetExtendedColorZones);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
-  test('GetExtendedColorZonesCommand decode handles StateExtendedColorZones responses for single response', () => {
-    const cmd = Commands.GetExtendedColorZonesCommand();
+  test('GetExtendedColorZones decode handles StateExtendedColorZones responses for single response', () => {
+    const cmd = Commands.GetExtendedColorZones();
     
     // Mock StateExtendedColorZones response (Type.StateExtendedColorZones = 512)
     // Single response for device with ≤82 zones - decoder always reads 82 colors
@@ -800,8 +800,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Single response, no more expected
   });
 
-  test('GetExtendedColorZonesCommand decode handles StateExtendedColorZones responses for multiple responses', () => {
-    const cmd = Commands.GetExtendedColorZonesCommand();
+  test('GetExtendedColorZones decode handles StateExtendedColorZones responses for multiple responses', () => {
+    const cmd = Commands.GetExtendedColorZones();
     
     // Mock first StateExtendedColorZones response for device with >82 zones
     const stateExtendedBytes1 = new Uint8Array(36 + 5 + 82 * 8); // header + basic payload + 82 colors
@@ -862,9 +862,9 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Complete
   });
 
-  test('GetExtendedColorZonesCommand callback receives responses', () => {
+  test('GetExtendedColorZones callback receives responses', () => {
     const receivedResponses: StateExtendedColorZones[] = [];
-    const cmd = Commands.GetExtendedColorZonesCommand((response) => {
+    const cmd = Commands.GetExtendedColorZones((response) => {
       receivedResponses.push(response);
     });
     
@@ -897,9 +897,9 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Single response for ≤82 zones
   });
 
-  test('GetExtendedColorZonesCommand callback can stop early', () => {
+  test('GetExtendedColorZones callback can stop early', () => {
     const receivedResponses: StateExtendedColorZones[] = [];
-    const cmd = Commands.GetExtendedColorZonesCommand((response) => {
+    const cmd = Commands.GetExtendedColorZones((response) => {
       receivedResponses.push(response);
       return false; // Stop early
     });
@@ -931,8 +931,8 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // Stopped early due to callback returning false
   });
 
-  test('GetExtendedColorZonesCommand ignores unknown response types', () => {
-    const cmd = Commands.GetExtendedColorZonesCommand();
+  test('GetExtendedColorZones ignores unknown response types', () => {
+    const cmd = Commands.GetExtendedColorZones();
     
     // Mock unknown response type
     const unknownBytes = new Uint8Array(36 + 10);
@@ -949,12 +949,12 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, false); // No expected responses set up yet, so false
   });
 
-  test('SetExtendedColorZonesCommand', () => {
+  test('SetExtendedColorZones', () => {
     const colors = [
       { hue: 120, saturation: 65535, brightness: 32768, kelvin: 3500 },
       { hue: 240, saturation: 32768, brightness: 65535, kelvin: 2700 }
     ];
-    const cmd = Commands.SetExtendedColorZonesCommand(1000, MultiZoneExtendedApplicationRequest.APPLY, 0, 2, colors);
+    const cmd = Commands.SetExtendedColorZones(1000, MultiZoneExtendedApplicationRequest.APPLY, 0, 2, colors);
     assert.equal(cmd.type, Type.SetExtendedColorZones);
     assert.equal(cmd.payload.length, 664);
     
@@ -977,8 +977,8 @@ describe('commands', () => {
     assert.equal(view.getUint16(22, true), 2700); // kelvin
   });
 
-  test('SetUserPositionCommand', () => {
-    const cmd = Commands.SetUserPositionCommand(1, 1.5, -2.7);
+  test('SetUserPosition', () => {
+    const cmd = Commands.SetUserPosition(1, 1.5, -2.7);
     assert.equal(cmd.type, Type.SetUserPosition);
     assert.equal(cmd.payload.length, 11);
     
@@ -990,7 +990,7 @@ describe('commands', () => {
     assert.ok(Math.abs(view.getFloat32(7, true) - (-2.7)) < 0.001); // userY (floating point comparison)
   });
 
-  test('Set64Command', () => {
+  test('Set64', () => {
     const colors = Array.from({ length: 5 }, (_, i) => ({
       hue: i * 100,
       saturation: 65535,
@@ -998,7 +998,7 @@ describe('commands', () => {
       kelvin: 3500
     }));
     
-    const cmd = Commands.Set64Command(0, 8, 1, 2, 4, 500, colors);
+    const cmd = Commands.Set64(0, 8, 1, 2, 4, 500, colors);
     assert.equal(cmd.type, Type.Set64);
     assert.equal(cmd.payload.length, 522);
     
@@ -1021,15 +1021,15 @@ describe('commands', () => {
     }
   });
 
-  test('GetTileEffectCommand', () => {
-    const cmd = Commands.GetTileEffectCommand();
+  test('GetTileEffect', () => {
+    const cmd = Commands.GetTileEffect();
     assert.equal(cmd.type, Type.GetTileEffect);
     assert.equal(cmd.payload.length, 2);
     assert.equal(cmd.payload[0], 0); // reserved6
     assert.equal(cmd.payload[1], 0); // reserved7
   });
 
-  test('SetTileEffectCommand', () => {
+  test('SetTileEffect', () => {
     const palette = Array.from({ length: 3 }, (_, i) => ({
       hue: i * 120,
       saturation: 65535,
@@ -1037,7 +1037,7 @@ describe('commands', () => {
       kelvin: 3500
     }));
     
-    const cmd = Commands.SetTileEffectCommand(
+    const cmd = Commands.SetTileEffect(
       54321, // instanceid
       TileEffectType.FLAME,
       8, // speed
@@ -1069,8 +1069,8 @@ describe('commands', () => {
     assert.equal(view.getUint16(66, true), 3500); // kelvin
   });
 
-  test('SensorGetAmbientLightCommand', () => {
-    const cmd = Commands.SensorGetAmbientLightCommand();
+  test('SensorGetAmbientLight', () => {
+    const cmd = Commands.SensorGetAmbientLight();
     assert.equal(cmd.type, Type.SensorGetAmbientLight);
     assert.equal(typeof cmd.decode, 'function');
   });

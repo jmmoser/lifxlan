@@ -5,7 +5,7 @@
  *   bun examples/discover.ts
  *   node examples/discover.ts   (Node 22.18+ runs TypeScript directly)
  */
-import { GetLabelCommand } from 'lifxlan';
+import { GetLabel } from 'lifxlan';
 import { openLan } from 'lifxlan/node';
 import { discover } from 'lifxlan/discovery';
 
@@ -13,7 +13,7 @@ const { client, devices, router, close } = await openLan();
 
 console.log('Scanning for 5 seconds...');
 for await (const device of discover(router, devices, { timeoutMs: 5000 })) {
-  const label = await client.send(GetLabelCommand(), device);
+  const label = await client.send(GetLabel(), device);
   console.log(`${device.serialNumber}  ${device.address}:${device.port}  "${label}"`);
 }
 
