@@ -117,39 +117,31 @@ For performance, decoding is zero-copy: the buffer you pass to `router.receive()
 
 ### Response Mode Control
 
-The `client.send()` method supports flexible response modes with **full type safety** - the return type changes based on the response mode you choose:
+Every command declares its natural exchange, and `client.send()` follows it: **Get commands** (GetColor, GetPower, etc.) wait for the response data packet, **Set commands** (SetColor, SetPower, etc.) wait for an acknowledgement. The return type tracks the exchange, so no type assertions are needed:
 
 ```javascript
-// Use command defaults (recommended)
-const color = await client.send(GetColor(), device);     // Promise<LightState>
-await client.send(SetPower(true), device);              // Promise<void> (Set commands default to ack-only)
-
-// Override response behavior with type-safe returns
-await client.send(command, device, { responseMode: 'ack-only' });  // Promise<void>
-const data = await client.send(command, device, { responseMode: 'response' }); // Promise<T>
-const result = await client.send(command, device, { responseMode: 'both' });   // Promise<T>
-
-// With abort signal
-const response = await client.send(GetColor(), device, { 
-  responseMode: 'both',     // returns Promise<LightState>
-  signal: abortController.signal 
-});
-console.log(response.hue);    // response is typed as LightState
+const color = await client.send(GetColor(), device);   // Promise<LightState>
+await client.send(SetPower(true), device);             // Promise<void> (Set commands default to ack-only)
 ```
 
-**Response Modes:**
-- `'auto'` - Use the command's default behavior (recommended) → `Promise<T>`
-- `'ack-only'` - Wait for acknowledgment packet (confirms receipt) → `Promise<void>`
-- `'response'` - Wait for response data packet (Get commands) → `Promise<T>`
-- `'both'` - Wait for both ack and response → `Promise<T>`
+For the rare call that needs a different exchange, `responseMode` overrides the command's default — and the return type follows the override:
 
-**Command Defaults:**
-- **Get commands** (GetColor, GetPower, etc.) default to `'response'`
-- **Set commands** (SetColor, SetPower, etc.) default to `'ack-only'`
+```javascript
+// Downgrade a Get to a receipt check
+await client.send(GetColor(), device, { responseMode: 'ack-only' });  // Promise<void>
+
+// Force the response packet out of a Set (see the caveat below)
+const state = await client.send(SetPower(true), device, { responseMode: 'response' }); // Promise<number>
+```
+
+**Response Modes** (omit the option to use the command's default):
+- `'ack-only'` - Wait for the acknowledgement packet (confirms the device received the message) → `Promise<void>`
+- `'response'` - Wait for the response data packet → `Promise<T>`
+- `'both'` - Wait for both packets → `Promise<T>`
+
+> **Protocol caveat:** forcing `'response'` (or `'both'`) on a Set command asks the device for a State reply that may reflect the state from *before* the change was applied, and waiting on two UDP packets gives a call more ways to time out without confirming anything extra. To verify a change took effect, wait for the ack and then send the matching Get (see the [examples below](#response-mode-control-examples)).
 
 **Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
-
-**Type Safety:** The return type changes based on your response mode choice, so no type assertions are needed.
 
 ## Examples by Runtime
 
@@ -557,11 +549,12 @@ A client also implements `Symbol.dispose`, so a `using` declaration disposes it 
 ### Response Mode Control Examples
 
 ```javascript
-// High-reliability mode: wait for both ack and response (typed return)
-const state = await client.send(SetColor(120, 100, 100, 3500, 1000), device, { 
-  responseMode: 'both'     // returns Promise<LightState>
-});
-console.log('Confirmed color:', state.hue);
+// Confirm a change, then read back the applied state. This is the reliable
+// verify pattern: a State reply forced out of a Set with responseMode:
+// 'response' may reflect the state from before the change was applied.
+await client.send(SetColor(120, 100, 100, 3500, 0), device); // ack-only by default
+const currentState = await client.send(GetColor(), device);  // Promise<LightState>
+console.log('Light is now:', currentState.hue);
 
 // Fast mode: fire-and-forget for animations (no promise)
 for (let i = 0; i < 360; i += 10) {
@@ -569,16 +562,10 @@ for (let i = 0; i < 360; i += 10) {
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
-// Confirmation only (void return)
-await client.send(SetColor(120, 100, 100, 3500, 0), device, { 
+// Downgrade a Get to a liveness check (void return)
+await client.send(GetColor(), device, { 
   responseMode: 'ack-only' // returns Promise<void>
 });
-
-// Get response data (typed return)
-const currentState = await client.send(SetColor(120, 100, 100, 3500, 0), device, { 
-  responseMode: 'response' // returns Promise<LightState>
-});
-console.log('Light is now:', currentState.hue);
 ```
 
 ## Advanced Examples

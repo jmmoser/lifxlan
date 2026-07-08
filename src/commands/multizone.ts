@@ -1,7 +1,7 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import type { MultiZoneApplicationRequest, MultiZoneEffectType, MultiZoneExtendedApplicationRequest } from '../constants/index.js';
-import type { Decoder } from './index.js';
+import type { Command, Decoder } from './index.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
 
@@ -62,8 +62,8 @@ export function GetColorZones(
     type: Type.GetColorZones,
     payload: Encoding.encodeGetColorZones(startIndex, endIndex),
     createDecoder,
-    defaultResponseMode: 'response' as const,
-  };
+    defaultResponseMode: 'response',
+  } satisfies Command<ColorZoneResponse[], 'response'>;
 }
 
 export function SetColorZones(
@@ -80,16 +80,16 @@ export function SetColorZones(
     type: Type.SetColorZones,
     payload: Encoding.encodeSetColorZones(startIndex, endIndex, hue, saturation, brightness, kelvin, duration, apply),
     decode: Encoding.decodeStateMultiZone,
-    defaultResponseMode: 'ack-only' as const,
-  };
+    defaultResponseMode: 'ack-only',
+  } satisfies Command<Encoding.StateMultiZone, 'ack-only'>;
 }
 
 export function GetMultiZoneEffect() {
   return {
     type: Type.GetMultiZoneEffect,
     decode: Encoding.decodeStateMultiZoneEffect,
-    defaultResponseMode: 'response' as const,
-  };
+    defaultResponseMode: 'response',
+  } satisfies Command<Encoding.StateMultiZoneEffect, 'response'>;
 }
 
 export function SetMultiZoneEffect(
@@ -103,8 +103,8 @@ export function SetMultiZoneEffect(
     type: Type.SetMultiZoneEffect,
     payload: Encoding.encodeSetMultiZoneEffect(instanceid, effectType, speed, duration, parameters),
     decode: Encoding.decodeStateMultiZoneEffect,
-    defaultResponseMode: 'ack-only' as const,
-  };
+    defaultResponseMode: 'ack-only',
+  } satisfies Command<Encoding.StateMultiZoneEffect, 'ack-only'>;
 }
 
 export function GetExtendedColorZones(
@@ -163,8 +163,8 @@ export function GetExtendedColorZones(
   return {
     type: Type.GetExtendedColorZones,
     createDecoder,
-    defaultResponseMode: 'response' as const,
-  };
+    defaultResponseMode: 'response',
+  } satisfies Command<Encoding.StateExtendedColorZones[], 'response'>;
 }
 
 export function SetExtendedColorZones(
@@ -178,6 +178,6 @@ export function SetExtendedColorZones(
     type: Type.SetExtendedColorZones,
     payload: Encoding.encodeSetExtendedColorZones(duration, apply, zoneIndex, colorsCount, colors),
     decode: Encoding.decodeStateExtendedColorZones,
-    defaultResponseMode: 'ack-only' as const,
-  };
+    defaultResponseMode: 'ack-only',
+  } satisfies Command<Encoding.StateExtendedColorZones, 'ack-only'>;
 }

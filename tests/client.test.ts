@@ -1021,14 +1021,14 @@ describe('client', () => {
     client.dispose();
   });
 
-  test('send with auto response mode and no defaultResponseMode', async () => {
+  test('send with no responseMode and no defaultResponseMode falls back to response', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
         onSend(message) {
           const header = decodeHeader(message);
           assert.equal(header.res_required, true); // Should default to 'response'
-          
+
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, 65535, true);
           client.router.receive(
@@ -1054,9 +1054,31 @@ describe('client', () => {
       decode: GetPower().decode,
     };
 
-    const result = await client.send(commandWithoutDefault, sharedDevice, { responseMode: 'auto' });
+    const result = await client.send(commandWithoutDefault, sharedDevice, { signal: new AbortController().signal });
     assert.equal(result, 0xFFFF);
-    
+
+    client.dispose();
+  });
+
+  test('send rejects an unknown responseMode instead of timing out', async () => {
+    // Typed callers can no longer pass 'auto' (undefined means "use the
+    // command default" now), but untyped JavaScript callers still can; the
+    // failure must be loud, not a packet with no flags riding to a timeout.
+    const client = Client({
+      router: Router({
+        onSend() {
+          assert.fail('no packet should be sent for an invalid responseMode');
+        },
+      }),
+    });
+
+    const legacyOptions = { responseMode: 'auto' };
+    await assert.rejects(
+      // @ts-expect-error -- 'auto' was removed from ResponseMode
+      client.send(GetPower(), sharedDevice, legacyOptions),
+      (error: unknown) => Error.isError(error) && error.name === 'ValidationError',
+    );
+
     client.dispose();
   });
 

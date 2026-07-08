@@ -26,7 +26,9 @@ import {
 import type { ClientRouter, Header } from './router.js';
 
 import type { Device } from './devices.js';
-import type { Decoder, Command } from './commands/index.js';
+import type { Decoder, Command, ResponseMode } from './commands/index.js';
+
+export type { ResponseMode } from './commands/index.js';
 
 /** Sequence numbers are limited to 0-254. We use 255 for broadcast messages. */
 const SEQUENCE_SPACE = 0xFF;
@@ -37,7 +39,7 @@ interface PendingHandler {
 }
 
 function registerHandler<T>(
-  ackMode: 'ack-only' | 'response' | 'both',
+  ackMode: ResponseMode,
   serialNumber: string,
   sequence: number,
   decode: Decoder<T> | undefined,
@@ -154,17 +156,14 @@ function registerHandler<T>(
   return promise;
 }
 
-// Define response modes as const to get literal types
-const RESPONSE_MODES = ['auto', 'ack-only', 'response', 'both'] as const;
-export type ResponseMode = typeof RESPONSE_MODES[number];
-
 /**
- * Resolves the effective response mode for a call: an explicit, non-'auto'
- * override wins; otherwise the command's own default mode is used. This mirrors
- * the runtime resolution in send() (`options.responseMode` else command default).
+ * Resolves the effective response mode for a call: an explicit override wins;
+ * otherwise (the option was omitted, so `Override` is `undefined`) the
+ * command's own default mode is used. This mirrors the runtime resolution in
+ * send() (`options?.responseMode ?? command.defaultResponseMode`).
  */
-type ResolveMode<Override extends ResponseMode, Default extends ResponseMode> =
-  Override extends 'auto' ? Default : Override;
+type ResolveMode<Override extends ResponseMode | undefined, Default extends ResponseMode> =
+  Override extends ResponseMode ? Override : Default;
 
 /**
  * Maps a resolved response mode to the awaited result of send(): an 'ack-only'
@@ -174,15 +173,22 @@ type ResolveMode<Override extends ResponseMode, Default extends ResponseMode> =
  */
 type ModeReturn<T, Mode extends ResponseMode> = Mode extends 'ack-only' ? Promise<void> : Promise<T>;
 
-export interface SendOptions<A extends ResponseMode = ResponseMode> {
+export interface SendOptions<A extends ResponseMode | undefined = ResponseMode | undefined> {
   /**
-   * Controls response behavior for the command.
-   * 
-   * Available options:
-   * - 'auto': Use the command's default behavior (recommended)
-   * - 'ack-only': Wait for acknowledgment packet (confirms receipt)
-   * - 'response': Wait for response data packet (Get commands)
-   * - 'both': Wait for both ack and response (maximum reliability)
+   * Overrides the exchange for this call. Omit it to use the command's own
+   * default — Get commands wait for the response data packet, Set commands
+   * wait for an acknowledgement — which is right for almost every call.
+   *
+   * - 'ack-only': Wait for the acknowledgement packet (confirms receipt)
+   * - 'response': Wait for the response data packet
+   * - 'both': Wait for both packets
+   *
+   * Protocol caveat: forcing 'response' (or 'both') on a Set command makes
+   * the device reply with a State message that may reflect the state from
+   * *before* the change was applied, and waiting on two UDP packets gives a
+   * call more ways to time out without confirming anything extra. To verify
+   * a change took effect, wait for the ack and follow up with the matching
+   * Get command.
    */
   responseMode?: A;
   /**
@@ -241,8 +247,8 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    */
   unicast<T>(command: Command<T>, device: Device): void;
 
-  send<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
-    command: Command<T> & { defaultResponseMode?: Default },
+  send<T, Default extends ResponseMode = 'response', Override extends ResponseMode | undefined = undefined>(
+    command: Command<T, Default>,
     device: Device,
     options?: SendOptions<Override>,
   ): ModeReturn<T, ResolveMode<Override, Default>>;
@@ -429,8 +435,8 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
      * transport — surfaces as a rejected promise, so fan-outs like
      * `Promise.all(devices.map(...))` observe all failures uniformly.
      */
-    send<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
-      command: Command<T> & { defaultResponseMode?: Default },
+    send<T, Default extends ResponseMode = 'response', Override extends ResponseMode | undefined = undefined>(
+      command: Command<T, Default>,
       device: Device,
       options?: SendOptions<Override>,
     ): ModeReturn<T, ResolveMode<Override, Default>> {
@@ -457,27 +463,14 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       // exception instead of a rejection.
       let pendingBySequence: Map<number, PendingHandler> | undefined;
       try {
-        // Determine response mode: an explicit, non-'auto' override wins;
-        // otherwise fall back to the command's default mode.
-        const requestedMode = options?.responseMode;
-        const ackMode: 'ack-only' | 'response' | 'both' =
-          !requestedMode || requestedMode === 'auto'
-            ? command.defaultResponseMode ?? 'response'
-            : requestedMode;
+        // Determine response mode: an explicit override wins; otherwise fall
+        // back to the command's default mode.
+        const ackMode: ResponseMode = options?.responseMode ?? command.defaultResponseMode ?? 'response';
 
-        // A createDecoder command gets a fresh decoder per exchange so commands
-        // that accumulate multi-packet state stay safe to reuse across
-        // concurrent sends and devices.
-        const decode = command.createDecoder ? command.createDecoder() : command.decode;
-
-        // A mode that waits on response data can never settle without a
-        // decoder; fail loudly now instead of letting the call ride to a
-        // confusing timeout.
-        if (ackMode !== 'ack-only' && decode === undefined) {
-          throw new ValidationError('command', command.type, `response mode '${ackMode}' requires the command to provide decode or createDecoder`);
-        }
-
-        // Determine protocol flags based on response mode
+        // Determine protocol flags based on response mode. The default arm is
+        // unreachable for typed callers but guards untyped ones: an unknown
+        // string would otherwise send a packet that requests nothing and ride
+        // to a confusing timeout.
         let resRequired = false;
         let ackRequired = false;
 
@@ -492,6 +485,20 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
             resRequired = true;
             ackRequired = true;
             break;
+          default:
+            throw new ValidationError('responseMode', ackMode, "expected 'ack-only', 'response', or 'both'");
+        }
+
+        // A createDecoder command gets a fresh decoder per exchange so commands
+        // that accumulate multi-packet state stay safe to reuse across
+        // concurrent sends and devices.
+        const decode = command.createDecoder ? command.createDecoder() : command.decode;
+
+        // A mode that waits on response data can never settle without a
+        // decoder; fail loudly now instead of letting the call ride to a
+        // confusing timeout.
+        if (ackMode !== 'ack-only' && decode === undefined) {
+          throw new ValidationError('command', command.type, `response mode '${ackMode}' requires the command to provide decode or createDecoder`);
         }
 
         pendingBySequence = responseHandlerMap.get(device.serialNumber);

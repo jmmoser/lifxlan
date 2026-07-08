@@ -2,14 +2,14 @@ import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import { NOOP } from '../utils/index.js';
 import type { TileEffectType, TileEffectSkyType } from '../constants/index.js';
-import type { Decoder } from './index.js';
+import type { Command, Decoder } from './index.js';
 
 export function GetDeviceChain() {
   return {
     type: Type.GetDeviceChain,
     decode: Encoding.decodeStateDeviceChain,
-    defaultResponseMode: 'response' as const,
-  };
+    defaultResponseMode: 'response',
+  } satisfies Command<Encoding.StateDeviceChain, 'response'>;
 }
 
 export function Get64(
@@ -63,8 +63,8 @@ export function Get64(
     type: Type.Get64,
     payload: Encoding.encodeGet64(tileIndex, length, x, y, width),
     createDecoder,
-    defaultResponseMode: 'response' as const,
-  };
+    defaultResponseMode: 'response',
+  } satisfies Command<Encoding.State64[], 'response'>;
 }
 
 export function SetUserPosition(tileIndex: number, userX: number, userY: number) {
@@ -72,8 +72,8 @@ export function SetUserPosition(tileIndex: number, userX: number, userY: number)
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
     decode: NOOP,
-    defaultResponseMode: 'ack-only' as const,
-  };
+    defaultResponseMode: 'ack-only',
+  } satisfies Command<void, 'ack-only'>;
 }
 
 export function Set64(
@@ -89,8 +89,8 @@ export function Set64(
     type: Type.Set64,
     payload: Encoding.encodeSet64(tileIndex, length, x, y, width, duration, colors),
     decode: NOOP,
-    defaultResponseMode: 'ack-only' as const,
-  };
+    defaultResponseMode: 'ack-only',
+  } satisfies Command<void, 'ack-only'>;
 }
 
 export function GetTileEffect() {
@@ -98,8 +98,8 @@ export function GetTileEffect() {
     type: Type.GetTileEffect,
     payload: Encoding.encodeGetTileEffect(),
     decode: Encoding.decodeStateTileEffect,
-    defaultResponseMode: 'response' as const,
-  };
+    defaultResponseMode: 'response',
+  } satisfies Command<Encoding.StateTileEffect, 'response'>;
 }
 
 export function SetTileEffect(
@@ -116,6 +116,6 @@ export function SetTileEffect(
     type: Type.SetTileEffect,
     payload: Encoding.encodeSetTileEffect(instanceid, effectType, speed, duration, skyType, cloudSaturationMin, paletteCount, palette),
     decode: Encoding.decodeStateTileEffect,
-    defaultResponseMode: 'ack-only' as const,
-  };
+    defaultResponseMode: 'ack-only',
+  } satisfies Command<Encoding.StateTileEffect, 'ack-only'>;
 }
