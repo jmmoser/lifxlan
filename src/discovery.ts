@@ -1,6 +1,6 @@
 /**
  * Optional discovery helper, exposed as the 'lifxlan/discovery' subpath so
- * the package root keeps only passive building blocks - this is the one
+ * the package root keeps only passive building blocks: this is the one
  * piece of the library that acts on a timer. It automates the
  * broadcast-GetService-on-a-backoff recipe from the README; receiving is
  * still the caller's socket handler feeding `router.receive()` into
@@ -18,7 +18,7 @@ export interface DiscoveryOptions {
    * The delay before the first repeat broadcast. Each subsequent broadcast
    * quadruples the delay until it reaches
    * {@link DiscoveryOptions.maxIntervalMs}, so discovery bursts while UDP
-   * loss matters most and then settles into a slow heartbeat - with the
+   * loss matters most and then settles into a slow heartbeat. With the
    * defaults, broadcasts go out immediately, then after 1s, 4s, 16s, and
    * every minute from there. Defaults to 1000ms.
    */
@@ -30,10 +30,10 @@ export interface DiscoveryOptions {
    */
   maxIntervalMs?: number;
   /**
-   * Ends iteration when aborted. Unlike devices.get() - where abort rejects
-   * because the awaited lookup never happened - stopping a discovery stream
+   * Ends iteration when aborted. Unlike devices.get(), where abort rejects
+   * because the awaited lookup never happened, stopping a discovery stream
    * is its expected ending, so the iterator completes normally instead of
-   * throwing. Devices already queued are still yielded before it completes -
+   * throwing. Devices already queued are still yielded before it completes,
    * including when the signal is already aborted at the call, which drains the
    * current registry snapshot and then ends without broadcasting.
    */
@@ -41,7 +41,7 @@ export interface DiscoveryOptions {
   /**
    * Total discovery budget: iteration ends normally (like the signal, and
    * draining the queue the same way) once this elapses. Defaults to 0
-   * (disabled) - unlike the 3000ms default of devices.get(), because an
+   * (disabled), unlike the 3000ms default of devices.get(), because an
    * open-ended stream silently ending mid-loop would surprise more than a
    * single lookup timing out.
    */
@@ -62,21 +62,21 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
 
 /**
  * Discovers LIFX devices by broadcasting GetService immediately and then on
- * a widening backoff - starting at `intervalMs`, quadrupling per broadcast,
- * settling at `maxIntervalMs` - yielding each device exactly once as it
+ * a widening backoff (starting at `intervalMs`, quadrupling per broadcast,
+ * settling at `maxIntervalMs`), yielding each device exactly once as it
  * lands in `devices`:
  * devices already registered before the call are yielded first, then new
  * registrations as they arrive. (A device removed from the registry and
  * later re-registered counts as a new registration and is yielded again.)
  *
- * The helper creates and owns a Client on `router` - one source id for the
- * lifetime of the loop, released on completion - so no outside code can
+ * The helper creates and owns a Client on `router` (one source id for the
+ * lifetime of the loop, released on completion), so no outside code can
  * dispose its transport mid-broadcast. Should the router's onSend itself
  * start throwing (e.g. the socket was closed), iteration ends instead of
  * the timer crashing the process; the initial synchronous broadcast inside
  * the discover() call itself still throws, matching client.broadcast().
  *
- * Iteration ends normally - never with an error - on signal abort, on the
+ * Iteration ends normally, never with an error: on signal abort, on the
  * timeoutMs budget elapsing (both deliver already-queued devices first), on
  * dispose(), or on breaking out of the loop (both discard the queue).
  *
@@ -145,7 +145,7 @@ export function discover(
     // another 'abort' event, so there is nothing to listen for and no point
     // creating a client, broadcasting, or arming a timer. Still seed the
     // already-registered snapshot so a pre-aborted signal drains it and then
-    // ends - identical to aborting a moment later, with no timing surprise.
+    // ends, identical to aborting a moment later, with no timing surprise.
     queue.push(...devices.registered.values());
     done = true;
   } else {
@@ -186,7 +186,7 @@ export function discover(
 
     // Chained timeouts rather than setInterval: the delay quadruples after
     // each broadcast (1s, 4s, 16s, then the 60s cap, by default), bursting
-    // early - when a lost UDP packet still delays first contact - and
+    // early (when a lost UDP packet still delays first contact) and
     // settling at the cap so an open-ended stream left running (to track
     // DHCP changes) is a slow heartbeat, not once-a-second network chatter
     // for every device on the LAN.
@@ -203,7 +203,7 @@ export function discover(
           finish();
           return;
         }
-        // A reentrant finish() - onSend itself invoking dispose() - lands
+        // A reentrant finish() (onSend itself invoking dispose()) lands
         // between the broadcast above and this reschedule; with setInterval
         // the clear stopped future ticks, with a chain it must be checked.
         if (done) return;
@@ -223,7 +223,7 @@ export function discover(
     dispose: disposeNow,
     // Enables `using discovery = discover(...)`: end of scope disposes the
     // stream. Requiring Node >= 22 (where Symbol.dispose exists natively)
-    // is what makes defining this safe - on older runtimes the symbol was
+    // is what makes defining this safe; on older runtimes the symbol was
     // undefined and the computed key silently became the string "undefined".
     [Symbol.dispose]: disposeNow,
     [Symbol.asyncIterator]() {

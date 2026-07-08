@@ -1370,7 +1370,7 @@ describe('encoding', () => {
   test('encodeStringTo with multi-byte UTF-8 string that exactly fills byteLength does not write null terminator', () => {
     const bytes = new Uint8Array(10);
     bytes.fill(0xff);
-    // 'café' is 5 bytes in UTF-8 - exactly fills the 5-byte field
+    // 'café' is 5 bytes in UTF-8, so it exactly fills the 5-byte field
     Encoding.encodeStringTo(bytes, 0, 'café', 5);
     assert.deepEqual(bytes.subarray(0, 5), new Uint8Array([0x63, 0x61, 0x66, 0xc3, 0xa9]));
     // Byte at index 5 must remain 0xff (no null terminator since written === byteLength)

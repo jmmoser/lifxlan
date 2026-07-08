@@ -1,7 +1,7 @@
 /**
  * Node-only smoke test for the built `lifxlan/node` helper: a fake device on
  * a loopback UDP socket answers the packets openLan()'s wiring sends, so the
- * whole path - bind, send, receive, decode, register - runs against `dist`
+ * whole path (bind, send, receive, decode, register) runs against `dist`
  * over a real socket. Nothing is broadcast; every packet is unicast to
  * 127.0.0.1. Not run on Deno: the helper is Node/Bun specific by design.
  *

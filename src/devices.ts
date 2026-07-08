@@ -74,7 +74,7 @@ export interface DevicesOptions extends DeviceEventHandlers {
 export interface GetDeviceOptions {
   /**
    * Cancels the lookup when aborted; the promise rejects with the signal's
-   * reason. The signal is additive to the timeout - passing a signal does not
+   * reason. The signal is additive to the timeout: passing a signal does not
    * disable the timeout.
    */
   signal?: AbortSignal;
@@ -98,7 +98,7 @@ export interface DevicesInstance {
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
   remove(serialNumber: string): boolean;
   /**
-   * Waits for the device with this serial number to be registered - a
+   * Waits for the device with this serial number to be registered: a
    * discovery rendezvous, not a lookup. A known device resolves immediately;
    * otherwise the promise settles on a future `register()`, the timeout, or
    * the signal. For a synchronous check, use {@link DevicesInstance.registered}.
@@ -112,7 +112,7 @@ export interface DevicesInstance {
    * cannot starve another. Each call is independent: subscribing the same
    * function twice invokes it twice per event. Subscribing from within a
    * handler takes effect on the next event; unsubscribing takes effect at
-   * once - a handler removed mid-dispatch is skipped if it has not run yet.
+   * once; a handler removed mid-dispatch is skipped if it has not run yet.
    */
   subscribe(handlers: DeviceEventHandlers): () => void;
   [Symbol.iterator](): Iterator<Device>;
@@ -133,7 +133,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
   // that don't observe it. Each handler is wrapped in a per-subscription
   // record: the constructor callbacks are simply the first records (Sets
   // iterate in insertion order, so they run ahead of later subscribers, with
-  // no separate dispatch path), and every subscribe() stays independent -
+  // no separate dispatch path), and every subscribe() stays independent:
   // subscribing the same function twice registers two records, and each
   // unsubscribe removes only its own.
   const addedListeners = new Set<ListenerRecord>();
@@ -145,7 +145,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
   if (options.onRemoved) removedListeners.add({ fn: options.onRemoved });
 
   function emit(listeners: Set<ListenerRecord>, device: Device) {
-    // Iterate at most the count captured before dispatch - zero allocation, no
+    // Iterate at most the count captured before dispatch: zero allocation, no
     // per-dispatch copy. A handler subscribed from within a handler is past the
     // cap, so it isn't seen until the next event (this also stops a
     // subscribe-in-handler from looping forever); a handler unsubscribed before
@@ -219,7 +219,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     },
     subscribe(handlers: DeviceEventHandlers): () => void {
       // Wrap each handler in its own record so the unsubscribe removes exactly
-      // what this call added - independent of later mutation of the caller's
+      // what this call added, independent of later mutation of the caller's
       // object and of any other subscriber that passes the same function.
       const added = handlers.onAdded ? { fn: handlers.onAdded } : undefined;
       const changed = handlers.onChanged ? { fn: handlers.onChanged } : undefined;
@@ -238,7 +238,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
       if (signal?.aborted) {
         // The caller already cancelled. Reject even when the device is
-        // already known - resolving a cancelled lookup is more surprising
+        // already known; resolving a cancelled lookup is more surprising
         // than rejecting it, and it matches platform abort semantics. (An
         // already-aborted signal also never fires another 'abort' event, so
         // the listener below would never run.)

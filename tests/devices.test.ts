@@ -293,7 +293,7 @@ describe('devices', () => {
     c1.abort();
     await assert.rejects(p1, /aborted/);
 
-    // p2 must still resolve when the device registers - the c1 abort must
+    // p2 must still resolve when the device registers: the c1 abort must
     // only have removed its own resolver, not p2's.
     devices.register(56700, '192.168.1.1', received('abcdef123456'));
     const device = await p2;

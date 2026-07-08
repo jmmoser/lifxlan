@@ -1,7 +1,7 @@
 /**
  * Party mode: sweep the hue of every discovered light for ten seconds.
  *
- * Animations are the textbook case for `client.unicast()` - fire-and-forget,
+ * Animations are the textbook case for `client.unicast()`: fire-and-forget,
  * no acks, one packet per frame. A dropped frame doesn't matter because the
  * next one replaces it 100ms later.
  *

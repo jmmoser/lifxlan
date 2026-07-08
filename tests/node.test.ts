@@ -2,7 +2,7 @@
  * Exercises the `lifxlan/node` helper over real `node:dgram` loopback
  * sockets (bun implements node:dgram, so this runs in the normal suite): a
  * fake device on 127.0.0.1 answers the packets openLan()'s wiring sends. No
- * broadcasts are ever sent - every packet is unicast to a loopback port -
+ * broadcasts are ever sent (every packet is unicast to a loopback port),
  * so nothing leaves the machine.
  */
 import { describe, test } from 'bun:test';

@@ -91,7 +91,7 @@ describe('discovery', () => {
     const discovery = discover(router, devices, { intervalMs: 1 });
 
     // Delays after the initial broadcast are 1, 4, 16ms. Timers never fire
-    // early, so the fourth broadcast cannot land before ~21ms have elapsed -
+    // early, so the fourth broadcast cannot land before ~21ms have elapsed;
     // a fixed 1ms interval would reach it in ~3ms. A lower bound stays
     // robust under CI jitter, which only ever delays timers further.
     await untilSent(4);
@@ -190,7 +190,7 @@ describe('discovery', () => {
     controller.abort();
 
     const discovery = discover(router, devices, { signal: controller.signal });
-    // No client, no broadcast, no timer - but the snapshot is still yielded.
+    // No client, no broadcast, no timer, but the snapshot is still yielded.
     expect(sent.length).toBe(0);
 
     const first = await discovery.next();
@@ -220,7 +220,7 @@ describe('discovery', () => {
     devices.register(56700, '10.0.0.2', received(SERIAL_B));
 
     // The two devices are queued synchronously; the loop yields them, then
-    // blocks on next() until the deadline fires finish() - no sleep needed.
+    // blocks on next() until the deadline fires finish(); no sleep needed.
     const collected: string[] = [];
     for await (const device of discovery) {
       collected.push(device.serialNumber);
