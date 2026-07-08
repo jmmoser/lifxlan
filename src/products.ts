@@ -12,16 +12,16 @@
  *
  * @example
  * ```javascript
- * import { PRODUCTS_URL, GetVersionCommand, GetHostFirmwareCommand } from 'lifxlan';
+ * import { PRODUCTS_URL, GetVersion, GetHostFirmware } from 'lifxlan';
  * import { Products } from 'lifxlan/products';
  *
  * const products = Products(await (await fetch(PRODUCTS_URL)).json());
  *
- * const version = await client.send(GetVersionCommand(), device);
- * const firmware = await client.send(GetHostFirmwareCommand(), device);
+ * const version = await client.send(GetVersion(), device);
+ * const firmware = await client.send(GetHostFirmware(), device);
  * const features = products.features(version.vendor, version.product, firmware);
  * if (features?.extended_multizone) {
- *   // safe to use SetExtendedColorZonesCommand
+ *   // safe to use SetExtendedColorZones
  * }
  * ```
  */
@@ -96,7 +96,7 @@ export interface Product {
 /**
  * A host firmware version, either as `{ major, minor }` or in the shape
  * returned by `decodeStateHostFirmware` so the decoded response of a
- * `GetHostFirmwareCommand` can be passed directly.
+ * `GetHostFirmware` can be passed directly.
  */
 export type FirmwareVersion =
   | { major: number; minor: number }

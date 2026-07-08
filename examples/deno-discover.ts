@@ -6,7 +6,7 @@
  * Run:
  *   deno run --allow-net --unstable-net examples/deno-discover.ts
  */
-import { Client, Devices, Router, GetServiceCommand } from 'npm:lifxlan';
+import { Client, Devices, Router, GetService } from 'npm:lifxlan';
 
 const socket = Deno.listenDatagram({
   hostname: '0.0.0.0',
@@ -29,8 +29,8 @@ const devices = Devices({
 const client = Client({ router });
 
 console.log('Scanning for 5 seconds...');
-client.broadcast(GetServiceCommand());
-const scanInterval = setInterval(() => client.broadcast(GetServiceCommand()), 1000);
+client.broadcast(GetService());
+const scanInterval = setInterval(() => client.broadcast(GetService()), 1000);
 
 setTimeout(() => {
   clearInterval(scanInterval);

@@ -260,7 +260,7 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
  * @example
  * ```javascript
  * const client = Client({ router });
- * const response = await client.send(GetColorCommand(), device);
+ * const response = await client.send(GetColor(), device);
  * ```
  */
 export function Client<R extends ClientRouter>(options: ClientOptions<R>): ClientInstance<R> {

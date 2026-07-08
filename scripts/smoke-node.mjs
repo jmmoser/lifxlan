@@ -8,7 +8,7 @@
  * Build first: `bun run build`.
  */
 import dgram from 'node:dgram';
-import { Device, Type, GetPowerCommand } from '../dist/index.js';
+import { Device, Type, GetPower } from '../dist/index.js';
 import { encode, decodeHeader } from '../dist/encoding.js';
 import { openLan } from '../dist/node.js';
 
@@ -33,7 +33,7 @@ const fakePort = await new Promise((resolve, reject) => {
 const lan = await openLan({ address: '127.0.0.1' });
 
 const device = Device({ serialNumber: SERIAL, address: '127.0.0.1', port: fakePort });
-const power = await lan.client.send(GetPowerCommand(), device);
+const power = await lan.client.send(GetPower(), device);
 if (power !== 0xFFFF) {
   throw new Error(`round trip returned ${power}, expected 65535`);
 }

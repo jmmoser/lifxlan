@@ -2,7 +2,7 @@ import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
 import { NOOP } from '../utils/index.js';
 
-export function GetServiceCommand() {
+export function GetService() {
   return {
     type: Type.GetService,
     decode: Encoding.decodeStateService,
@@ -10,7 +10,7 @@ export function GetServiceCommand() {
   };
 }
 
-export function GetHostFirmwareCommand() {
+export function GetHostFirmware() {
   return {
     type: Type.GetHostFirmware,
     decode: Encoding.decodeStateHostFirmware,
@@ -18,7 +18,7 @@ export function GetHostFirmwareCommand() {
   };
 }
 
-export function GetWifiInfoCommand() {
+export function GetWifiInfo() {
   return {
     type: Type.GetWifiInfo,
     decode: Encoding.decodeStateWifiInfo,
@@ -26,7 +26,7 @@ export function GetWifiInfoCommand() {
   };
 }
 
-export function GetWifiFirmwareCommand() {
+export function GetWifiFirmware() {
   return {
     type: Type.GetWifiFirmware,
     decode: Encoding.decodeStateWifiFirmware,
@@ -34,7 +34,7 @@ export function GetWifiFirmwareCommand() {
   };
 }
 
-export function GetPowerCommand() {
+export function GetPower() {
   return {
     type: Type.GetPower,
     decode: Encoding.decodeStatePower,
@@ -42,7 +42,7 @@ export function GetPowerCommand() {
   };
 }
 
-export function SetPowerCommand(power: number | boolean) {
+export function SetPower(power: number | boolean) {
   return {
     type: Type.SetPower,
     payload: Encoding.encodeSetPower(power),
@@ -51,7 +51,7 @@ export function SetPowerCommand(power: number | boolean) {
   };
 }
 
-export function GetLabelCommand() {
+export function GetLabel() {
   return {
     type: Type.GetLabel,
     decode: Encoding.decodeStateLabel,
@@ -59,7 +59,7 @@ export function GetLabelCommand() {
   };
 }
 
-export function SetLabelCommand(label: string) {
+export function SetLabel(label: string) {
   return {
     type: Type.SetLabel,
     payload: Encoding.encodeString(label, 32),
@@ -68,7 +68,7 @@ export function SetLabelCommand(label: string) {
   };
 }
 
-export function GetVersionCommand() {
+export function GetVersion() {
   return {
     type: Type.GetVersion,
     decode: Encoding.decodeStateVersion,
@@ -76,7 +76,7 @@ export function GetVersionCommand() {
   };
 }
 
-export function GetInfoCommand() {
+export function GetInfo() {
   return {
     type: Type.GetInfo,
     decode: Encoding.decodeStateInfo,
@@ -84,7 +84,7 @@ export function GetInfoCommand() {
   };
 }
 
-export function SetRebootCommand() {
+export function SetReboot() {
   return {
     type: Type.SetReboot,
     decode: NOOP,
@@ -92,7 +92,7 @@ export function SetRebootCommand() {
   };
 }
 
-export function GetLocationCommand() {
+export function GetLocation() {
   return {
     type: Type.GetLocation,
     decode: Encoding.decodeStateLocation,
@@ -100,7 +100,7 @@ export function GetLocationCommand() {
   };
 }
 
-export function SetLocationCommand(location: Uint8Array | string, label: string, updatedAt: Date) {
+export function SetLocation(location: Uint8Array | string, label: string, updatedAt: Date) {
   return {
     type: Type.SetLocation,
     payload: Encoding.encodeSetLocation(location, label, updatedAt),
@@ -109,7 +109,7 @@ export function SetLocationCommand(location: Uint8Array | string, label: string,
   };
 }
 
-export function GetGroupCommand() {
+export function GetGroup() {
   return {
     type: Type.GetGroup,
     decode: Encoding.decodeStateGroup,
@@ -117,7 +117,7 @@ export function GetGroupCommand() {
   };
 }
 
-export function SetGroupCommand(group: Uint8Array | string, label: string, updatedAt: Date) {
+export function SetGroup(group: Uint8Array | string, label: string, updatedAt: Date) {
   return {
     type: Type.SetGroup,
     payload: Encoding.encodeSetGroup(group, label, updatedAt),
@@ -126,7 +126,7 @@ export function SetGroupCommand(group: Uint8Array | string, label: string, updat
   };
 }
 
-export function EchoRequestCommand(echoing: Uint8Array) {
+export function EchoRequest(echoing: Uint8Array) {
   return {
     type: Type.EchoRequest,
     payload: Encoding.encodeEchoRequest(echoing),

@@ -4,7 +4,7 @@ import { NOOP } from '../utils/index.js';
 import type { TileEffectType, TileEffectSkyType } from '../constants/index.js';
 import type { Decoder } from './index.js';
 
-export function GetDeviceChainCommand() {
+export function GetDeviceChain() {
   return {
     type: Type.GetDeviceChain,
     decode: Encoding.decodeStateDeviceChain,
@@ -12,7 +12,7 @@ export function GetDeviceChainCommand() {
   };
 }
 
-export function Get64Command(
+export function Get64(
   tileIndex: number,
   length: number,
   x: number,
@@ -67,7 +67,7 @@ export function Get64Command(
   };
 }
 
-export function SetUserPositionCommand(tileIndex: number, userX: number, userY: number) {
+export function SetUserPosition(tileIndex: number, userX: number, userY: number) {
   return {
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
@@ -76,7 +76,7 @@ export function SetUserPositionCommand(tileIndex: number, userX: number, userY: 
   };
 }
 
-export function Set64Command(
+export function Set64(
   tileIndex: number, 
   length: number, 
   x: number, 
@@ -93,7 +93,7 @@ export function Set64Command(
   };
 }
 
-export function GetTileEffectCommand() {
+export function GetTileEffect() {
   return {
     type: Type.GetTileEffect,
     payload: Encoding.encodeGetTileEffect(),
@@ -102,7 +102,7 @@ export function GetTileEffectCommand() {
   };
 }
 
-export function SetTileEffectCommand(
+export function SetTileEffect(
   instanceid: number, 
   effectType: TileEffectType, 
   speed: number, 

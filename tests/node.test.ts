@@ -12,7 +12,7 @@ import { openLan } from '../src/node.js';
 import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader, type Header } from '../src/encoding.js';
-import { GetPowerCommand } from '../src/commands/index.js';
+import { GetPower } from '../src/commands/index.js';
 import { DisposedClientError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 
@@ -70,7 +70,7 @@ describe('openLan', () => {
     const { client, devices, close } = await openLan({ address: '127.0.0.1' });
     try {
       const device = Device({ serialNumber: SERIAL, address: '127.0.0.1', port: fake.port });
-      const power = await client.send(GetPowerCommand(), device);
+      const power = await client.send(GetPower(), device);
       assert.equal(power, 0xffff);
       // The reply flowed through the built-in wiring, so the fake device is
       // now also in the registry.
@@ -130,7 +130,7 @@ describe('openLan', () => {
     const lan = await openLan({ address: '127.0.0.1' });
     try {
       const device = Device({ serialNumber: SERIAL, address: '127.0.0.1', port: silentPort });
-      const pending = lan.client.send(GetPowerCommand(), device, { timeoutMs: 10_000 });
+      const pending = lan.client.send(GetPower(), device, { timeoutMs: 10_000 });
 
       const first = lan.close();
       assert.equal(lan.close(), first); // every call returns the same promise
@@ -161,7 +161,7 @@ describe('openLan', () => {
     try {
       const device = Device({ serialNumber: SERIAL, address: '127.0.0.1', port: silentPort });
       const started = Date.now();
-      await assert.rejects(lan.client.send(GetPowerCommand(), device));
+      await assert.rejects(lan.client.send(GetPower(), device));
       assert.ok(Date.now() - started < 3000, 'timed out via the 50ms override, not the 3s default');
     } finally {
       await lan.close();

@@ -5,7 +5,7 @@ import { Router, type ClientRouter, type MessageHandler } from '../src/router.js
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPowerCommand, GetServiceCommand, GetColorZonesCommand, SetPowerCommand } from '../src/commands/index.js';
+import { GetPower, GetService, GetColorZones, SetPower } from '../src/commands/index.js';
 import { UnhandledCommandError, TimeoutError } from '../src/errors.js';
 
 describe('client', () => {
@@ -47,7 +47,7 @@ describe('client', () => {
       address: '1.2.3.4',
     });
 
-    const res = await client.send(GetPowerCommand(), device);
+    const res = await client.send(GetPower(), device);
 
     assert.equal(res, 0xFFFF);
   });
@@ -87,7 +87,7 @@ describe('client', () => {
 
     const client = Client({ router });
     try {
-      const res = await client.send(GetPowerCommand(), sharedDevice);
+      const res = await client.send(GetPower(), sharedDevice);
       assert.equal(res, 0xABCD);
     } finally {
       client.dispose();
@@ -117,9 +117,9 @@ describe('client', () => {
       }),
     });
 
-    await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only' });
+    await client.send(GetPower(), sharedDevice, { responseMode: 'ack-only' });
 
-    await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only', signal: new AbortController().signal });
+    await client.send(GetPower(), sharedDevice, { responseMode: 'ack-only', signal: new AbortController().signal });
   });
 
   test('Set command default (ack-only) resolves undefined', async () => {
@@ -147,7 +147,7 @@ describe('client', () => {
     });
 
     // The static type is Promise<void>; assert the runtime agrees (no payload).
-    const result = await client.send(SetPowerCommand(true), sharedDevice);
+    const result = await client.send(SetPower(true), sharedDevice);
     assert.equal(result, undefined);
 
     client.dispose();
@@ -178,7 +178,7 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { responseMode: 'ack-only' }), (error) => {
+    await assert.rejects(() => client.send(GetPower(), sharedDevice, { responseMode: 'ack-only' }), (error) => {
       return error instanceof UnhandledCommandError && error.commandType === Type.StatePower;
     });
   });
@@ -191,7 +191,7 @@ describe('client', () => {
       }),
     });
 
-    client.broadcast(GetServiceCommand());
+    client.broadcast(GetService());
   });
 
   test('unicast', () => {
@@ -202,7 +202,7 @@ describe('client', () => {
       }),
     });
 
-    client.unicast(GetServiceCommand(), sharedDevice);
+    client.unicast(GetService(), sharedDevice);
   });
 
   test('abort send', async () => {
@@ -216,7 +216,7 @@ describe('client', () => {
     const signal = AbortSignal.timeout(0);
 
     // Rejects with the signal's reason (a DOMException named TimeoutError here).
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
+    await assert.rejects(() => client.send(GetPower(), sharedDevice, { signal }), (error) => {
       return error instanceof DOMException && error.name === 'TimeoutError';
     });
   });
@@ -230,7 +230,7 @@ describe('client', () => {
     });
 
     const controller = new AbortController();
-    const promise = client.send(GetPowerCommand(), sharedDevice, { signal: controller.signal });
+    const promise = client.send(GetPower(), sharedDevice, { signal: controller.signal });
 
     const reason = new Error('user cancelled');
     controller.abort(reason);
@@ -250,7 +250,7 @@ describe('client', () => {
     const reason = new Error('already cancelled');
     const signal = AbortSignal.abort(reason);
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice, { signal }), (error) => {
+    await assert.rejects(() => client.send(GetPower(), sharedDevice, { signal }), (error) => {
       return error === reason;
     });
   });
@@ -284,11 +284,11 @@ describe('client', () => {
     });
 
     await assert.rejects(
-      () => client.send(GetPowerCommand(), sharedDevice, { signal: AbortSignal.abort() }),
+      () => client.send(GetPower(), sharedDevice, { signal: AbortSignal.abort() }),
     );
     assert.equal(sendCount, 0); // nothing was transmitted for the aborted call
 
-    await client.send(GetPowerCommand(), sharedDevice);
+    await client.send(GetPower(), sharedDevice);
     assert.equal(sendCount, 1);
 
     client.dispose();
@@ -319,7 +319,7 @@ describe('client', () => {
     });
 
     const controller = new AbortController();
-    const result = await client.send(GetPowerCommand(), sharedDevice, { signal: controller.signal });
+    const result = await client.send(GetPower(), sharedDevice, { signal: controller.signal });
     assert.equal(result, 65535);
 
     // The settled exchange already removed its abort listener; this must not
@@ -359,7 +359,7 @@ describe('client', () => {
     });
 
     await assert.rejects(
-      () => client.send(GetColorZonesCommand(0, 1), sharedDevice, { timeoutMs: 10 }),
+      () => client.send(GetColorZones(0, 1), sharedDevice, { timeoutMs: 10 }),
       (error) => error instanceof TimeoutError,
     );
 
@@ -377,7 +377,7 @@ describe('client', () => {
     // The signal never aborts; the timeout must still settle the promise
     // instead of hanging forever on the lost response.
     await assert.rejects(
-      () => client.send(GetPowerCommand(), sharedDevice, { signal: new AbortController().signal }),
+      () => client.send(GetPower(), sharedDevice, { signal: new AbortController().signal }),
       (error) => error instanceof TimeoutError,
     );
   });
@@ -391,7 +391,7 @@ describe('client', () => {
     });
 
     await assert.rejects(
-      () => client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 1 }),
+      () => client.send(GetPower(), sharedDevice, { timeoutMs: 1 }),
       (error) => error instanceof TimeoutError && error.timeoutMs === 1,
     );
   });
@@ -405,7 +405,7 @@ describe('client', () => {
     });
 
     const controller = new AbortController();
-    const promise = client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 0, signal: controller.signal });
+    const promise = client.send(GetPower(), sharedDevice, { timeoutMs: 0, signal: controller.signal });
 
     // Give the (overridden) 1ms default timeout a chance to fire first; the
     // abort reason below proves it did not.
@@ -424,7 +424,7 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice), (error) => {
+    await assert.rejects(() => client.send(GetPower(), sharedDevice), (error) => {
       return Error.isError(error) && error.name === 'TimeoutError';
     });
   });
@@ -464,7 +464,7 @@ describe('client', () => {
       }),
     });
 
-    await assert.rejects(() => client.send(GetPowerCommand(), sharedDevice));
+    await assert.rejects(() => client.send(GetPower(), sharedDevice));
   });
 
   test('send on a disposed client rejects instead of throwing', async () => {
@@ -475,7 +475,7 @@ describe('client', () => {
 
     // Must not throw synchronously: the failure has to surface through the
     // returned promise so Promise.all fan-outs observe it uniformly.
-    const promise = client.send(GetPowerCommand(), sharedDevice);
+    const promise = client.send(GetPower(), sharedDevice);
     await assert.rejects(promise, (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError');
   });
 
@@ -489,12 +489,12 @@ describe('client', () => {
       }),
     });
 
-    const promise = client.send(GetPowerCommand(), sharedDevice);
+    const promise = client.send(GetPower(), sharedDevice);
     await assert.rejects(promise, /socket closed/);
 
     // The failed exchange must release its sequence/handler immediately
     // (not wait for the timeout), so a retry can reuse the slot.
-    const retry = client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 1 });
+    const retry = client.send(GetPower(), sharedDevice, { timeoutMs: 1 });
     await assert.rejects(retry, /socket closed/);
   });
 
@@ -511,7 +511,7 @@ describe('client', () => {
 
     // The failed exchange must not leave per-device state behind; a normal
     // send afterwards still works.
-    await assert.rejects(client.send(GetPowerCommand(), sharedDevice, { timeoutMs: 1 }), TimeoutError);
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 1 }), TimeoutError);
   });
 
   test('send rejects response modes on commands without a decoder', async () => {
@@ -566,12 +566,12 @@ describe('client', () => {
     });
 
     // Request with sequence 0 never gets a response and never times out.
-    const stuck = client.send(GetPowerCommand(), sharedDevice, { signal: new AbortController().signal });
+    const stuck = client.send(GetPower(), sharedDevice, { signal: new AbortController().signal });
 
     // Drive the counter through the entire sequence space. Each send must
     // skip the still-pending sequence 0 instead of conflicting with it.
     for (let i = 0; i < 300; i++) {
-      await client.send(GetPowerCommand(), sharedDevice);
+      await client.send(GetPower(), sharedDevice);
     }
 
     assert.equal(observed[0], 0);
@@ -589,7 +589,7 @@ describe('client', () => {
       }),
     });
 
-    const pending = client.send(GetPowerCommand(), sharedDevice);
+    const pending = client.send(GetPower(), sharedDevice);
     client.dispose();
 
     await assert.rejects(pending, (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError');
@@ -612,11 +612,11 @@ describe('client', () => {
     });
 
     for (let i = 0; i < 255; i++) {
-      client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal });
+      client.send(GetPower(), device, { responseMode: 'ack-only', signal: new AbortController().signal });
     }
 
     await assert.rejects(
-      client.send(GetPowerCommand(), device, { responseMode: 'ack-only', signal: new AbortController().signal }),
+      client.send(GetPower(), device, { responseMode: 'ack-only', signal: new AbortController().signal }),
       (error: unknown) => Error.isError(error) && error.name === 'SequenceExhaustionError',
     );
   });
@@ -638,11 +638,11 @@ describe('client', () => {
     });
 
     for (let i = 0; i < 255; i++) {
-      client.send(GetPowerCommand(), device, { signal: new AbortController().signal });
+      client.send(GetPower(), device, { signal: new AbortController().signal });
     }
 
     await assert.rejects(
-      client.send(GetPowerCommand(), device, { signal: new AbortController().signal }),
+      client.send(GetPower(), device, { signal: new AbortController().signal }),
       (error: unknown) => Error.isError(error) && error.name === 'SequenceExhaustionError',
     );
   });
@@ -721,7 +721,7 @@ describe('client', () => {
     });
 
     // Request zones 0-1, should receive 2 StateZone responses
-    const result = await client.send(GetColorZonesCommand(0, 1), device);
+    const result = await client.send(GetColorZones(0, 1), device);
     
     // TODO: is it possible to get more than 1 response?
     assert.equal(Array.isArray(result), true);
@@ -774,7 +774,7 @@ describe('client', () => {
     const deviceB = Device({ serialNumber: 'abcdef123402', port: 1234, address: '1.2.3.5' });
 
     // The same command object drives both exchanges.
-    const command = GetColorZonesCommand(0, 1);
+    const command = GetColorZones(0, 1);
     const [resultA, resultB] = await Promise.all([
       client.send(command, deviceA),
       client.send(command, deviceB),
@@ -827,7 +827,7 @@ describe('client', () => {
       address: '1.2.3.4',
     });
     await assert.rejects(
-      client.send(GetServiceCommand(), device),
+      client.send(GetService(), device),
       (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError',
     );
   });
@@ -848,23 +848,23 @@ describe('client', () => {
 
     // The fire-and-forget (non-promise) operations throw synchronously...
     assert.throws(
-      () => client.broadcast(GetServiceCommand()),
+      () => client.broadcast(GetService()),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
 
     assert.throws(
-      () => client.unicast(GetServiceCommand(), device),
+      () => client.unicast(GetService(), device),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
 
     // ...while send() always reports failure through its promise.
     await assert.rejects(
-      client.send(GetServiceCommand(), device, { responseMode: 'ack-only' }),
+      client.send(GetService(), device, { responseMode: 'ack-only' }),
       (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError',
     );
 
     await assert.rejects(
-      client.send(GetServiceCommand(), device),
+      client.send(GetService(), device),
       (error: unknown) => Error.isError(error) && error.name === 'DisposedClientError',
     );
   });
@@ -887,7 +887,7 @@ describe('client', () => {
     });
 
     // Start a request but don't respond
-    const promise = client.send(GetServiceCommand(), device);
+    const promise = client.send(GetService(), device);
     
     // Verify the request was sent
     assert.ok(sendCalled);
@@ -922,7 +922,7 @@ describe('client', () => {
     });
 
     const controller = new AbortController();
-    const promise = client.send(GetServiceCommand(), device, { signal: controller.signal });
+    const promise = client.send(GetService(), device, { signal: controller.signal });
     
     // Immediately abort
     controller.abort();
@@ -957,7 +957,7 @@ describe('client', () => {
 
     const controller = new AbortController();
     const customError = new Error('Custom abort reason');
-    const promise = client.send(GetServiceCommand(), device, { signal: controller.signal });
+    const promise = client.send(GetService(), device, { signal: controller.signal });
     
     // Abort with custom reason
     controller.abort(customError);
@@ -1015,7 +1015,7 @@ describe('client', () => {
       }),
     });
 
-    const result = await client.send(GetPowerCommand(), sharedDevice, { responseMode: 'both' });
+    const result = await client.send(GetPower(), sharedDevice, { responseMode: 'both' });
     assert.equal(result, 0xFFFF);
     
     client.dispose();
@@ -1051,7 +1051,7 @@ describe('client', () => {
     const commandWithoutDefault = {
       type: Type.GetPower,
       payload: new Uint8Array(),
-      decode: GetPowerCommand().decode,
+      decode: GetPower().decode,
     };
 
     const result = await client.send(commandWithoutDefault, sharedDevice, { responseMode: 'auto' });
@@ -1092,7 +1092,7 @@ describe('client', () => {
     // Send 256 messages to observe increment and wrap (255 is reserved, so
     // sequences run 0..254 then wrap back to 0).
     for (let i = 0; i < 256; i++) {
-      client.unicast(GetServiceCommand(), device);
+      client.unicast(GetService(), device);
     }
 
     assert.equal(sequences[0], 0);
@@ -1123,9 +1123,9 @@ describe('client', () => {
       address: '1.2.3.4',
     });
 
-    a.unicast(GetServiceCommand(), device);
-    a.unicast(GetServiceCommand(), device);
-    b.unicast(GetServiceCommand(), device);
+    a.unicast(GetService(), device);
+    a.unicast(GetService(), device);
+    b.unicast(GetService(), device);
 
     // Each client owns its own sequence space; b's counter is not advanced
     // by a's sends even though they target the same device.
@@ -1193,7 +1193,7 @@ describe('client', () => {
     });
 
     // Start a request to create a response handler
-    client.send(GetServiceCommand(), device).catch(() => {
+    client.send(GetService(), device).catch(() => {
       // Ignore the rejection - we're testing disposal cleanup
     });
 

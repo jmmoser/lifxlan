@@ -8,7 +8,7 @@
  */
 
 import { Client } from './client.js';
-import { GetServiceCommand } from './commands/device.js';
+import { GetService } from './commands/device.js';
 
 import type { ClientRouter } from './router.js';
 import type { Device, DevicesInstance } from './devices.js';
@@ -178,7 +178,7 @@ export function discover(
     }
 
     try {
-      client.broadcast(GetServiceCommand());
+      client.broadcast(GetService());
     } catch (err) {
       finish();
       throw err;
@@ -195,7 +195,7 @@ export function discover(
     const scheduleBroadcast = () => {
       timer = setTimeout(() => {
         try {
-          client.broadcast(GetServiceCommand());
+          client.broadcast(GetService());
         } catch {
           // The transport refused the packet (socket closed, router onSend
           // threw). Inside a timer callback the throw would otherwise be an

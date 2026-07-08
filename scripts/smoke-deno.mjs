@@ -8,7 +8,7 @@
  * Build first: `bun run build`. Run:
  *   deno run --allow-net=127.0.0.1 --unstable-net scripts/smoke-deno.mjs
  */
-import { Device, Type, GetPowerCommand } from '../dist/index.js';
+import { Device, Type, GetPower } from '../dist/index.js';
 import { encode, decodeHeader } from '../dist/encoding.js';
 import { openLan } from '../dist/deno.js';
 
@@ -34,7 +34,7 @@ const answering = (async () => {
 const lan = await openLan({ address: '127.0.0.1' });
 
 const device = Device({ serialNumber: SERIAL, address: '127.0.0.1', port: fake.addr.port });
-const power = await lan.client.send(GetPowerCommand(), device);
+const power = await lan.client.send(GetPower(), device);
 if (power !== 0xFFFF) {
   throw new Error(`round trip returned ${power}, expected 65535`);
 }

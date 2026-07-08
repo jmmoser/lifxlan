@@ -99,14 +99,14 @@ export interface LanInstance extends AsyncDisposable {
  *
  * @example
  * ```javascript
- * import { SetPowerCommand } from 'lifxlan';
+ * import { SetPower } from 'lifxlan';
  * import { openLan } from 'lifxlan/node';
  * import { discover } from 'lifxlan/discovery';
  *
  * const { client, devices, router, close } = await openLan();
  * using discovery = discover(router, devices);
  * const device = await devices.get('d07123456789');
- * await client.send(SetPowerCommand(true), device);
+ * await client.send(SetPower(true), device);
  * await close();
  * ```
  */

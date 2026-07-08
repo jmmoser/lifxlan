@@ -54,58 +54,58 @@ export {
 /** Commands */
 export type { Command, Decoder } from './commands/index.js';
 export {
-  GetServiceCommand,
-  GetHostFirmwareCommand,
-  GetWifiInfoCommand,
-  GetWifiFirmwareCommand,
-  GetPowerCommand,
-  SetPowerCommand,
-  GetLabelCommand,
-  SetLabelCommand,
-  GetVersionCommand,
-  GetInfoCommand,
-  SetRebootCommand,
-  GetLocationCommand,
-  SetLocationCommand,
-  GetGroupCommand,
-  SetGroupCommand,
-  EchoRequestCommand,
+  GetService,
+  GetHostFirmware,
+  GetWifiInfo,
+  GetWifiFirmware,
+  GetPower,
+  SetPower,
+  GetLabel,
+  SetLabel,
+  GetVersion,
+  GetInfo,
+  SetReboot,
+  GetLocation,
+  SetLocation,
+  GetGroup,
+  SetGroup,
+  EchoRequest,
 } from './commands/device.js';
 export {
-  GetColorCommand,
-  SetColorCommand,
-  SetWaveformCommand,
-  GetLightPowerCommand,
-  SetLightPowerCommand,
-  SetWaveformOptionalCommand,
-  GetInfraredCommand,
-  SetInfraredCommand,
-  GetHevCycleCommand,
-  SetHevCycleCommand,
-  GetHevCycleConfigurationCommand,
-  SetHevCycleConfigurationCommand,
-  GetLastHevCycleResultCommand,
+  GetColor,
+  SetColor,
+  SetWaveform,
+  GetLightPower,
+  SetLightPower,
+  SetWaveformOptional,
+  GetInfrared,
+  SetInfrared,
+  GetHevCycle,
+  SetHevCycle,
+  GetHevCycleConfiguration,
+  SetHevCycleConfiguration,
+  GetLastHevCycleResult,
 } from './commands/light.js';
 export {
-  GetColorZonesCommand,
-  SetColorZonesCommand,
-  GetMultiZoneEffectCommand,
-  SetMultiZoneEffectCommand,
-  GetExtendedColorZonesCommand,
-  SetExtendedColorZonesCommand,
+  GetColorZones,
+  SetColorZones,
+  GetMultiZoneEffect,
+  SetMultiZoneEffect,
+  GetExtendedColorZones,
+  SetExtendedColorZones,
 } from './commands/multizone.js';
 export type { ColorZoneResponse } from './commands/multizone.js';
 export {
-  GetDeviceChainCommand,
-  Get64Command,
-  SetUserPositionCommand,
-  Set64Command,
-  GetTileEffectCommand,
-  SetTileEffectCommand,
+  GetDeviceChain,
+  Get64,
+  SetUserPosition,
+  Set64,
+  GetTileEffect,
+  SetTileEffect,
 } from './commands/tile.js';
-export { GetRPowerCommand, SetRPowerCommand } from './commands/relay.js';
-export { GetButtonCommand, SetButtonCommand } from './commands/button.js';
-export { SensorGetAmbientLightCommand } from './commands/sensor.js';
+export { GetRPower, SetRPower } from './commands/relay.js';
+export { GetButton, SetButton } from './commands/button.js';
+export { SensorGetAmbientLight } from './commands/sensor.js';
 
 /**
  * Decoded protocol message types. The encode/decode functions that produce
@@ -124,7 +124,6 @@ export type {
   StateInfo,
   StateLocation,
   StateGroup,
-  SetColor,
   LightState,
   StateHevCycle,
   StateHevCycleConfiguration,

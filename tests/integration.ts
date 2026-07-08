@@ -5,21 +5,21 @@ import {
   Client, 
   Router, 
   Devices, 
-  GetServiceCommand,
-  GetPowerCommand,
-  SetPowerCommand,
-  GetLabelCommand,
-  GetColorCommand,
-  SetColorCommand,
-  GetHostFirmwareCommand,
-  GetWifiInfoCommand,
-  GetLightPowerCommand,
-  GetVersionCommand,
-  GetDeviceChainCommand,
-  Get64Command,
-  Set64Command,
-  GetTileEffectCommand,
-  SetTileEffectCommand,
+  GetService,
+  GetPower,
+  SetPower,
+  GetLabel,
+  GetColor,
+  SetColor,
+  GetHostFirmware,
+  GetWifiInfo,
+  GetLightPower,
+  GetVersion,
+  GetDeviceChain,
+  Get64,
+  Set64,
+  GetTileEffect,
+  SetTileEffect,
   TileEffectType,
   TileEffectSkyType,
   StateTileEffect,
@@ -138,7 +138,7 @@ describe('LIFX Integration Tests', () => {
           if (selectedDevice && !selectedTileDevice) {
             // Only check if this might be a tile device
             try {
-              const versionInfo = await client.send(GetVersionCommand(), device);
+              const versionInfo = await client.send(GetVersion(), device);
               const deviceType = identifyDeviceType(versionInfo.product);
               if (deviceType !== 'tile') return;
             } catch {
@@ -148,10 +148,10 @@ describe('LIFX Integration Tests', () => {
           
           try {
             // Get WiFi info to check signal strength
-            const wifiInfo = await client.send(GetWifiInfoCommand(), device);
+            const wifiInfo = await client.send(GetWifiInfo(), device);
             
             // Get device version to identify product type
-            const versionInfo = await client.send(GetVersionCommand(), device);
+            const versionInfo = await client.send(GetVersion(), device);
             
             // Check for good RSSI (better than -70 dBm is considered good)
             const hasGoodSignal = wifiInfo.signal > -70;
@@ -219,11 +219,11 @@ describe('LIFX Integration Tests', () => {
       console.log('🚀 Starting LIFX device discovery...');
 
       // Start device discovery
-      client.broadcast(GetServiceCommand());
+      client.broadcast(GetService());
       
       // Continue scanning during discovery period
       const scanInterval = setInterval(() => {
-        client.broadcast(GetServiceCommand());
+        client.broadcast(GetService());
       }, SCAN_INTERVAL);
 
       try {
@@ -284,9 +284,9 @@ describe('LIFX Integration Tests', () => {
       console.log('🔧 Test 1: Getting device information...');
       
       const [label, hostFirmware, wifiInfo] = await Promise.all([
-        client.send(GetLabelCommand(), selectedDevice!),
-        client.send(GetHostFirmwareCommand(), selectedDevice!),
-        client.send(GetWifiInfoCommand(), selectedDevice!)
+        client.send(GetLabel(), selectedDevice!),
+        client.send(GetHostFirmware(), selectedDevice!),
+        client.send(GetWifiInfo(), selectedDevice!)
       ]);
 
       assert.ok(label, 'Should receive device label');
@@ -300,27 +300,27 @@ describe('LIFX Integration Tests', () => {
       // Test 2: Power state management
       console.log('⚡ Test 2: Testing power state management...');
       
-      const initialPowerState = await client.send(GetPowerCommand(), selectedDevice!);
+      const initialPowerState = await client.send(GetPower(), selectedDevice!);
       const initialPowerOn = initialPowerState > 0;
       console.log(`  Initial power state: ${initialPowerOn ? 'ON' : 'OFF'} (${initialPowerState})`);
       
       // Toggle power state
       const newPowerState = !initialPowerOn;
-      await client.send(SetPowerCommand(newPowerState), selectedDevice!);
+      await client.send(SetPower(newPowerState), selectedDevice!);
       
       // Wait a bit for the change to take effect
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const verifyPowerState = await client.send(GetPowerCommand(), selectedDevice!);
+      const verifyPowerState = await client.send(GetPower(), selectedDevice!);
       const verifyPowerOn = verifyPowerState > 0;
       assert.equal(verifyPowerOn, newPowerState, 'Power state should be updated correctly');
       console.log(`  Power state changed to: ${verifyPowerOn ? 'ON' : 'OFF'} (${verifyPowerState})`);
 
       // Restore original power state
-      await client.send(SetPowerCommand(initialPowerOn), selectedDevice!);
+      await client.send(SetPower(initialPowerOn), selectedDevice!);
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const restoredPowerState = await client.send(GetPowerCommand(), selectedDevice!);
+      const restoredPowerState = await client.send(GetPower(), selectedDevice!);
       const restoredPowerOn = restoredPowerState > 0;
       assert.equal(restoredPowerOn, initialPowerOn, 'Power state should be restored to original value');
       console.log(`  Power state restored to: ${restoredPowerOn ? 'ON' : 'OFF'} (${restoredPowerState})`);
@@ -333,10 +333,10 @@ describe('LIFX Integration Tests', () => {
       let originalColorState: LightState | null = null;
       
       try {
-        originalLightPowerState = await client.send(GetLightPowerCommand(), selectedDevice!);
+        originalLightPowerState = await client.send(GetLightPower(), selectedDevice!);
         console.log(`  Light power level: ${originalLightPowerState}`);
         
-        originalColorState = await client.send(GetColorCommand(), selectedDevice!);
+        originalColorState = await client.send(GetColor(), selectedDevice!);
         console.log(`  Current color - H:${originalColorState.hue} S:${originalColorState.saturation} B:${originalColorState.brightness} K:${originalColorState.kelvin}`);
         
         // Test color change (only if device is on)
@@ -350,12 +350,12 @@ describe('LIFX Integration Tests', () => {
           const testKelvin = 3500;       // Neutral white
           const duration = 1000;         // 1 second transition
           
-          await client.send(SetColorCommand(testHue, testSaturation, testBrightness, testKelvin, duration), selectedDevice!);
+          await client.send(SetColor(testHue, testSaturation, testBrightness, testKelvin, duration), selectedDevice!);
           
           // Wait for transition to complete
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          const newColorState = await client.send(GetColorCommand(), selectedDevice!);
+          const newColorState = await client.send(GetColor(), selectedDevice!);
           console.log(`  New color - H:${newColorState.hue} S:${newColorState.saturation} B:${newColorState.brightness} K:${newColorState.kelvin}`);
           
           // Verify color changed (with some tolerance for timing)
@@ -379,7 +379,7 @@ describe('LIFX Integration Tests', () => {
       
       for (let i = 0; i < numTests; i++) {
         const start = Date.now();
-        await client.send(GetPowerCommand(), selectedDevice!);
+        await client.send(GetPower(), selectedDevice!);
         const elapsed = Date.now() - start;
         timingTests.push(elapsed);
       }
@@ -398,9 +398,9 @@ describe('LIFX Integration Tests', () => {
       console.log('🔄 Test 5: Testing concurrent operations...');
 
       const concurrentResults = await Promise.all([
-        client.send(GetPowerCommand(), selectedDevice!),
-        client.send(GetLabelCommand(), selectedDevice!),
-        client.send(GetHostFirmwareCommand(), selectedDevice!)
+        client.send(GetPower(), selectedDevice!),
+        client.send(GetLabel(), selectedDevice!),
+        client.send(GetHostFirmware(), selectedDevice!)
       ]);
       assert.equal(concurrentResults.length, 3, 'All concurrent operations should complete');
       assert.ok(concurrentResults.every(result => result != null), 'All concurrent operations should return valid results');
@@ -416,7 +416,7 @@ describe('LIFX Integration Tests', () => {
           console.log('  Restoring original color and brightness...');
           const duration = 1000; // 1 second transition
           
-          await client.send(SetColorCommand(
+          await client.send(SetColor(
             originalColorState.hue, 
             originalColorState.saturation, 
             originalColorState.brightness, 
@@ -428,7 +428,7 @@ describe('LIFX Integration Tests', () => {
           await new Promise(resolve => setTimeout(resolve, 300));
           
           // Verify restoration
-          const restoredColorState = await client.send(GetColorCommand(), selectedDevice!);
+          const restoredColorState = await client.send(GetColor(), selectedDevice!);
           const colorRestored = 
             Math.abs(restoredColorState.hue - originalColorState.hue) < 1000 &&
             Math.abs(restoredColorState.brightness - originalColorState.brightness) < 1000;
@@ -456,18 +456,18 @@ describe('LIFX Integration Tests', () => {
         try {
           // Get tile device chain information
           console.log('  Getting tile device chain...');
-          const deviceChain = await client.send(GetDeviceChainCommand(), selectedTileDevice!);
+          const deviceChain = await client.send(GetDeviceChain(), selectedTileDevice!);
           console.log(`  Device chain: ${deviceChain.tile_devices_count} tiles`);
 
           // Get current tile state for restoration
           console.log('  Capturing original tile state...');
-          const tileStates = await client.send(Get64Command(0, deviceChain.tile_devices_count, 0, 0, 8), selectedTileDevice!);
+          const tileStates = await client.send(Get64(0, deviceChain.tile_devices_count, 0, 0, 8), selectedTileDevice!);
           originalTileStates = tileStates;
           console.log(`  Captured state for ${tileStates.length} tiles`);
           
           // Get current tile effect
           console.log('  Getting current tile effect...');
-          originalTileEffect = await client.send(GetTileEffectCommand(), selectedTileDevice!);
+          originalTileEffect = await client.send(GetTileEffect(), selectedTileDevice!);
           assert.ok(originalTileEffect, 'Should receive tile effect state');
           console.log(`  Original effect type: ${originalTileEffect.type}`);
           
@@ -486,7 +486,7 @@ describe('LIFX Integration Tests', () => {
             fullColors.push(testColors[i % testColors.length]!);
           }
           
-          await client.send(Set64Command(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, fullColors), selectedTileDevice!);
+          await client.send(Set64(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, fullColors), selectedTileDevice!);
           console.log('  Applied test colors to tiles');
           
           // Wait for color change
@@ -499,7 +499,7 @@ describe('LIFX Integration Tests', () => {
             { hue: 32768, saturation: 65535, brightness: 65535, kelvin: 3500 }, // Cyan
           ];
           
-          await client.send(SetTileEffectCommand(
+          await client.send(SetTileEffect(
             1, // instanceid
             TileEffectType.MORPH, // effect type
             50, // speed (0-100)
@@ -518,7 +518,7 @@ describe('LIFX Integration Tests', () => {
           console.log('  Restoring original tile state...');
           
           // First, turn off any effects
-          await client.send(SetTileEffectCommand(
+          await client.send(SetTileEffect(
             originalTileEffect.instanceid || 0,
             TileEffectType.OFF,
             0,
@@ -536,7 +536,7 @@ describe('LIFX Integration Tests', () => {
           if (originalTileStates && originalTileStates.length > 0) {
             const originalColors = originalTileStates.flatMap((tile: State64) => tile.colors || []);
             if (originalColors.length > 0) {
-              await client.send(Set64Command(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, originalColors), selectedTileDevice!);
+              await client.send(Set64(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, originalColors), selectedTileDevice!);
               console.log('  Restored original tile colors');
               
               // Wait for restoration to complete
@@ -551,7 +551,7 @@ describe('LIFX Integration Tests', () => {
               ? originalTileEffect.skyType 
               : TileEffectSkyType.SUNRISE;
             
-            await client.send(SetTileEffectCommand(
+            await client.send(SetTileEffect(
               originalTileEffect.instanceid || 0,
               effectType,
               originalTileEffect.speed || 50,

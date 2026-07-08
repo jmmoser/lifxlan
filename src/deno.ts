@@ -120,14 +120,14 @@ function toError(err: unknown): Error {
  *
  * @example
  * ```javascript
- * import { SetPowerCommand } from 'npm:lifxlan';
+ * import { SetPower } from 'npm:lifxlan';
  * import { openLan } from 'npm:lifxlan/deno';
  * import { discover } from 'npm:lifxlan/discovery';
  *
  * const { client, devices, router, close } = await openLan();
  * using discovery = discover(router, devices);
  * const device = await devices.get('d07123456789');
- * await client.send(SetPowerCommand(true), device);
+ * await client.send(SetPower(true), device);
  * await close();
  * ```
  */
