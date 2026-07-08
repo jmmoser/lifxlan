@@ -1,6 +1,6 @@
 /**
- * Exercises the `lifxlan/deno` helper's wiring — send path, read loop,
- * registration, close semantics, error routing — against an in-memory fake
+ * Exercises the `lifxlan/deno` helper's wiring - send path, read loop,
+ * registration, close semantics, error routing - against an in-memory fake
  * of the structural `Deno.DatagramConn` slice the module declares. The
  * module resolves `Deno` from the global scope at call time, so installing
  * a fake namespace on globalThis lets the whole helper run under bun:test.

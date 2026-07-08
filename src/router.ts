@@ -31,8 +31,8 @@ const MAX_SOURCE_VALUES = MAX_SOURCE - 2;
 export interface RouterOptions {
   /**
    * The outbound transport: called with the encoded packet for every
-   * `send()`. `serialNumber` is a routing hint — present when the sender
-   * knows the destination device (unicast, not broadcast) — letting a
+   * `send()`. `serialNumber` is a routing hint - present when the sender
+   * knows the destination device (unicast, not broadcast) - letting a
    * transport with per-device paths pick one without decoding the packet.
    * A plain UDP transport can ignore it.
    */
@@ -53,7 +53,7 @@ export interface RouterOptions {
 }
 
 /**
- * The sending half of the router — all a {@link Client} requires, so a
+ * The sending half of the router - all a {@link Client} requires, so a
  * custom router only has to implement these three methods to drive one;
  * {@link RouterInstance.receive} is only needed by the socket wiring.
  *
@@ -97,8 +97,8 @@ export interface RouterInstance extends ClientRouter {
    * Returns `undefined` if the message could not be decoded.
    *
    * Ownership: the buffer passed to `receive()` is consumed, not copied.
-   * Decoded values — `header.target`, `payload`, and the results that
-   * decoders deliver to awaiting `send()` calls — are zero-copy views into
+   * Decoded values - `header.target`, `payload`, and the results that
+   * decoders deliver to awaiting `send()` calls - are zero-copy views into
    * it. A socket layer that reuses its receive buffer must hand `receive()`
    * a copy; otherwise the next datagram silently corrupts previously decoded
    * results. (Node's dgram and Deno's listenDatagram allocate a fresh buffer
@@ -111,8 +111,8 @@ export interface RouterInstance extends ClientRouter {
  * Multiplexes one network transport across many concurrent senders. Each
  * sender registers a handler under a source id and encodes that id into its
  * requests (see {@link ClientRouter}); `receive()` routes each response to
- * the handler whose source it echoes, decoding the header — including the
- * relatively expensive serial number conversion — once per packet.
+ * the handler whose source it echoes, decoding the header - including the
+ * relatively expensive serial number conversion - once per packet.
  */
 export function Router(options: RouterOptions): RouterInstance {
   const handlers = new Map<number, MessageHandler>();

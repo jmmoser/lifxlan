@@ -1,7 +1,7 @@
 /**
  * Deno-only smoke test for the built `lifxlan/deno` helper: a fake device on
  * a loopback UDP socket answers the packets openLan()'s wiring sends, so the
- * whole path — listen, send, read loop, decode, register — runs against
+ * whole path - listen, send, read loop, decode, register - runs against
  * `dist` over a real socket. Nothing is broadcast; every packet is unicast
  * to 127.0.0.1.
  *

@@ -34,4 +34,4 @@ deno run --allow-net --unstable-net examples/deno-discover.ts
 npm install lifxlan
 ```
 
-Copy any example into your project and run it — the imports work as-is.
+Copy any example into your project and run it - the imports work as-is.

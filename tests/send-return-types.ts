@@ -3,7 +3,7 @@
  *
  * These assertions are verified by `npx tsc` (tsconfig `include` covers
  * `tests/**`), NOT by `bun test`. The filename intentionally avoids the
- * `*.test.ts` pattern so the runtime runner skips it — there is nothing here
+ * `*.test.ts` pattern so the runtime runner skips it - there is nothing here
  * to execute, only types to check. A failing assertion is a *compile* error.
  *
  * They guard the contract that the awaited result of send() follows the

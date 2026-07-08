@@ -53,8 +53,8 @@ describe('client', () => {
   });
 
   test('works with a custom router that implements only ClientRouter', async () => {
-    // This router has no receive() pipeline — it synthesizes responses in
-    // send() — proving Client needs only ClientRouter, not RouterInstance.
+    // This router has no receive() pipeline - it synthesizes responses in
+    // send() - proving Client needs only ClientRouter, not RouterInstance.
     const handlers = new Map<number, MessageHandler>();
     const router: ClientRouter = {
       register(handler, source) {

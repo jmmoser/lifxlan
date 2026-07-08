@@ -1,16 +1,16 @@
 /**
- * Batteries-included setup for Deno, exposed as the 'lifxlan/deno' subpath —
+ * Batteries-included setup for Deno, exposed as the 'lifxlan/deno' subpath -
  * the Deno counterpart to 'lifxlan/node'. It packages the wiring from the
- * Deno example — `Deno.listenDatagram`, Router/Devices/Client connected to
+ * Deno example - `Deno.listenDatagram`, Router/Devices/Client connected to
  * it, a background read loop feeding `router.receive()` into
- * `devices.register()` — behind the same `openLan()` call, returning the
+ * `devices.register()` - behind the same `openLan()` call, returning the
  * same shape. Requires `--allow-net` and `--unstable-net`, exactly like the
  * manual wiring it replaces.
  *
  * The library's own toolchain compiles without Deno's type definitions, so
  * this module declares the minimal structural slice of the `Deno` namespace
  * it touches; at runtime those lookups resolve to the real global. Importing
- * it outside Deno throws a ReferenceError — by design, this module is never
+ * it outside Deno throws a ReferenceError - by design, this module is never
  * loaded unless asked for.
  */
 
@@ -45,7 +45,7 @@ export interface OpenLanOptions extends DeviceEventHandlers {
   /**
    * Local UDP port to bind. Defaults to 0 (an ephemeral port picked by the
    * OS), which is what you want unless a firewall rule requires a fixed
-   * port — LIFX devices reply to whatever port the request came from.
+   * port - LIFX devices reply to whatever port the request came from.
    */
   port?: number;
   /**
@@ -66,7 +66,7 @@ export interface OpenLanOptions extends DeviceEventHandlers {
   /**
    * Observes asynchronous send failures and an unexpected end of the read
    * loop. When omitted they are discarded, matching the library's
-   * UDP-is-best-effort semantics — a lost packet already surfaces as
+   * UDP-is-best-effort semantics - a lost packet already surfaces as
    * TimeoutError on acknowledged sends. The interruption `close()` inflicts
    * on the read loop is normal shutdown and is never reported here.
    * Synchronous `Deno.listenDatagram` failures (missing permissions, port in
@@ -82,7 +82,7 @@ export interface LanInstance extends AsyncDisposable {
   readonly client: ClientInstance;
   /**
    * The underlying `Deno.DatagramConn` (typed as the structural slice this
-   * module declares) — the escape hatch for anything the options don't
+   * module declares) - the escape hatch for anything the options don't
    * cover, such as `socket.addr.port` for the bound port. The background
    * read loop already consumes the socket's async iterator; don't iterate it
    * yourself.
@@ -91,10 +91,10 @@ export interface LanInstance extends AsyncDisposable {
   /**
    * Disposes the client (pending sends reject with DisposedClientError
    * instead of dangling until their timeouts) and closes the socket,
-   * resolving once the read loop has ended — the settled promise is the
+   * resolving once the read loop has ended - the settled promise is the
    * guarantee that no further datagram handling (registration, onMessage)
    * will run; awaiting is optional, since teardown starts synchronously.
-   * Idempotent — every call returns the same promise. An `await using`
+   * Idempotent - every call returns the same promise. An `await using`
    * declaration does the same through `Symbol.asyncDispose` at end of
    * scope. A freestanding closure (nothing on this instance relies on
    * `this`), so destructuring it off the instance is safe.
@@ -165,7 +165,7 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
         devices.register(remote.port, remote.hostname, router.receive(message));
       }
     } catch (err) {
-      // socket.close() interrupts the iterator with BadResource — that's
+      // socket.close() interrupts the iterator with BadResource - that's
       // normal shutdown. Anything else ended reception unexpectedly.
       if (!closing && onSocketError) onSocketError(toError(err));
     }

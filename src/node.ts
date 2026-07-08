@@ -1,11 +1,11 @@
 /**
  * Batteries-included setup for Node.js and Bun, exposed as the
  * 'lifxlan/node' subpath so the package root stays runtime-agnostic. It
- * packages the wiring every `node:dgram` program repeats — create a socket,
- * connect Router/Devices/Client to it, bind, enable broadcast — behind one
+ * packages the wiring every `node:dgram` program repeats - create a socket,
+ * connect Router/Devices/Client to it, bind, enable broadcast - behind one
  * async call. The pieces it returns are the ordinary public abstractions, so
  * everything composable about them (discovery, taps, extra clients on the
- * same router) still works; and nothing here is required — any runtime can
+ * same router) still works; and nothing here is required - any runtime can
  * keep wiring its own socket exactly as before.
  *
  * Bun runs this module through its `node:dgram` implementation; the Deno
@@ -27,7 +27,7 @@ export interface OpenLanOptions extends DeviceEventHandlers {
   /**
    * Local UDP port to bind. Defaults to 0 (an ephemeral port picked by the
    * OS), which is what you want unless a firewall rule requires a fixed
-   * port — LIFX devices reply to whatever port the request came from.
+   * port - LIFX devices reply to whatever port the request came from.
    */
   port?: number;
   /**
@@ -51,7 +51,7 @@ export interface OpenLanOptions extends DeviceEventHandlers {
    * Observes socket-level errors: asynchronous send failures (e.g. a
    * transiently unreachable host) and any 'error' the socket emits after
    * binding. When omitted they are discarded, matching the library's
-   * UDP-is-best-effort semantics — a lost packet already surfaces as
+   * UDP-is-best-effort semantics - a lost packet already surfaces as
    * TimeoutError on acknowledged sends, and swallowing the event keeps a
    * routine EHOSTUNREACH from crashing the process (an unobserved dgram
    * 'error' event throws). Bind errors are not routed here; they reject the
@@ -65,7 +65,7 @@ export interface LanInstance extends AsyncDisposable {
   readonly devices: DevicesInstance;
   readonly client: ClientInstance;
   /**
-   * The underlying `node:dgram` socket — the escape hatch for anything the
+   * The underlying `node:dgram` socket - the escape hatch for anything the
    * options don't cover (multicast membership, TTL, `address()` for the
    * bound port). The socket's 'message' handler feeding the router is
    * already attached; adding your own listeners is fine, replacing them is
@@ -75,9 +75,9 @@ export interface LanInstance extends AsyncDisposable {
   /**
    * Disposes the client (pending sends reject with DisposedClientError
    * instead of dangling until their timeouts) and closes the socket,
-   * resolving once the OS has released it — async because dgram teardown
+   * resolving once the OS has released it - async because dgram teardown
    * is; awaiting is optional (teardown starts synchronously), but is what
-   * makes an immediate rebind of the same port race-free. Idempotent —
+   * makes an immediate rebind of the same port race-free. Idempotent -
    * every call returns the same promise. An `await using` declaration does
    * the same through `Symbol.asyncDispose` at end of scope. A freestanding
    * closure (nothing on this instance relies on `this`), so destructuring
@@ -154,7 +154,7 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
   });
 
   // From here on the socket must not crash the process on a stray 'error'
-  // event (dgram throws when the event has no listener) — forward or discard.
+  // event (dgram throws when the event has no listener) - forward or discard.
   socket.on('error', (err) => {
     if (onSocketError) onSocketError(err);
   });
@@ -193,7 +193,7 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
     close,
     // Enables `await using lan = await openLan()`: end of scope closes the
     // socket. Requiring Node >= 22 (where Symbol.asyncDispose exists
-    // natively) is what makes defining this safe — on older runtimes the
+    // natively) is what makes defining this safe - on older runtimes the
     // symbol was undefined and the computed key silently became the string
     // "undefined".
     [Symbol.asyncDispose]: close,

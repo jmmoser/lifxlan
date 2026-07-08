@@ -187,7 +187,7 @@ export interface SendOptions<A extends ResponseMode = ResponseMode> {
   responseMode?: A;
   /**
    * Cancels the exchange when aborted; the promise rejects with the signal's
-   * reason. The signal is additive to the timeout — passing a signal does not
+   * reason. The signal is additive to the timeout - passing a signal does not
    * disable the timeout.
    */
   signal?: AbortSignal;
@@ -202,7 +202,7 @@ export interface SendOptions<A extends ResponseMode = ResponseMode> {
 
 export interface ClientOptions<R extends ClientRouter = ClientRouter> {
   /**
-   * Only the sending half of the router is required — see
+   * Only the sending half of the router is required - see
    * {@link ClientRouter}; the client never calls `receive()`. The concrete
    * type is preserved on {@link ClientInstance.router}.
    */
@@ -228,7 +228,7 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    */
   dispose(): void;
   /**
-   * Fire-and-forget to the whole network. No response is correlated —
+   * Fire-and-forget to the whole network. No response is correlated -
    * responses only reach a router-level `onMessage` tap. Throws
    * synchronously if the transport does.
    */
@@ -289,7 +289,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
    * Allocates the next sequence number that has no pending exchange. A
    * sequence is only unavailable while a send() to the same device is still
    * in flight, so a slow response (or a timeoutMs: 0 call) never collides
-   * with new sends — the counter simply skips over it. Returns undefined
+   * with new sends - the counter simply skips over it. Returns undefined
    * when all 255 sequence numbers are in flight.
    */
   function nextFreeSequence(serialNumber: string, pendingBySequence: Map<number, PendingHandler>): number | undefined {
@@ -378,7 +378,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
     dispose,
     // Enables `using client = Client(...)`: end of scope disposes the client.
     // Requiring Node >= 22 (where Symbol.dispose exists natively) is what
-    // makes defining this safe — on older runtimes the symbol was undefined
+    // makes defining this safe - on older runtimes the symbol was undefined
     // and the computed key silently became the string "undefined".
     [Symbol.dispose]: dispose,
     /**
@@ -424,9 +424,9 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
     /**
      * Send a command to a device with configurable acknowledgment behavior.
      *
-     * Never throws synchronously: every failure — disposed client, aborted
+     * Never throws synchronously: every failure - disposed client, aborted
      * signal, exhausted sequence numbers, a missing decoder, or a throwing
-     * transport — surfaces as a rejected promise, so fan-outs like
+     * transport - surfaces as a rejected promise, so fan-outs like
      * `Promise.all(devices.map(...))` observe all failures uniformly.
      */
     send<T, Default extends ResponseMode = 'response', Override extends ResponseMode = 'auto'>(
@@ -452,8 +452,8 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       }
 
       // Everything below runs inside one guard so that no synchronous throw
-      // — a user-supplied createDecoder/payload getter, encode() on a
-      // malformed device, or anything unforeseen — can escape send() as an
+      // - a user-supplied createDecoder/payload getter, encode() on a
+      // malformed device, or anything unforeseen - can escape send() as an
       // exception instead of a rejection.
       let pendingBySequence: Map<number, PendingHandler> | undefined;
       try {

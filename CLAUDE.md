@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Setup
 
-Run `bun install` before anything else — tests, lint, and typecheck all need it. In Claude Code on the web this happens automatically via the SessionStart hook (`.claude/hooks/session-start.sh`). Bun is the primary toolchain; the test suite runs on `bun:test`.
+Run `bun install` before anything else - tests, lint, and typecheck all need it. In Claude Code on the web this happens automatically via the SessionStart hook (`.claude/hooks/session-start.sh`). Bun is the primary toolchain; the test suite runs on `bun:test`.
 
 ## Development Commands
 
@@ -13,10 +13,10 @@ Run `bun install` before anything else — tests, lint, and typecheck all need i
 - **Type Check**: `npx tsc`
 - **Lint**: `bun run lint` (oxlint)
 - **Build**: `bun run build` (ESM-only minified bundle into `dist/`; CommonJS consumers rely on Node's require(esm) interop)
-- **Docs**: `bun run docs` (typedoc — broken `{@link}` references fail CI)
+- **Docs**: `bun run docs` (typedoc - broken `{@link}` references fail CI)
 - **Benchmarks**: `bun run bench`
 
-Do NOT run `bun run test:integration` — it sends UDP traffic to real LIFX devices on the local network and will hang or fail in a sandbox.
+Do NOT run `bun run test:integration` - it sends UDP traffic to real LIFX devices on the local network and will hang or fail in a sandbox.
 
 ## Check code quality
 
@@ -53,9 +53,9 @@ There is deliberately no group registry: a device's group (UUID + label, set by 
 
 The package root (`src/index.ts`) contains only passive building blocks. Optional pieces live behind subpath exports so unused code costs nothing:
 
-- `lifxlan/node` (`src/node.ts`): batteries-included socket wiring for Node.js/Bun — `openLan()` binds a `node:dgram` socket and returns a Router + Devices + Client connected to it
+- `lifxlan/node` (`src/node.ts`): batteries-included socket wiring for Node.js/Bun - `openLan()` binds a `node:dgram` socket and returns a Router + Devices + Client connected to it
 - `lifxlan/deno` (`src/deno.ts`): the Deno twin of `lifxlan/node`, over `Deno.listenDatagram`; declares its own minimal structural Deno types so the Node toolchain typechecks it (unit-tested in bun via a mocked `Deno` global, runtime-tested by `scripts/smoke-deno.mjs`)
-- `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper — repeats the GetService broadcast on a widening backoff (default 1s, ×4 per broadcast, capped at 1 minute)
+- `lifxlan/discovery` (`src/discovery.ts`): the one timer-driven helper - repeats the GetService broadcast on a widening backoff (default 1s, ×4 per broadcast, capped at 1 minute)
 - `lifxlan/products` (`src/products.ts`): capability lookup from the official LIFX products.json; takes parsed data, never fetches
 - `lifxlan/encoding`: the low-level encoding utilities
 
@@ -67,10 +67,10 @@ Device discovery works by broadcasting `GetService()` and registering responses 
 
 ### Where Things Live
 
-- `tests/` — unit tests (`*.test.ts`) plus `helpers.ts`, type-level checks (`send-return-types.ts`), and the device-requiring `integration.ts`
-- `examples/` — self-contained runnable scripts (see `examples/README.md`); they import `lifxlan` by self-reference, so `bun run build` first
-- `docs/` — hand-written protocol guides (field types, querying, changing device state)
-- `scripts/` — build minification and the Node/Deno smoke tests CI runs against `dist/`
+- `tests/` - unit tests (`*.test.ts`) plus `helpers.ts`, type-level checks (`send-return-types.ts`), and the device-requiring `integration.ts`
+- `examples/` - self-contained runnable scripts (see `examples/README.md`); they import `lifxlan` by self-reference, so `bun run build` first
+- `docs/` - hand-written protocol guides (field types, querying, changing device state)
+- `scripts/` - build minification and the Node/Deno smoke tests CI runs against `dist/`
 
 ## TypeScript Support
 
