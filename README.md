@@ -408,6 +408,16 @@ using discovery = discover(router, devices);
 const device = await devices.get('d07123456789');
 ```
 
+The same shape grabs the *first* device found — no loop, no serial number — by calling the iterator directly:
+
+```javascript
+using discovery = discover(router, devices, { timeoutMs: 3000 });
+const { value: device, done } = await discovery.next();
+if (done) throw new Error('no devices found within 3s');
+```
+
+The `done` check is only needed because of the `timeoutMs` budget (or a `signal`): iteration ending before yielding anything is the one way `value` comes back `undefined`. Without a budget, the promise simply stays pending until the first device registers.
+
 Writing `using` needs TypeScript ≥ 5.2 with `Disposable` in scope (a `lib` that includes `esnext.disposable`, or `@types/node`, which Node ≥ 22 projects already have); otherwise call `dispose()` directly. With no `timeoutMs` it runs until disposed, broadcasting at the backed-off `maxIntervalMs` cadence and keeping the registry fresh as DHCP addresses change. Internally it uses the public `devices.subscribe({ onAdded, onChanged, onRemoved })`, which observes registry events and returns an unsubscribe function.
 
 ### Manually Controlling Discovery
