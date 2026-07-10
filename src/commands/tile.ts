@@ -103,18 +103,19 @@ export function GetTileEffect() {
 }
 
 export function SetTileEffect(
-  instanceid: number, 
-  effectType: TileEffectType, 
-  speed: number, 
-  duration: bigint, 
-  skyType: TileEffectSkyType, 
-  cloudSaturationMin: number, 
-  paletteCount: number, 
+  instanceid: number,
+  effectType: TileEffectType,
+  speed: number,
+  duration: bigint,
+  skyType: TileEffectSkyType,
+  cloudSaturationMin: number,
+  cloudSaturationMax: number,
+  paletteCount: number,
   palette: Encoding.Color[]
 ) {
   return {
     type: Type.SetTileEffect,
-    payload: Encoding.encodeSetTileEffect(instanceid, effectType, speed, duration, skyType, cloudSaturationMin, paletteCount, palette),
+    payload: Encoding.encodeSetTileEffect(instanceid, effectType, speed, duration, skyType, cloudSaturationMin, cloudSaturationMax, paletteCount, palette),
     decode: Encoding.decodeStateTileEffect,
     defaultResponseMode: 'ack-only',
   } satisfies Command<Encoding.StateTileEffect, 'ack-only'>;

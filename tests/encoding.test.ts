@@ -384,10 +384,11 @@ describe('encoding', () => {
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateInfo(bytes, offsetRef);
-    
+
     assert.equal(result.time.getTime(), Number(time / 1000000n));
-    assert.equal(result.uptime.getTime(), Number(uptime / 1000000n));
-    assert.equal(result.downtime.getTime(), Number(downtime / 1000000n));
+    // uptime/downtime are durations, decoded as raw nanosecond counts.
+    assert.equal(result.uptime_ns, uptime);
+    assert.equal(result.downtime_ns, downtime);
     assert.equal(offsetRef.current, 24);
   });
 
@@ -1278,6 +1279,7 @@ describe('encoding', () => {
       10000n, // duration
       1,      // skyType
       50,     // cloudSaturationMin
+      180,    // cloudSaturationMax
       2,      // paletteCount
       palette // palette
     );
@@ -1295,6 +1297,7 @@ describe('encoding', () => {
     assert.equal(view.getUint32(23, true), 0);         // reserved3
     assert.equal(view.getUint8(27), 1);                // skyType
     assert.equal(view.getUint8(31), 50);               // cloudSaturationMin
+    assert.equal(view.getUint8(35), 180);              // cloudSaturationMax
     assert.equal(view.getUint8(59), 2);                // paletteCount
     
     // Check first palette color

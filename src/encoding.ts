@@ -279,6 +279,13 @@ function decodeTimestamp(bytes: Uint8Array, offsetRef: OffsetRef): Date {
   return time;
 }
 
+function decodeUint64(bytes: Uint8Array, offsetRef: OffsetRef): bigint {
+  ensureSize(bytes, offsetRef.current, 8);
+  const value = readBigUint64(bytes, offsetRef.current);
+  offsetRef.current += 8;
+  return value;
+}
+
 export function decodeStateService(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   ensureSize(bytes, o, 5);
@@ -433,13 +440,17 @@ export function decodeStateVersion(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
+  // `time` is an absolute timestamp (nanoseconds since epoch), so it decodes
+  // to a Date; `uptime`/`downtime` are durations in nanoseconds — time since
+  // power on and length of the last power-off period — so they stay raw
+  // uint64 values, suffixed with their unit like StateHevCycle's duration_s.
   const time = decodeTimestamp(bytes, offsetRef);
-  const uptime = decodeTimestamp(bytes, offsetRef);
-  const downtime = decodeTimestamp(bytes, offsetRef);
+  const uptime_ns = decodeUint64(bytes, offsetRef);
+  const downtime_ns = decodeUint64(bytes, offsetRef);
   return {
     time,
-    uptime,
-    downtime,
+    uptime_ns,
+    downtime_ns,
   };
 }
 
@@ -777,7 +788,7 @@ export function encodeGetTileEffect(): Uint8Array {
   return payload;
 }
 
-export function encodeSetTileEffect(instanceid: number, effectType: TileEffectType, speed: number, duration: bigint, skyType: TileEffectSkyType, cloudSaturationMin: number, paletteCount: number, palette: Color[]): Uint8Array {
+export function encodeSetTileEffect(instanceid: number, effectType: TileEffectType, speed: number, duration: bigint, skyType: TileEffectSkyType, cloudSaturationMin: number, cloudSaturationMax: number, paletteCount: number, palette: Color[]): Uint8Array {
   const payload = new Uint8Array(188);
   const view = new DataView(payload.buffer);
   view.setUint8(0, 0); // reserved0
@@ -788,15 +799,11 @@ export function encodeSetTileEffect(instanceid: number, effectType: TileEffectTy
   view.setBigUint64(11, duration, true);
   view.setUint32(19, 0); // reserved2
   view.setUint32(23, 0); // reserved3
+  // The 32-byte effect parameters block (27..59). Only the SKY effect uses
+  // it; bytes 28..30, 32..34, and 36..58 are reserved and stay zero.
   view.setUint8(27, skyType);
-  view.setUint8(28, 0); // reserved4[0]
-  view.setUint8(29, 0); // reserved4[1]
-  view.setUint8(30, 0); // reserved4[2]
   view.setUint8(31, cloudSaturationMin);
-  view.setUint32(32, 0); // reserved5 (first 3 bytes)
-  view.setUint32(35, 0); // reserved6 (24 bytes, filling with zeros)
-  view.setUint32(51, 0); 
-  view.setUint32(55, 0);
+  view.setUint8(35, cloudSaturationMax);
   view.setUint8(59, paletteCount);
   
   for (let i = 0; i < 16; i++) {
