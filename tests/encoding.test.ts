@@ -153,11 +153,19 @@ describe('encoding', () => {
   });
 
   test('getHeaderTagged', () => {
-    const bytes1 = new Uint8Array([0x00, 0x00, 0x00, 0x10]); // tagged = 1 (bit 12 = 1, 0x1000)
+    const bytes1 = new Uint8Array([0x00, 0x00, 0x00, 0x20]); // tagged = 1 (bit 13 = 1, 0x2000)
     assert.equal(Encoding.getHeaderTagged(bytes1), true);
 
-    const bytes2 = new Uint8Array([0x00, 0x00, 0x00, 0x00]); // tagged = 0 (bit 12 = 0)
+    const bytes2 = new Uint8Array([0x00, 0x00, 0x00, 0x10]); // tagged = 0 (bit 13 = 0; bit 12 is addressable, not tagged)
     assert.equal(Encoding.getHeaderTagged(bytes2), false);
+
+    // Must agree with encode() and decodeHeader() on where the tagged bit lives.
+    const tagged = Encoding.encode(true, 2, new Uint8Array(6), false, false, 0, 2);
+    assert.equal(Encoding.getHeaderTagged(tagged), true);
+    assert.equal(Encoding.decodeHeader(tagged).tagged, true);
+    const untagged = Encoding.encode(false, 2, new Uint8Array(6), false, false, 0, 2);
+    assert.equal(Encoding.getHeaderTagged(untagged), false);
+    assert.equal(Encoding.decodeHeader(untagged).tagged, false);
   });
 
   test('getHeaderSource', () => {

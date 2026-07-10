@@ -98,9 +98,9 @@ export function SetWaveformOptional(
       setBrightness,
       setKelvin,
     ),
-    decode: Encoding.decodeStateLightPower,
+    decode: Encoding.decodeLightState,
     defaultResponseMode: 'ack-only',
-  } satisfies Command<number, 'ack-only'>;
+  } satisfies Command<Encoding.LightState, 'ack-only'>;
 }
 
 export function GetInfrared() {

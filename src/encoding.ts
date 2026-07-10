@@ -1342,7 +1342,7 @@ export const getHeaderSize = (bytes: Uint8Array, offset = 0): number => readUint
 
 export const getHeaderFlags = (bytes: Uint8Array, offset = 0): number => readUint16(bytes, offset + 2);
 
-export const getHeaderTagged = (bytes: Uint8Array, offset = 0): boolean => !!((getHeaderFlags(bytes, offset) >> 12) & 0b1);
+export const getHeaderTagged = (bytes: Uint8Array, offset = 0): boolean => !!((getHeaderFlags(bytes, offset) >> 13) & 0b1);
 
 export const getHeaderSource = (bytes: Uint8Array, offset = 0): number => readUint32(bytes, offset + 4);
 

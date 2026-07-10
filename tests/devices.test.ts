@@ -282,6 +282,26 @@ describe('devices', () => {
     await assert.rejects(p, /aborted/);
   });
 
+  test('a stale waiter settling after remove() does not drop a newer waiter for the same serial', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    // Waiter A's resolver lands in a set that remove() then orphans.
+    const c1 = new AbortController();
+    const p1 = devices.get('abcdef123456', { signal: c1.signal });
+    devices.remove('abcdef123456');
+
+    // Waiter B registers a fresh resolver set for the same serial.
+    const p2 = devices.get('abcdef123456');
+
+    // A settles late — it must not delete B's resolver set on its way out.
+    c1.abort();
+    await assert.rejects(p1, /aborted/);
+
+    devices.register(56700, '192.168.1.1', received('abcdef123456'));
+    const device = await p2;
+    expect(device.serialNumber).toBe('abcdef123456');
+  });
+
   test('aborted get does not block subsequent get for same serial number', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 

@@ -248,6 +248,12 @@ describe('commands', () => {
     assert.equal(cmd.payload[22], 0); // setSaturation false
     assert.equal(cmd.payload[23], 1); // setBrightness true
     assert.equal(cmd.payload[24], 0); // setKelvin false
+
+    // The device answers SetWaveformOptional with a LightState (107), the
+    // same response SetWaveform gets — not a StateLightPower.
+    assert.equal(cmd.decode, Commands.SetWaveform(
+      false, 0, 0, 0, 0, 0, 0, 0, Waveform.SAW,
+    ).decode);
   });
 
   test('GetInfrared', () => {
