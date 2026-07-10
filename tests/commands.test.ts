@@ -248,6 +248,12 @@ describe('commands', () => {
     assert.equal(cmd.payload[22], 0); // setSaturation false
     assert.equal(cmd.payload[23], 1); // setBrightness true
     assert.equal(cmd.payload[24], 0); // setKelvin false
+
+    // The device answers SetWaveformOptional with a LightState (107), the
+    // same response SetWaveform gets — not a StateLightPower.
+    assert.equal(cmd.decode, Commands.SetWaveform(
+      false, 0, 0, 0, 0, 0, 0, 0, Waveform.SAW,
+    ).decode);
   });
 
   test('GetInfrared', () => {
@@ -1044,6 +1050,7 @@ describe('commands', () => {
       5000n, // duration
       TileEffectSkyType.SUNSET,
       128, // cloudSaturationMin
+      200, // cloudSaturationMax
       3, // paletteCount
       palette
     );
@@ -1060,6 +1067,7 @@ describe('commands', () => {
     assert.equal(view.getBigUint64(11, true), 5000n); // duration
     assert.equal(view.getUint8(27), TileEffectSkyType.SUNSET); // skyType
     assert.equal(view.getUint8(31), 128); // cloudSaturationMin
+    assert.equal(view.getUint8(35), 200); // cloudSaturationMax
     assert.equal(view.getUint8(59), 3); // paletteCount
     
     // Check first palette color

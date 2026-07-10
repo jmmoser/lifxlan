@@ -506,6 +506,7 @@ describe('LIFX Integration Tests', () => {
             BigInt(5000), // duration in ms
             TileEffectSkyType.SUNRISE, // sky type (used for SKY effect)
             50, // cloud saturation min
+            180, // cloud saturation max
             testPalette.length, // palette count
             testPalette
           ), selectedTileDevice!);
@@ -524,6 +525,7 @@ describe('LIFX Integration Tests', () => {
             0,
             BigInt(0),
             TileEffectSkyType.SUNRISE,
+            0,
             0,
             0,
             []
@@ -558,6 +560,7 @@ describe('LIFX Integration Tests', () => {
               BigInt(originalTileEffect.duration || 0),
               skyType,
               originalTileEffect.cloudSaturationMin || 50,
+              originalTileEffect.cloudSaturationMax || 180,
               originalTileEffect.palette_count || 0,
               originalTileEffect.palette || []
             ), selectedTileDevice!);

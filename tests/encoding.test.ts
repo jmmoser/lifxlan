@@ -153,11 +153,19 @@ describe('encoding', () => {
   });
 
   test('getHeaderTagged', () => {
-    const bytes1 = new Uint8Array([0x00, 0x00, 0x00, 0x10]); // tagged = 1 (bit 12 = 1, 0x1000)
+    const bytes1 = new Uint8Array([0x00, 0x00, 0x00, 0x20]); // tagged = 1 (bit 13 = 1, 0x2000)
     assert.equal(Encoding.getHeaderTagged(bytes1), true);
 
-    const bytes2 = new Uint8Array([0x00, 0x00, 0x00, 0x00]); // tagged = 0 (bit 12 = 0)
+    const bytes2 = new Uint8Array([0x00, 0x00, 0x00, 0x10]); // tagged = 0 (bit 13 = 0; bit 12 is addressable, not tagged)
     assert.equal(Encoding.getHeaderTagged(bytes2), false);
+
+    // Must agree with encode() and decodeHeader() on where the tagged bit lives.
+    const tagged = Encoding.encode(true, 2, new Uint8Array(6), false, false, 0, 2);
+    assert.equal(Encoding.getHeaderTagged(tagged), true);
+    assert.equal(Encoding.decodeHeader(tagged).tagged, true);
+    const untagged = Encoding.encode(false, 2, new Uint8Array(6), false, false, 0, 2);
+    assert.equal(Encoding.getHeaderTagged(untagged), false);
+    assert.equal(Encoding.decodeHeader(untagged).tagged, false);
   });
 
   test('getHeaderSource', () => {
@@ -376,10 +384,11 @@ describe('encoding', () => {
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateInfo(bytes, offsetRef);
-    
+
     assert.equal(result.time.getTime(), Number(time / 1000000n));
-    assert.equal(result.uptime.getTime(), Number(uptime / 1000000n));
-    assert.equal(result.downtime.getTime(), Number(downtime / 1000000n));
+    // uptime/downtime are durations, decoded as raw nanosecond counts.
+    assert.equal(result.uptime_ns, uptime);
+    assert.equal(result.downtime_ns, downtime);
     assert.equal(offsetRef.current, 24);
   });
 
@@ -1270,6 +1279,7 @@ describe('encoding', () => {
       10000n, // duration
       1,      // skyType
       50,     // cloudSaturationMin
+      180,    // cloudSaturationMax
       2,      // paletteCount
       palette // palette
     );
@@ -1287,6 +1297,7 @@ describe('encoding', () => {
     assert.equal(view.getUint32(23, true), 0);         // reserved3
     assert.equal(view.getUint8(27), 1);                // skyType
     assert.equal(view.getUint8(31), 50);               // cloudSaturationMin
+    assert.equal(view.getUint8(35), 180);              // cloudSaturationMax
     assert.equal(view.getUint8(59), 2);                // paletteCount
     
     // Check first palette color

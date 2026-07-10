@@ -267,13 +267,13 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
       function settleReject(reason: unknown) {
         cleanup();
+        // Remove only this call's resolver, and only if the set still holds
+        // it: after a remove() orphans the set, a fresh get() for the same
+        // serial owns a new set, and blindly deleting the map entry here
+        // would silently drop that newer waiter's resolver.
         const resolvers = deviceResolvers.get(serialNumber);
-        if (resolvers) {
-          if (resolvers.size > 1) {
-            resolvers.delete(resolver);
-          } else {
-            deviceResolvers.delete(serialNumber);
-          }
+        if (resolvers && resolvers.delete(resolver) && resolvers.size === 0) {
+          deviceResolvers.delete(serialNumber);
         }
         reject(reason);
       }
