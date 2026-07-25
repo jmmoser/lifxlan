@@ -67,3 +67,37 @@ import type { ColorZoneResponse } from '../src/commands/multizone.js';
 
 const getZones = () => client.send(GetColorZones(0, 1), device);
 export type _getZonesIsResponseArray = Expect<Equal<Awaited<ReturnType<typeof getZones>>, ColorZoneResponse[]>>;
+
+// --- Commands with no response packet ---------------------------------------
+
+// The protocol documents SetReboot, Set64, and SetUserPosition as having no
+// response packet even with res_required set. They are Command<void>, so
+// requesting 'response' or 'both' is a compile error — the request can never
+// be satisfied and would otherwise ride to a guaranteed timeout.
+import { SetReboot } from '../src/commands/device.js';
+import { Set64, SetUserPosition } from '../src/commands/tile.js';
+
+// Their ack-only default resolves void, like any other ack-only command.
+const setReboot = () => client.send(SetReboot(), device);
+export type _setRebootIsVoid = Expect<Equal<Awaited<ReturnType<typeof setReboot>>, void>>;
+
+// An explicit ack-only override (and mode-free options) remain fine.
+void client.send(SetReboot(), device, { responseMode: 'ack-only' });
+void client.send(Set64({ tileIndex: 0, width: 8, colors: [] }), device, { timeoutMs: 1000 });
+
+// @ts-expect-error SetReboot has no response packet to wait for
+void client.send(SetReboot(), device, { responseMode: 'response' });
+// @ts-expect-error Set64 has no response packet to wait for
+void client.send(Set64({ tileIndex: 0, width: 8, colors: [] }), device, { responseMode: 'both' });
+// @ts-expect-error SetUserPosition has no response packet to wait for
+void client.send(SetUserPosition(0, 0, 0), device, { responseMode: 'response' });
+
+// --- Fire-and-forget accepts any default mode --------------------------------
+
+// broadcast() and sendUnacknowledged() perform no exchange, so a command's
+// defaultResponseMode must not restrict them — high-rate Set commands are
+// their primary use case.
+import { SetColor } from '../src/commands/light.js';
+void client.sendUnacknowledged(SetColor({ hue: 0, saturation: 0, brightness: 0, kelvin: 3500 }), device);
+void client.broadcast(SetColor({ hue: 0, saturation: 0, brightness: 0, kelvin: 3500 }));
+void client.sendUnacknowledged(GetColor(), device);

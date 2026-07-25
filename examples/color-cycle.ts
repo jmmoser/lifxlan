@@ -1,7 +1,7 @@
 /**
  * Party mode: sweep the hue of every discovered light for ten seconds.
  *
- * Animations are the textbook case for `client.unicast()` — fire-and-forget,
+ * Animations are the textbook case for `client.sendUnacknowledged()` — fire-and-forget,
  * no acks, one packet per frame. A dropped frame doesn't matter because the
  * next one replaces it 100ms later.
  *
@@ -30,7 +30,7 @@ while (Date.now() - start < RUN_MS) {
   const elapsed = Date.now() - start;
   const hue = Math.round(((elapsed % HUE_CYCLE_MS) / HUE_CYCLE_MS) * 65535);
   for (const device of devices) {
-    client.unicast(SetColor(hue, 65535, 65535, 3500, FRAME_MS), device);
+    client.sendUnacknowledged(SetColor({ hue, saturation: 65535, brightness: 65535, kelvin: 3500, duration: FRAME_MS }), device);
   }
   await new Promise((resolve) => setTimeout(resolve, FRAME_MS));
 }

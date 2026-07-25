@@ -81,7 +81,10 @@ describe('commands', () => {
   test('SetReboot', () => {
     const cmd = Commands.SetReboot();
     assert.equal(cmd.type, Type.SetReboot);
-    assert.equal(typeof cmd.decode, 'function');
+    // No decoder: SetReboot has no State response, so forcing
+    // responseMode 'response' must reject with ValidationError instead of
+    // resolving undefined.
+    assert.equal('decode' in cmd, false);
   });
 
   test('GetLocation', () => {
@@ -156,7 +159,7 @@ describe('commands', () => {
   });
 
   test('SetColor', () => {
-    const cmd = Commands.SetColor(120, 65535, 32768, 3500, 1000);
+    const cmd = Commands.SetColor({ hue: 120, saturation: 65535, brightness: 32768, kelvin: 3500, duration: 1000 });
     assert.equal(cmd.type, Type.SetColor);
     assert.ok(cmd.payload instanceof Uint8Array);
     assert.equal(typeof cmd.decode, 'function');
@@ -164,15 +167,17 @@ describe('commands', () => {
 
   test('SetWaveform', () => {
     const cmd = Commands.SetWaveform(
-      true, // transient
-      120, // hue
-      65535, // saturation
-      32768, // brightness
-      3500, // kelvin
-      1000, // period
-      5, // cycles
-      0, // skewRatio
-      Waveform.SINE
+      {
+        transient: true,
+        hue: 120,
+        saturation: 65535,
+        brightness: 32768,
+        kelvin: 3500,
+        period: 1000,
+        cycles: 5,
+        skewRatio: 0,
+        waveform: Waveform.SINE,
+      }
     );
     assert.equal(cmd.type, Type.SetWaveform);
     assert.equal(cmd.payload.length, 21);
@@ -215,21 +220,21 @@ describe('commands', () => {
   });
 
   test('SetWaveformOptional', () => {
-    const cmd = Commands.SetWaveformOptional(
-      false, // transient
-      240, // hue
-      32768, // saturation
-      65535, // brightness
-      2700, // kelvin
-      2000, // period
-      3, // cycles
-      -100, // skewRatio
-      Waveform.TRIANGLE,
-      true, // setHue
-      false, // setSaturation
-      true, // setBrightness
-      false // setKelvin
-    );
+    const cmd = Commands.SetWaveformOptional({
+      transient: false,
+      hue: 240,
+      saturation: 32768,
+      brightness: 65535,
+      kelvin: 2700,
+      period: 2000,
+      cycles: 3,
+      skewRatio: -100,
+      waveform: Waveform.TRIANGLE,
+      setHue: true,
+      setSaturation: false,
+      setBrightness: true,
+      setKelvin: false,
+    });
     
     assert.equal(cmd.type, Type.SetWaveformOptional);
     assert.equal(cmd.payload.length, 25);
@@ -252,7 +257,7 @@ describe('commands', () => {
     // The device answers SetWaveformOptional with a LightState (107), the
     // same response SetWaveform gets — not a StateLightPower.
     assert.equal(cmd.decode, Commands.SetWaveform(
-      false, 0, 0, 0, 0, 0, 0, 0, Waveform.SAW,
+      { hue: 0, saturation: 0, brightness: 0, kelvin: 0, period: 0, cycles: 0, waveform: Waveform.SAW },
     ).decode);
   });
 
@@ -335,7 +340,7 @@ describe('commands', () => {
   });
 
   test('Get64', () => {
-    const cmd = Commands.Get64(0, 8, 2, 3, 4);
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 8, x: 2, y: 3, width: 4 });
     assert.equal(cmd.type, Type.Get64);
     assert.equal(cmd.payload.length, 6);
     
@@ -349,21 +354,21 @@ describe('commands', () => {
   });
 
   test('Get64 with callback', () => {
-    const cmd = Commands.Get64(0, 3, 0, 0, 8);
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 3, width: 8 });
     assert.equal(cmd.type, Type.Get64);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('Get64 decode handles State64 responses', () => {
-    const cmd = Commands.Get64(0, 2, 0, 0, 8);
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 2, width: 8 });
     
     // Mock State64 response (Type.State64 = 711)
     const state64Bytes = new Uint8Array(36 + 5 + 64 * 8); // header + basic payload + 64 colors
     const view = new DataView(state64Bytes.buffer);
     view.setUint16(32, Type.State64, true); // message type
     
-    // State64 payload: tile_index, reserved6, x, y, width, colors[64]
-    view.setUint8(36, 0); // tile_index
+    // State64 payload: tileIndex, reserved6, x, y, width, colors[64]
+    view.setUint8(36, 0); // tileIndex
     view.setUint8(37, 0); // reserved6
     view.setUint8(38, 0); // x
     view.setUint8(39, 0); // y
@@ -388,7 +393,7 @@ describe('commands', () => {
     assert.equal(result.length, 1);
     const tile = result[0];
     assert.ok(tile);
-    assert.equal(tile.tile_index, 0);
+    assert.equal(tile.tileIndex, 0);
     assert.equal(tile.colors.length, 64);
     assert.equal(tile.colors[0]?.hue, 120);
     assert.equal(continuation.expectMore, true); // Should expect more tiles (0, 1)
@@ -396,15 +401,15 @@ describe('commands', () => {
 
   test('Get64 callback receives responses', () => {
     const receivedResponses: State64[] = [];
-    const cmd = Commands.Get64(0, 2, 0, 0, 8, (response) => {
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 2, width: 8, onResponse: (response) => {
       receivedResponses.push(response);
-    });
+    } });
     
     // Mock State64 response for tile 0
     const state64Bytes = new Uint8Array(36 + 5 + 64 * 8);
     const view = new DataView(state64Bytes.buffer);
     view.setUint16(32, Type.State64, true);
-    view.setUint8(36, 0); // tile_index
+    view.setUint8(36, 0); // tileIndex
     view.setUint8(37, 0); // reserved6
     view.setUint8(38, 0); // x
     view.setUint8(39, 0); // y
@@ -417,23 +422,23 @@ describe('commands', () => {
     decode(state64Bytes, offsetRef, continuation, Type.State64);
     
     assert.equal(receivedResponses.length, 1);
-    assert.equal(receivedResponses[0]?.tile_index, 0);
+    assert.equal(receivedResponses[0]?.tileIndex, 0);
     assert.equal(continuation.expectMore, true); // Still expecting tile 1
   });
 
   test('Get64 callback can stop early', () => {
     const receivedResponses: State64[] = [];
     
-    const cmd = Commands.Get64(0, 3, 0, 0, 8, (response) => {
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 3, width: 8, onResponse: (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    });
+    } });
     
     // Mock State64 response for tile 0
     const state64Bytes = new Uint8Array(36 + 5 + 64 * 8);
     const view = new DataView(state64Bytes.buffer);
     view.setUint16(32, Type.State64, true);
-    view.setUint8(36, 0); // tile_index
+    view.setUint8(36, 0); // tileIndex
     
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
@@ -446,13 +451,13 @@ describe('commands', () => {
   });
 
   test('Get64 accumulates responses correctly', () => {
-    const cmd = Commands.Get64(0, 2, 0, 0, 8);
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 2, width: 8 });
     
     // First call should return array with 1 item
     const state64Bytes1 = new Uint8Array(36 + 5 + 64 * 8);
     let view = new DataView(state64Bytes1.buffer);
     view.setUint16(32, Type.State64, true);
-    view.setUint8(36, 0); // tile_index
+    view.setUint8(36, 0); // tileIndex
     
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
@@ -466,20 +471,20 @@ describe('commands', () => {
     const state64Bytes2 = new Uint8Array(36 + 5 + 64 * 8);
     view = new DataView(state64Bytes2.buffer);
     view.setUint16(32, Type.State64, true);
-    view.setUint8(36, 1); // tile_index
+    view.setUint8(36, 1); // tileIndex
     
     offsetRef.current = 36;
     continuation.expectMore = false;
     
     const result2 = decode(state64Bytes2, offsetRef, continuation, Type.State64);
     assert.equal(result2.length, 2);
-    assert.equal(result2[0]?.tile_index, 0);
-    assert.equal(result2[1]?.tile_index, 1);
+    assert.equal(result2[0]?.tileIndex, 0);
+    assert.equal(result2[1]?.tileIndex, 1);
     assert.equal(continuation.expectMore, false); // Complete
   });
 
   test('Get64 ignores unknown response types', () => {
-    const cmd = Commands.Get64(0, 1, 0, 0, 8);
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 1, width: 8 });
     
     // Mock unknown response type
     const unknownBytes = new Uint8Array(36 + 10);
@@ -524,9 +529,9 @@ describe('commands', () => {
     const view = new DataView(stateZoneBytes.buffer);
     view.setUint16(32, Type.StateZone, true); // message type
     
-    // StateZone payload: zones_count, zone_index, hue, saturation, brightness, kelvin
-    view.setUint8(36, 3); // zones_count
-    view.setUint8(37, 0); // zone_index
+    // StateZone payload: zonesCount, zoneIndex, hue, saturation, brightness, kelvin
+    view.setUint8(36, 3); // zonesCount
+    view.setUint8(37, 0); // zoneIndex
     view.setUint16(38, 120, true); // hue
     view.setUint16(40, 65535, true); // saturation
     view.setUint16(42, 32768, true); // brightness
@@ -542,7 +547,7 @@ describe('commands', () => {
     assert.equal(result.length, 1);
     const zone = result[0];
     assert.ok(zone);
-    assert.equal(zone.zone_index, 0);
+    assert.equal(zone.zoneIndex, 0);
     assert.ok('hue' in zone);
     assert.equal(zone.hue, 120);
     assert.equal(continuation.expectMore, true); // Should expect more zones (0, 1, 2)
@@ -558,8 +563,8 @@ describe('commands', () => {
     view.setUint16(32, Type.StateMultiZone, true); // message type
     
     // StateMultiZone payload
-    view.setUint8(36, 3); // zones_count
-    view.setUint8(37, 0); // zone_index
+    view.setUint8(36, 3); // zonesCount
+    view.setUint8(37, 0); // zoneIndex
     
     // 8 colors (StateMultiZone always has 8 colors)
     for (let i = 0; i < 8; i++) {
@@ -580,7 +585,7 @@ describe('commands', () => {
     assert.equal(result.length, 1);
     const zone = result[0];
     assert.ok(zone);
-    assert.equal(zone.zone_index, 0);
+    assert.equal(zone.zoneIndex, 0);
     assert.ok('colors' in zone);
     assert.equal(zone.colors.length, 8);
     assert.equal(continuation.expectMore, false); // All zones covered (0-7, more than we requested 0-2)
@@ -596,8 +601,8 @@ describe('commands', () => {
     const stateZoneBytes = new Uint8Array(36 + 13);
     const view = new DataView(stateZoneBytes.buffer);
     view.setUint16(32, Type.StateZone, true);
-    view.setUint8(36, 2); // zones_count
-    view.setUint8(37, 0); // zone_index
+    view.setUint8(36, 2); // zonesCount
+    view.setUint8(37, 0); // zoneIndex
     view.setUint16(38, 120, true); // hue
     view.setUint16(40, 65535, true); // saturation
     view.setUint16(42, 32768, true); // brightness
@@ -612,7 +617,7 @@ describe('commands', () => {
     assert.equal(receivedResponses.length, 1);
     const res = receivedResponses[0];
     assert.ok(res);
-    assert.equal(res.zone_index, 0);
+    assert.equal(res.zoneIndex, 0);
     assert.ok('hue' in res);
     assert.equal(res.hue, 120);
     assert.equal(continuation.expectMore, true); // Still expecting zone 1
@@ -630,8 +635,8 @@ describe('commands', () => {
     const stateZoneBytes = new Uint8Array(36 + 13);
     const view = new DataView(stateZoneBytes.buffer);
     view.setUint16(32, Type.StateZone, true);
-    view.setUint8(36, 6); // zones_count
-    view.setUint8(37, 0); // zone_index
+    view.setUint8(36, 6); // zonesCount
+    view.setUint8(37, 0); // zoneIndex
     view.setUint16(38, 120, true); // hue
     view.setUint16(40, 65535, true); // saturation
     view.setUint16(42, 32768, true); // brightness
@@ -655,8 +660,8 @@ describe('commands', () => {
     const stateZoneBytes1 = new Uint8Array(36 + 13);
     let view = new DataView(stateZoneBytes1.buffer);
     view.setUint16(32, Type.StateZone, true);
-    view.setUint8(36, 3); // zones_count
-    view.setUint8(37, 0); // zone_index
+    view.setUint8(36, 3); // zonesCount
+    view.setUint8(37, 0); // zoneIndex
     
     const offsetRef = { current: 36 };
     const continuation = { expectMore: false };
@@ -670,31 +675,31 @@ describe('commands', () => {
     const stateZoneBytes2 = new Uint8Array(36 + 13);
     view = new DataView(stateZoneBytes2.buffer);
     view.setUint16(32, Type.StateZone, true);
-    view.setUint8(36, 3); // zones_count
-    view.setUint8(37, 1); // zone_index
+    view.setUint8(36, 3); // zonesCount
+    view.setUint8(37, 1); // zoneIndex
     
     offsetRef.current = 36;
     continuation.expectMore = false;
     
     const result2 = decode(stateZoneBytes2, offsetRef, continuation, Type.StateZone);
     assert.equal(result2.length, 2);
-    assert.equal(result2[0]?.zone_index, 0);
-    assert.equal(result2[1]?.zone_index, 1);
+    assert.equal(result2[0]?.zoneIndex, 0);
+    assert.equal(result2[1]?.zoneIndex, 1);
     assert.equal(continuation.expectMore, true); // Still need zone 2
     
     // Third call should return array with 3 items and be complete
     const stateZoneBytes3 = new Uint8Array(36 + 13);
     view = new DataView(stateZoneBytes3.buffer);
     view.setUint16(32, Type.StateZone, true);
-    view.setUint8(36, 3); // zones_count
-    view.setUint8(37, 2); // zone_index
+    view.setUint8(36, 3); // zonesCount
+    view.setUint8(37, 2); // zoneIndex
     
     offsetRef.current = 36;
     continuation.expectMore = false;
     
     const result3 = decode(stateZoneBytes3, offsetRef, continuation, Type.StateZone);
     assert.equal(result3.length, 3);
-    assert.equal(result3[2]?.zone_index, 2);
+    assert.equal(result3[2]?.zoneIndex, 2);
     assert.equal(continuation.expectMore, false); // Complete
   });
 
@@ -717,7 +722,16 @@ describe('commands', () => {
   });
 
   test('SetColorZones', () => {
-    const cmd = Commands.SetColorZones(0, 7, 120, 65535, 32768, 3500, 1000, MultiZoneApplicationRequest.APPLY);
+    const cmd = Commands.SetColorZones({
+      startIndex: 0,
+      endIndex: 7,
+      hue: 120,
+      saturation: 65535,
+      brightness: 32768,
+      kelvin: 3500,
+      duration: 1000,
+      apply: MultiZoneApplicationRequest.APPLY,
+    });
     assert.equal(cmd.type, Type.SetColorZones);
     assert.equal(cmd.payload.length, 15);
     
@@ -740,12 +754,18 @@ describe('commands', () => {
 
   test('SetMultiZoneEffect', () => {
     const parameters = new Uint8Array(32).fill(0xAB);
-    const cmd = Commands.SetMultiZoneEffect(12345, MultiZoneEffectType.MOVE, 5, 10000n, parameters);
+    const cmd = Commands.SetMultiZoneEffect({
+      instanceId: 12345,
+      effectType: MultiZoneEffectType.MOVE,
+      speed: 5,
+      duration: 10000n,
+      parameters,
+    });
     assert.equal(cmd.type, Type.SetMultiZoneEffect);
     assert.equal(cmd.payload.length, 59);
     
     const view = new DataView(cmd.payload.buffer);
-    assert.equal(view.getUint32(0, true), 12345); // instanceid
+    assert.equal(view.getUint32(0, true), 12345); // instanceId
     assert.equal(view.getUint8(4), MultiZoneEffectType.MOVE); // effectType
     assert.equal(view.getUint8(5), 0); // reserved
     assert.equal(view.getUint8(6), 0); // reserved
@@ -775,10 +795,10 @@ describe('commands', () => {
     const view = new DataView(stateExtendedBytes.buffer);
     view.setUint16(32, Type.StateExtendedColorZones, true); // message type
     
-    // StateExtendedColorZones payload: zones_count, zone_index, colors_count, colors[82]
-    view.setUint16(36, 10, true); // zones_count (≤82, so single response)
-    view.setUint16(38, 0, true); // zone_index
-    view.setUint8(40, 10); // colors_count
+    // StateExtendedColorZones payload: zonesCount, zoneIndex, colorsCount, colors[82]
+    view.setUint16(36, 10, true); // zonesCount (≤82, so single response)
+    view.setUint16(38, 0, true); // zoneIndex
+    view.setUint8(40, 10); // colorsCount
     
     // Add color data (must always be 82 colors as per decoder implementation)
     for (let i = 0; i < 82; i++) {
@@ -798,9 +818,9 @@ describe('commands', () => {
     assert.equal(Array.isArray(result), true);
     assert.equal(result.length, 1);
     const zones = result[0];
-    assert.equal(zones?.zones_count, 10);
-    assert.equal(zones?.zone_index, 0);
-    assert.equal(zones?.colors_count, 10);
+    assert.equal(zones?.zonesCount, 10);
+    assert.equal(zones?.zoneIndex, 0);
+    assert.equal(zones?.colorsCount, 10);
     assert.equal(zones?.colors.length, 82); // Decoder always reads 82 colors
     assert.equal(zones?.colors[0]?.hue, 120);
     assert.equal(continuation.expectMore, false); // Single response, no more expected
@@ -814,9 +834,9 @@ describe('commands', () => {
     let view = new DataView(stateExtendedBytes1.buffer);
     view.setUint16(32, Type.StateExtendedColorZones, true); // message type
     
-    view.setUint16(36, 150, true); // zones_count (>82, so multiple responses)
-    view.setUint16(38, 0, true); // zone_index (first chunk: 0-81)
-    view.setUint8(40, 82); // colors_count
+    view.setUint16(36, 150, true); // zonesCount (>82, so multiple responses)
+    view.setUint16(38, 0, true); // zoneIndex (first chunk: 0-81)
+    view.setUint8(40, 82); // colorsCount
     
     // Add 82 colors for first response
     for (let i = 0; i < 82; i++) {
@@ -834,8 +854,8 @@ describe('commands', () => {
     const result1 = decode(stateExtendedBytes1, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(result1.length, 1);
-    assert.equal(result1[0]?.zone_index, 0);
-    assert.equal(result1[0]?.colors_count, 82);
+    assert.equal(result1[0]?.zoneIndex, 0);
+    assert.equal(result1[0]?.colorsCount, 82);
     assert.equal(continuation.expectMore, true); // Should expect more responses for zones 82-149
     
     // Mock second StateExtendedColorZones response - decoder always reads 82 colors
@@ -843,9 +863,9 @@ describe('commands', () => {
     view = new DataView(stateExtendedBytes2.buffer);
     view.setUint16(32, Type.StateExtendedColorZones, true);
     
-    view.setUint16(36, 150, true); // zones_count
-    view.setUint16(38, 82, true); // zone_index (second chunk: 82-149)
-    view.setUint8(40, 68); // colors_count (only 68 are meaningful)
+    view.setUint16(36, 150, true); // zonesCount
+    view.setUint16(38, 82, true); // zoneIndex (second chunk: 82-149)
+    view.setUint8(40, 68); // colorsCount (only 68 are meaningful)
     
     // Add 82 colors (decoder always reads 82)
     for (let i = 0; i < 82; i++) {
@@ -862,8 +882,8 @@ describe('commands', () => {
     const result2 = decode(stateExtendedBytes2, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(result2.length, 2); // Accumulated responses
-    assert.equal(result2[1]?.zone_index, 82);
-    assert.equal(result2[1]?.colors_count, 68);
+    assert.equal(result2[1]?.zoneIndex, 82);
+    assert.equal(result2[1]?.colorsCount, 68);
     assert.equal(result2[1]?.colors.length, 82); // Decoder always reads 82 colors
     assert.equal(continuation.expectMore, false); // Complete
   });
@@ -878,9 +898,9 @@ describe('commands', () => {
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
     const view = new DataView(stateExtendedBytes.buffer);
     view.setUint16(32, Type.StateExtendedColorZones, true);
-    view.setUint16(36, 50, true); // zones_count
-    view.setUint16(38, 0, true); // zone_index
-    view.setUint8(40, 50); // colors_count
+    view.setUint16(36, 50, true); // zonesCount
+    view.setUint16(38, 0, true); // zoneIndex
+    view.setUint8(40, 50); // colorsCount
     
     // Add 82 colors (decoder always reads 82)
     for (let i = 0; i < 82; i++) {
@@ -898,8 +918,8 @@ describe('commands', () => {
     decode(stateExtendedBytes, offsetRef, continuation, Type.StateExtendedColorZones);
     
     assert.equal(receivedResponses.length, 1);
-    assert.equal(receivedResponses[0]?.zones_count, 50);
-    assert.equal(receivedResponses[0]?.zone_index, 0);
+    assert.equal(receivedResponses[0]?.zonesCount, 50);
+    assert.equal(receivedResponses[0]?.zoneIndex, 0);
     assert.equal(continuation.expectMore, false); // Single response for ≤82 zones
   });
 
@@ -914,9 +934,9 @@ describe('commands', () => {
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
     const view = new DataView(stateExtendedBytes.buffer);
     view.setUint16(32, Type.StateExtendedColorZones, true);
-    view.setUint16(36, 150, true); // zones_count (>82)
-    view.setUint16(38, 0, true); // zone_index
-    view.setUint8(40, 82); // colors_count
+    view.setUint16(36, 150, true); // zonesCount (>82)
+    view.setUint16(38, 0, true); // zoneIndex
+    view.setUint8(40, 82); // colorsCount
     
     // Add 82 colors
     for (let i = 0; i < 82; i++) {
@@ -960,7 +980,12 @@ describe('commands', () => {
       { hue: 120, saturation: 65535, brightness: 32768, kelvin: 3500 },
       { hue: 240, saturation: 32768, brightness: 65535, kelvin: 2700 }
     ];
-    const cmd = Commands.SetExtendedColorZones(1000, MultiZoneExtendedApplicationRequest.APPLY, 0, 2, colors);
+    const cmd = Commands.SetExtendedColorZones({
+      duration: 1000,
+      apply: MultiZoneExtendedApplicationRequest.APPLY,
+      zoneIndex: 0,
+      colors,
+    });
     assert.equal(cmd.type, Type.SetExtendedColorZones);
     assert.equal(cmd.payload.length, 664);
     
@@ -1004,7 +1029,7 @@ describe('commands', () => {
       kelvin: 3500
     }));
     
-    const cmd = Commands.Set64(0, 8, 1, 2, 4, 500, colors);
+    const cmd = Commands.Set64({ tileIndex: 0, tileCount: 8, x: 1, y: 2, width: 4, duration: 500, colors });
     assert.equal(cmd.type, Type.Set64);
     assert.equal(cmd.payload.length, 522);
     
@@ -1043,17 +1068,16 @@ describe('commands', () => {
       kelvin: 3500
     }));
     
-    const cmd = Commands.SetTileEffect(
-      54321, // instanceid
-      TileEffectType.FLAME,
-      8, // speed
-      5000n, // duration
-      TileEffectSkyType.SUNSET,
-      128, // cloudSaturationMin
-      200, // cloudSaturationMax
-      3, // paletteCount
-      palette
-    );
+    const cmd = Commands.SetTileEffect({
+      instanceId: 54321,
+      effectType: TileEffectType.FLAME,
+      speed: 8,
+      duration: 5000n,
+      skyType: TileEffectSkyType.SUNSET,
+      cloudSaturationMin: 128,
+      cloudSaturationMax: 200,
+      palette,
+    });
     
     assert.equal(cmd.type, Type.SetTileEffect);
     assert.equal(cmd.payload.length, 188);
@@ -1061,7 +1085,7 @@ describe('commands', () => {
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint8(0), 0); // reserved0
     assert.equal(view.getUint8(1), 0); // reserved1
-    assert.equal(view.getUint32(2, true), 54321); // instanceid
+    assert.equal(view.getUint32(2, true), 54321); // instanceId
     assert.equal(view.getUint8(6), TileEffectType.FLAME); // effectType
     assert.equal(view.getUint32(7, true), 8); // speed
     assert.equal(view.getBigUint64(11, true), 5000n); // duration

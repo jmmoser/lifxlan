@@ -21,20 +21,20 @@ describe('button messages', () => {
       },
     ]);
 
-    // SetButton is index (1) + buttons_count (1) + 8 buttons of 101 bytes.
+    // SetButton is index (1) + buttonsCount (1) + 8 buttons of 101 bytes.
     assert.equal(payload.length, 810);
     assert.equal(payload[0], 1, 'index');
-    assert.equal(payload[1], 2, 'buttons_count');
+    assert.equal(payload[1], 2, 'buttonsCount');
 
-    // First button: actions_count then gesture/target_type little-endian.
-    assert.equal(payload[2], 1, 'button 0 actions_count');
+    // First button: actionsCount then gesture/targetType little-endian.
+    assert.equal(payload[2], 1, 'button 0 actionsCount');
     assert.equal(payload[3]! | (payload[4]! << 8), ButtonGesture.PRESS);
     assert.equal(payload[5]! | (payload[6]! << 8), ButtonTargetType.POWER_TOGGLE_DEVICE);
     assert.deepEqual(payload.subarray(7, 13), target);
     assert.deepEqual(payload.subarray(13, 23), new Uint8Array(10), 'unused target bytes are zero');
 
     // Second button begins 101 bytes after the first.
-    assert.equal(payload[103], 1, 'button 1 actions_count');
+    assert.equal(payload[103], 1, 'button 1 actionsCount');
     assert.equal(payload[104]! | (payload[105]! << 8), ButtonGesture.HOLD);
     assert.equal(payload[106]! | (payload[107]! << 8), ButtonTargetType.BRIGHTNESS_UP_LOCAL_DEVICE);
   });
@@ -59,19 +59,19 @@ describe('button messages', () => {
     assert.equal(offsetRef.current, 811, 'decoder must consume the full wire size');
     assert.equal(state.count, 4);
     assert.equal(state.index, 0);
-    assert.equal(state.buttons_count, 1);
+    assert.equal(state.buttonsCount, 1);
     assert.equal(state.buttons.length, 8);
 
     const button = state.buttons[0]!;
-    assert.equal(button.actions_count, 2);
+    assert.equal(button.actionsCount, 2);
     assert.equal(button.actions.length, 5);
     assert.equal(button.actions[0]!.gesture, ButtonGesture.PRESS);
-    assert.equal(button.actions[0]!.target_type, ButtonTargetType.POWER_TOGGLE_RELAYS);
+    assert.equal(button.actions[0]!.targetType, ButtonTargetType.POWER_TOGGLE_RELAYS);
     assert.deepEqual(button.actions[0]!.target.subarray(0, 3), new Uint8Array([2, 0, 1]));
     assert.equal(button.actions[0]!.target.length, 16);
     assert.equal(button.actions[1]!.gesture, ButtonGesture.PRESS_PRESS);
-    assert.equal(button.actions[1]!.target_type, ButtonTargetType.DEMO_EFFECT_CYCLE);
-    assert.equal(state.buttons[7]!.actions_count, 0);
+    assert.equal(button.actions[1]!.targetType, ButtonTargetType.DEMO_EFFECT_CYCLE);
+    assert.equal(state.buttons[7]!.actionsCount, 0);
   });
 
   test('decodeStateButton rejects truncated payloads', () => {
@@ -87,8 +87,8 @@ describe('button messages', () => {
     const payload = Encoding.encodeSetButton(0, tooManyButtons);
 
     assert.equal(payload.length, 810);
-    assert.equal(payload[1], 8, 'buttons_count clamps to 8');
-    assert.equal(payload[2], 5, 'actions_count clamps to 5');
+    assert.equal(payload[1], 8, 'buttonsCount clamps to 8');
+    assert.equal(payload[2], 5, 'actionsCount clamps to 5');
   });
 
   test('commands carry the right packet types and defaults', () => {

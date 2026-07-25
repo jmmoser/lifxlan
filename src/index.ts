@@ -71,6 +71,9 @@ export {
   SetGroup,
   EchoRequest,
 } from './commands/device.js';
+export type { SetColorOptions, SetWaveformOptions, SetWaveformOptionalOptions } from './commands/light.js';
+export type { SetColorZonesOptions, SetMultiZoneEffectOptions, SetExtendedColorZonesOptions } from './commands/multizone.js';
+export type { Get64Options, Set64Options, SetTileEffectOptions } from './commands/tile.js';
 export {
   GetColor,
   SetColor,

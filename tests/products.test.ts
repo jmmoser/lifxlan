@@ -86,7 +86,7 @@ describe('products', () => {
 
   test('features() accepts the decodeStateHostFirmware shape directly', () => {
     const products = Products(vendors);
-    const features = products.features(1, 32, { version_major: 2, version_minor: 80 });
+    const features = products.features(1, 32, { versionMajor: 2, versionMinor: 80 });
     assert.equal(features?.extended_multizone, true);
     assert.deepEqual(features?.temperature_range, [1500, 9000]);
   });

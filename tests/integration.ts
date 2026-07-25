@@ -294,7 +294,7 @@ describe('LIFX Integration Tests', () => {
       assert.ok(wifiInfo, 'Should receive WiFi information');
       
       console.log(`  Device label: "${label}"`);
-      console.log(`  Firmware version: ${hostFirmware.version_major}.${hostFirmware.version_minor}`);
+      console.log(`  Firmware version: ${hostFirmware.versionMajor}.${hostFirmware.versionMinor}`);
       console.log(`  WiFi signal strength: ${wifiInfo.signal}dBm`);
 
       // Test 2: Power state management
@@ -350,7 +350,7 @@ describe('LIFX Integration Tests', () => {
           const testKelvin = 3500;       // Neutral white
           const duration = 1000;         // 1 second transition
           
-          await client.send(SetColor(testHue, testSaturation, testBrightness, testKelvin, duration), selectedDevice!);
+          await client.send(SetColor({ hue: testHue, saturation: testSaturation, brightness: testBrightness, kelvin: testKelvin, duration }), selectedDevice!);
           
           // Wait for transition to complete
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -417,11 +417,13 @@ describe('LIFX Integration Tests', () => {
           const duration = 1000; // 1 second transition
           
           await client.send(SetColor(
-            originalColorState.hue, 
-            originalColorState.saturation, 
-            originalColorState.brightness, 
-            originalColorState.kelvin, 
-            duration
+            {
+              hue: originalColorState.hue,
+              saturation: originalColorState.saturation,
+              brightness: originalColorState.brightness,
+              kelvin: originalColorState.kelvin,
+              duration,
+            }
           ), selectedDevice!);
           
           // Wait for transition to complete
@@ -457,11 +459,11 @@ describe('LIFX Integration Tests', () => {
           // Get tile device chain information
           console.log('  Getting tile device chain...');
           const deviceChain = await client.send(GetDeviceChain(), selectedTileDevice!);
-          console.log(`  Device chain: ${deviceChain.tile_devices_count} tiles`);
+          console.log(`  Device chain: ${deviceChain.tileDevicesCount} tiles`);
 
           // Get current tile state for restoration
           console.log('  Capturing original tile state...');
-          const tileStates = await client.send(Get64(0, deviceChain.tile_devices_count, 0, 0, 8), selectedTileDevice!);
+          const tileStates = await client.send(Get64({ tileIndex: 0, tileCount: deviceChain.tileDevicesCount, width: 8 }), selectedTileDevice!);
           originalTileStates = tileStates;
           console.log(`  Captured state for ${tileStates.length} tiles`);
           
@@ -486,7 +488,7 @@ describe('LIFX Integration Tests', () => {
             fullColors.push(testColors[i % testColors.length]!);
           }
           
-          await client.send(Set64(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, fullColors), selectedTileDevice!);
+          await client.send(Set64({ tileIndex: 0, tileCount: deviceChain.tileDevicesCount, width: 8, duration: 1000, colors: fullColors }), selectedTileDevice!);
           console.log('  Applied test colors to tiles');
           
           // Wait for color change
@@ -499,17 +501,16 @@ describe('LIFX Integration Tests', () => {
             { hue: 32768, saturation: 65535, brightness: 65535, kelvin: 3500 }, // Cyan
           ];
           
-          await client.send(SetTileEffect(
-            1, // instanceid
-            TileEffectType.MORPH, // effect type
-            50, // speed (0-100)
-            BigInt(5000), // duration in ms
-            TileEffectSkyType.SUNRISE, // sky type (used for SKY effect)
-            50, // cloud saturation min
-            180, // cloud saturation max
-            testPalette.length, // palette count
-            testPalette
-          ), selectedTileDevice!);
+          await client.send(SetTileEffect({
+            instanceId: 1,
+            effectType: TileEffectType.MORPH,
+            speed: 50,
+            duration: BigInt(5000),
+            skyType: TileEffectSkyType.SUNRISE,
+            cloudSaturationMin: 50,
+            cloudSaturationMax: 180,
+            palette: testPalette,
+          }), selectedTileDevice!);
           console.log('  Applied test effect to tiles');
           
           // Wait for effect to run
@@ -519,17 +520,16 @@ describe('LIFX Integration Tests', () => {
           console.log('  Restoring original tile state...');
           
           // First, turn off any effects
-          await client.send(SetTileEffect(
-            originalTileEffect.instanceid || 0,
-            TileEffectType.OFF,
-            0,
-            BigInt(0),
-            TileEffectSkyType.SUNRISE,
-            0,
-            0,
-            0,
-            []
-          ), selectedTileDevice!);
+          await client.send(SetTileEffect({
+            instanceId: originalTileEffect.instanceId || 0,
+            effectType: TileEffectType.OFF,
+            speed: 0,
+            duration: BigInt(0),
+            skyType: TileEffectSkyType.SUNRISE,
+            cloudSaturationMin: 0,
+            cloudSaturationMax: 0,
+            palette: [],
+          }), selectedTileDevice!);
           
           // Wait for effect to stop
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -538,7 +538,7 @@ describe('LIFX Integration Tests', () => {
           if (originalTileStates && originalTileStates.length > 0) {
             const originalColors = originalTileStates.flatMap((tile: State64) => tile.colors || []);
             if (originalColors.length > 0) {
-              await client.send(Set64(0, deviceChain.tile_devices_count, 0, 0, 8, 1000, originalColors), selectedTileDevice!);
+              await client.send(Set64({ tileIndex: 0, tileCount: deviceChain.tileDevicesCount, width: 8, duration: 1000, colors: originalColors }), selectedTileDevice!);
               console.log('  Restored original tile colors');
               
               // Wait for restoration to complete
@@ -553,17 +553,16 @@ describe('LIFX Integration Tests', () => {
               ? originalTileEffect.skyType 
               : TileEffectSkyType.SUNRISE;
             
-            await client.send(SetTileEffect(
-              originalTileEffect.instanceid || 0,
+            await client.send(SetTileEffect({
+              instanceId: originalTileEffect.instanceId || 0,
               effectType,
-              originalTileEffect.speed || 50,
-              BigInt(originalTileEffect.duration || 0),
+              speed: originalTileEffect.speed || 50,
+              duration: BigInt(originalTileEffect.duration || 0),
               skyType,
-              originalTileEffect.cloudSaturationMin || 50,
-              originalTileEffect.cloudSaturationMax || 180,
-              originalTileEffect.palette_count || 0,
-              originalTileEffect.palette || []
-            ), selectedTileDevice!);
+              cloudSaturationMin: originalTileEffect.cloudSaturationMin || 50,
+              cloudSaturationMax: originalTileEffect.cloudSaturationMax || 180,
+              palette: originalTileEffect.palette || [],
+            }), selectedTileDevice!);
             console.log('  Restored original tile effect');
           }
           
@@ -581,7 +580,7 @@ describe('LIFX Integration Tests', () => {
       console.log(`📊 Test Summary:`);
       console.log(`   - Regular Light: ${selectedDevice!.serialNumber} (${label})`);
       console.log(`   - Signal: ${selectedDeviceInfo!.signal}dBm (Product: ${selectedDeviceInfo!.product})`);
-      console.log(`   - Firmware: ${hostFirmware.version_major}.${hostFirmware.version_minor}`);
+      console.log(`   - Firmware: ${hostFirmware.versionMajor}.${hostFirmware.versionMinor}`);
       console.log(`   - Average response time: ${avgResponseTime.toFixed(1)}ms`);
       logTileDeviceSummary(selectedTileDevice, selectedTileDeviceInfo);
       console.log(`   - All core functionality verified and devices restored`);

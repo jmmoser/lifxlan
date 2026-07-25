@@ -2,7 +2,6 @@ import { ValidationError } from '../errors.js';
 
 const HEX_CHARS = /^[0-9a-fA-F]+$/;
 
-export const NOOP = (_value: unknown) => {};
 
 export function PromiseWithResolvers<T>(): {
   resolve: (value: T) => void;

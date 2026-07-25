@@ -100,7 +100,7 @@ export interface Product {
  */
 export type FirmwareVersion =
   | { major: number; minor: number }
-  | { version_major: number; version_minor: number };
+  | { versionMajor: number; versionMinor: number };
 
 export interface ProductsInstance {
   /** Looks up a product by the vendor/product ids from a StateVersion response. */
@@ -160,8 +160,8 @@ export function Products(vendors: readonly VendorDefinition[]): ProductsInstance
       if (!product) return undefined;
       if (!firmware || product.upgrades.length === 0) return product.features;
 
-      const major = 'major' in firmware ? firmware.major : firmware.version_major;
-      const minor = 'minor' in firmware ? firmware.minor : firmware.version_minor;
+      const major = 'major' in firmware ? firmware.major : firmware.versionMajor;
+      const minor = 'minor' in firmware ? firmware.minor : firmware.versionMinor;
 
       let features = product.features;
       for (const upgrade of product.upgrades) {
