@@ -29,6 +29,11 @@
 /**
  * The capability flags published for a product. Matches the `defaults` and
  * `features` objects in products.json.
+ *
+ * Field names (`extended_multizone`, `temperature_range`, ...) deliberately
+ * keep products.json's snake_case verbatim — the one exception to this
+ * library's camelCase convention — so the shapes can be diffed against and
+ * populated from the upstream file without translation.
  */
 export interface ProductFeatures {
   /** Supports HEV (germicidal) cycles. */

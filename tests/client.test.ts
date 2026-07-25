@@ -359,7 +359,7 @@ describe('client', () => {
     });
 
     await assert.rejects(
-      () => client.send(GetColorZones(0, 1), sharedDevice, { timeoutMs: 10 }),
+      () => client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), sharedDevice, { timeoutMs: 10 }),
       (error) => error instanceof TimeoutError,
     );
 
@@ -721,7 +721,7 @@ describe('client', () => {
     });
 
     // Request zones 0-1, should receive 2 StateZone responses
-    const result = await client.send(GetColorZones(0, 1), device);
+    const result = await client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), device);
     
     // TODO: is it possible to get more than 1 response?
     assert.equal(Array.isArray(result), true);
@@ -774,7 +774,7 @@ describe('client', () => {
     const deviceB = Device({ serialNumber: 'abcdef123402', port: 1234, address: '1.2.3.5' });
 
     // The same command object drives both exchanges.
-    const command = GetColorZones(0, 1);
+    const command = GetColorZones({ startIndex: 0, endIndex: 1 });
     const [resultA, resultB] = await Promise.all([
       client.send(command, deviceA),
       client.send(command, deviceB),

@@ -88,7 +88,7 @@ export function Get64(options: Get64Options) {
 // what lets send() reject responseMode 'response'/'both' at compile time:
 // with no decoder to infer from, only the annotation carries `void` to the
 // call site.
-export function SetUserPosition(tileIndex: number, userX: number, userY: number): Command<void, 'ack-only'> & { payload: Uint8Array } {
+export function SetUserPosition(tileIndex: number, userX: number, userY: number): Command<void, 'ack-only'> {
   return {
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
@@ -121,7 +121,7 @@ export interface Set64Options {
 // what lets send() reject responseMode 'response'/'both' at compile time:
 // with no decoder to infer from, only the annotation carries `void` to the
 // call site.
-export function Set64(options: Set64Options): Command<void, 'ack-only'> & { payload: Uint8Array } {
+export function Set64(options: Set64Options): Command<void, 'ack-only'> {
   if (options.colors.length > 64) {
     throw new ValidationError('colors', options.colors.length, 'must contain at most 64 colors');
   }

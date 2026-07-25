@@ -93,7 +93,10 @@ export function GetLightPower() {
   } satisfies Command<number, 'response'>;
 }
 
-export function SetLightPower(level: number | boolean, duration: number) {
+/**
+ * @param duration Transition time in milliseconds. Defaults to 0 (immediate).
+ */
+export function SetLightPower(level: number | boolean, duration = 0) {
   return {
     type: Type.SetLightPower,
     payload: Encoding.encodeSetLightPower(level, duration),

@@ -65,7 +65,7 @@ export type _setPowerUndefinedModeIsVoid = Expect<Equal<Awaited<ReturnType<typeo
 import { GetColorZones } from '../src/commands/multizone.js';
 import type { ColorZoneResponse } from '../src/commands/multizone.js';
 
-const getZones = () => client.send(GetColorZones(0, 1), device);
+const getZones = () => client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), device);
 export type _getZonesIsResponseArray = Expect<Equal<Awaited<ReturnType<typeof getZones>>, ColorZoneResponse[]>>;
 
 // --- Commands with no response packet ---------------------------------------

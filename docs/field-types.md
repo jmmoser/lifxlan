@@ -1,3 +1,5 @@
+> **Note:** This page mirrors the official LIFX protocol documentation, so field names appear in their wire-format snake_case (`zone_index`, `updated_at`, `res_required`, ...). The decoded messages this library returns expose the same fields in camelCase (`zoneIndex`, `updatedAt`, `resRequired`, ...).
+
 ## Simple types   [Skip link to Simple types](https://lan.developer.lifx.com/docs/field-types\#simple-types)
 
 ### Uint8   [Skip link to Uint8](https://lan.developer.lifx.com/docs/field-types\#uint8)

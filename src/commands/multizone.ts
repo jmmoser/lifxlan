@@ -6,11 +6,21 @@ import type { Command, Decoder } from './index.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
 
-export function GetColorZones(
-  startIndex: number,
-  endIndex: number,
-  onResponse?: (response: ColorZoneResponse) => boolean | void
-) {
+export interface GetColorZonesOptions {
+  /** First zone to fetch (inclusive). */
+  startIndex: number;
+  /** Last zone to fetch (inclusive). */
+  endIndex: number;
+  /**
+   * Called once per StateZone/StateMultiZone packet as it arrives. Return
+   * false to stop waiting for further packets and resolve with what has
+   * accumulated.
+   */
+  onResponse?: (response: ColorZoneResponse) => boolean | void;
+}
+
+export function GetColorZones(options: GetColorZonesOptions) {
+  const { startIndex, endIndex, onResponse } = options;
   // Accumulation state lives inside createDecoder so each send() gets a
   // fresh decoder, making this command safe to reuse across concurrent
   // sends and devices.
@@ -147,9 +157,17 @@ export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
   } satisfies Command<Encoding.StateMultiZoneEffect, 'ack-only'>;
 }
 
-export function GetExtendedColorZones(
-  onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void
-) {
+export interface GetExtendedColorZonesOptions {
+  /**
+   * Called once per StateExtendedColorZones packet as it arrives. Return
+   * false to stop waiting for further packets and resolve with what has
+   * accumulated.
+   */
+  onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void;
+}
+
+export function GetExtendedColorZones(options: GetExtendedColorZonesOptions = {}) {
+  const { onResponse } = options;
   // Accumulation state lives inside createDecoder so each send() gets a
   // fresh decoder, making this command safe to reuse across concurrent
   // sends and devices.
@@ -211,10 +229,11 @@ export interface SetExtendedColorZonesOptions {
   /** Index of the first zone the colors apply to. */
   zoneIndex: number;
   /**
-   * Between 1 and 82 colors, applied to consecutive zones starting at
-   * zoneIndex. The wire-level colors_count field is derived from this
-   * array's length. To address more than 82 zones, send multiple commands
-   * with NO_APPLY and finish with APPLY.
+   * Up to 82 colors, applied to consecutive zones starting at zoneIndex.
+   * The wire-level colors_count field is derived from this array's length.
+   * To address more than 82 zones, send multiple commands with NO_APPLY and
+   * finish with APPLY — which may be an empty array here, since APPLY_ONLY
+   * flushes previously buffered zones without carrying colors of its own.
    */
   colors: Encoding.Color[];
   /** Transition time in milliseconds. Defaults to 0 (immediate). */
@@ -228,8 +247,8 @@ export interface SetExtendedColorZonesOptions {
 }
 
 export function SetExtendedColorZones(options: SetExtendedColorZonesOptions) {
-  if (options.colors.length < 1 || options.colors.length > 82) {
-    throw new ValidationError('colors', options.colors.length, 'must contain between 1 and 82 colors');
+  if (options.colors.length > 82) {
+    throw new ValidationError('colors', options.colors.length, 'must contain at most 82 colors');
   }
   return {
     type: Type.SetExtendedColorZones,
