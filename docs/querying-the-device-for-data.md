@@ -1,3 +1,5 @@
+> **Note:** This page mirrors the official LIFX protocol documentation, so field names appear in their wire-format snake_case (`zone_index`, `updated_at`, `res_required`, ...). The decoded messages this library returns expose the same fields in camelCase (`zoneIndex`, `updatedAt`, `resRequired`, ...).
+
 The LIFX protocol supplies a number of `Get` messages for getting information from the LIFX devices. When you send these messages to the device with the `res_required` flag set to `0` you will get one or more `State` messages in response.
 
 Below you will find the `type` of the message, the fields that make up the payload of the message, the information you get from the request, and how many `State` messages you should expect in response.

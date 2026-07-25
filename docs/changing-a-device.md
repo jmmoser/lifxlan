@@ -1,3 +1,5 @@
+> **Note:** This page mirrors the official LIFX protocol documentation, so field names appear in their wire-format snake_case (`zone_index`, `updated_at`, `res_required`, ...). The decoded messages this library returns expose the same fields in camelCase (`zoneIndex`, `updatedAt`, `resRequired`, ...).
+
 The LIFX protocol supports `Set` messages which are used to change metadata or the visual appearance of a device. These messages also return `State` messages like the `Get` messages do when you specify `res_required=1`.
 
 Note however that if your `Set` messages changes the visual appearance of the light it is likely you'll get the state of the device before your change.

@@ -484,6 +484,8 @@ Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a 
 
 **`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `sendUnacknowledged()` throw synchronously instead, since they have no promise to reject.)
 
+One nuance: that guarantee covers *sending*, not *constructing*. Command factories that derive wire counts from an array (`SetExtendedColorZones`, `Set64`, `SetTileEffect`) validate the array's length and throw `ValidationError` at construction — a too-long array would otherwise encode a count byte that lies about the payload. If you build the command inside a `devices.map(...)` fan-out, a construction throw escapes the map before any promise exists; construct the command once, outside the loop, and the guarantee holds (this is also cheaper — commands are reusable across devices and sends).
+
 Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
 
 ### Rate Limits

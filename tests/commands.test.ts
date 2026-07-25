@@ -502,7 +502,7 @@ describe('commands', () => {
   });
 
   test('GetColorZones basic usage without callback', () => {
-    const cmd = Commands.GetColorZones(0, 15);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 15 });
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(cmd.payload.length, 2);
     
@@ -514,15 +514,15 @@ describe('commands', () => {
 
   test('GetColorZones with callback', () => {
     const responses: Commands.ColorZoneResponse[] = [];
-    const cmd = Commands.GetColorZones(0, 3, (response) => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 3, onResponse: (response) => {
       responses.push(response);
-    });
+    } });
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('GetColorZones decode handles StateZone responses', () => {
-    const cmd = Commands.GetColorZones(0, 2);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 2 });
     
     // Mock StateZone response (Type.StateZone = 503)
     const stateZoneBytes = new Uint8Array(36 + 13); // header + payload
@@ -554,7 +554,7 @@ describe('commands', () => {
   });
 
   test('GetColorZones decode handles StateMultiZone responses', () => {
-    const cmd = Commands.GetColorZones(0, 2);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 2 });
     
     // Mock StateMultiZone response (Type.StateMultiZone = 506)
     // StateMultiZone always contains 8 colors (fixed size)
@@ -593,9 +593,9 @@ describe('commands', () => {
 
   test('GetColorZones callback receives responses', () => {
     const receivedResponses: Commands.ColorZoneResponse[] = [];
-    const cmd = Commands.GetColorZones(0, 1, (response) => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 1, onResponse: (response) => {
       receivedResponses.push(response);
-    });
+    } });
     
     // Mock StateZone response for zone 0
     const stateZoneBytes = new Uint8Array(36 + 13);
@@ -626,10 +626,10 @@ describe('commands', () => {
   test('GetColorZones callback can stop early', () => {
     const receivedResponses: Commands.ColorZoneResponse[] = [];
     
-    const cmd = Commands.GetColorZones(0, 5, (response) => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 5, onResponse: (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    });
+    } });
     
     // Mock StateZone response for zone 0
     const stateZoneBytes = new Uint8Array(36 + 13);
@@ -654,7 +654,7 @@ describe('commands', () => {
 
 
   test('GetColorZones accumulates responses correctly', () => {
-    const cmd = Commands.GetColorZones(0, 2);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 2 });
     
     // First call should return array with 1 item
     const stateZoneBytes1 = new Uint8Array(36 + 13);
@@ -704,7 +704,7 @@ describe('commands', () => {
   });
 
   test('GetColorZones ignores unknown response types', () => {
-    const cmd = Commands.GetColorZones(0, 1);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 1 });
     
     // Mock unknown response type
     const unknownBytes = new Uint8Array(36 + 10);
@@ -890,9 +890,9 @@ describe('commands', () => {
 
   test('GetExtendedColorZones callback receives responses', () => {
     const receivedResponses: StateExtendedColorZones[] = [];
-    const cmd = Commands.GetExtendedColorZones((response) => {
+    const cmd = Commands.GetExtendedColorZones({ onResponse: (response) => {
       receivedResponses.push(response);
-    });
+    } });
     
     // Mock StateExtendedColorZones response - decoder always reads 82 colors
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
@@ -925,10 +925,10 @@ describe('commands', () => {
 
   test('GetExtendedColorZones callback can stop early', () => {
     const receivedResponses: StateExtendedColorZones[] = [];
-    const cmd = Commands.GetExtendedColorZones((response) => {
+    const cmd = Commands.GetExtendedColorZones({ onResponse: (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    });
+    } });
     
     // Mock first response for device with >82 zones
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
@@ -1008,11 +1008,36 @@ describe('commands', () => {
     assert.equal(view.getUint16(22, true), 2700); // kelvin
   });
 
+  test('SetExtendedColorZones accepts an empty colors array', () => {
+    // APPLY_ONLY flushes zones buffered by earlier NO_APPLY messages and
+    // carries no colors of its own — zero colors must stay expressible.
+    const cmd = Commands.SetExtendedColorZones({
+      apply: MultiZoneExtendedApplicationRequest.APPLY_ONLY,
+      zoneIndex: 0,
+      colors: [],
+    });
+    assert.equal(cmd.type, Type.SetExtendedColorZones);
+    const view = new DataView(cmd.payload.buffer);
+    assert.equal(view.getUint8(4), MultiZoneExtendedApplicationRequest.APPLY_ONLY);
+    assert.equal(view.getUint8(7), 0); // colorsCount
+  });
+
+  test('SetExtendedColorZones rejects more than 82 colors', () => {
+    const color = { hue: 0, saturation: 0, brightness: 0, kelvin: 3500 };
+    assert.throws(
+      () => Commands.SetExtendedColorZones({ zoneIndex: 0, colors: Array.from({ length: 83 }, () => color) }),
+      (error) => Error.isError(error) && error.name === 'ValidationError',
+    );
+  });
+
   test('SetUserPosition', () => {
     const cmd = Commands.SetUserPosition(1, 1.5, -2.7);
     assert.equal(cmd.type, Type.SetUserPosition);
+    // The public type is plain Command<void, 'ack-only'>, where payload is
+    // optional — narrow before inspecting the wire bytes.
+    assert.ok(cmd.payload instanceof Uint8Array);
     assert.equal(cmd.payload.length, 11);
-    
+
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint8(0), 1); // tileIndex
     assert.equal(view.getUint8(1), 0); // reserved
@@ -1031,8 +1056,11 @@ describe('commands', () => {
     
     const cmd = Commands.Set64({ tileIndex: 0, tileCount: 8, x: 1, y: 2, width: 4, duration: 500, colors });
     assert.equal(cmd.type, Type.Set64);
+    // The public type is plain Command<void, 'ack-only'>, where payload is
+    // optional — narrow before inspecting the wire bytes.
+    assert.ok(cmd.payload instanceof Uint8Array);
     assert.equal(cmd.payload.length, 522);
-    
+
     const view = new DataView(cmd.payload.buffer);
     assert.equal(view.getUint8(0), 0); // tileIndex
     assert.equal(view.getUint8(1), 8); // length

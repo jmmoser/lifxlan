@@ -1,3 +1,5 @@
+> **Note:** This page mirrors the official LIFX protocol documentation, so field names appear in their wire-format snake_case (`zone_index`, `updated_at`, `res_required`, ...). The decoded messages this library returns expose the same fields in camelCase (`zoneIndex`, `updatedAt`, `resRequired`, ...).
+
 You will receive a State message to your request when you send a Get message or if your Set message has the `res_required` flag set to 1. Though typically you would only require acknowledgement from Set messages.
 
 # Core   [Skip link to Core](https://lan.developer.lifx.com/docs/information-messages\#core)
