@@ -84,12 +84,16 @@ export function Get64(options: Get64Options) {
   } satisfies Command<Encoding.State64[], 'response'>;
 }
 
-export function SetUserPosition(tileIndex: number, userX: number, userY: number) {
+// The declared Command<void, ...> return type (rather than `satisfies`) is
+// what lets send() reject responseMode 'response'/'both' at compile time:
+// with no decoder to infer from, only the annotation carries `void` to the
+// call site.
+export function SetUserPosition(tileIndex: number, userX: number, userY: number): Command<void, 'ack-only'> & { payload: Uint8Array } {
   return {
     type: Type.SetUserPosition,
     payload: Encoding.encodeSetUserPosition(tileIndex, userX, userY),
     defaultResponseMode: 'ack-only',
-  } satisfies Command<void, 'ack-only'>;
+  };
 }
 
 export interface Set64Options {
@@ -113,7 +117,11 @@ export interface Set64Options {
   colors: Encoding.Color[];
 }
 
-export function Set64(options: Set64Options) {
+// The declared Command<void, ...> return type (rather than `satisfies`) is
+// what lets send() reject responseMode 'response'/'both' at compile time:
+// with no decoder to infer from, only the annotation carries `void` to the
+// call site.
+export function Set64(options: Set64Options): Command<void, 'ack-only'> & { payload: Uint8Array } {
   if (options.colors.length > 64) {
     throw new ValidationError('colors', options.colors.length, 'must contain at most 64 colors');
   }
@@ -129,7 +137,7 @@ export function Set64(options: Set64Options) {
       options.colors,
     ),
     defaultResponseMode: 'ack-only',
-  } satisfies Command<void, 'ack-only'>;
+  };
 }
 
 export function GetTileEffect() {

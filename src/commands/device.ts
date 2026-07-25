@@ -84,11 +84,15 @@ export function GetInfo() {
   } satisfies Command<Encoding.StateInfo, 'response'>;
 }
 
-export function SetReboot() {
+// The declared Command<void, ...> return type (rather than `satisfies`) is
+// what lets send() reject responseMode 'response'/'both' at compile time:
+// with no decoder to infer from, only the annotation carries `void` to the
+// call site.
+export function SetReboot(): Command<void, 'ack-only'> {
   return {
     type: Type.SetReboot,
     defaultResponseMode: 'ack-only',
-  } satisfies Command<void, 'ack-only'>;
+  };
 }
 
 export function GetLocation() {

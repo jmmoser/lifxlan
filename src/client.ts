@@ -173,6 +173,16 @@ type ResolveMode<Override extends ResponseMode | undefined, Default extends Resp
  */
 type ModeReturn<T, Mode extends ResponseMode> = Mode extends 'ack-only' ? Promise<void> : Promise<T>;
 
+/**
+ * The response modes a caller may request for a command whose decoded payload
+ * is `T`. A `Command<void>` (SetReboot, Set64, SetUserPosition) has no
+ * response packet — the protocol documents that no State message is sent even
+ * with res_required set — so requesting 'response' or 'both' on one is a
+ * compile error rather than a guaranteed timeout. The runtime ValidationError
+ * in send() backs this up for untyped callers.
+ */
+type RequestableModes<T> = [T] extends [void] ? 'ack-only' : ResponseMode;
+
 export interface SendOptions<A extends ResponseMode | undefined = ResponseMode | undefined> {
   /**
    * Overrides the exchange for this call. Omit it to use the command's own
@@ -189,6 +199,10 @@ export interface SendOptions<A extends ResponseMode | undefined = ResponseMode |
    * call more ways to time out without confirming anything extra. To verify
    * a change took effect, wait for the ack and follow up with the matching
    * Get command.
+   *
+   * Commands with no response packet at all (`Command<void>` — SetReboot,
+   * Set64, SetUserPosition) only accept 'ack-only' here; requesting a
+   * response from them is a compile error.
    */
   responseMode?: A;
   /**
@@ -236,19 +250,21 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
   /**
    * Fire-and-forget to the whole network. No response is correlated —
    * responses only reach a router-level `onMessage` tap. Throws
-   * synchronously if the transport does.
+   * synchronously if the transport does. Accepts any command regardless of
+   * its default response mode, since no exchange is performed.
    */
-  broadcast<T>(command: Command<T>): void;
+  broadcast<T>(command: Command<T, ResponseMode>): void;
   /**
    * Fire-and-forget to one device: no acknowledgement or response is
    * requested and delivery is not confirmed. Use it for high-rate updates
    * where the next packet supersedes the last; use `send()` when the
    * outcome matters. (Named for what it skips — `send()` also unicasts,
-   * but correlates a reply.)
+   * but correlates a reply.) Accepts any command regardless of its default
+   * response mode, since no exchange is performed.
    */
-  sendUnacknowledged<T>(command: Command<T>, device: Device): void;
+  sendUnacknowledged<T>(command: Command<T, ResponseMode>, device: Device): void;
 
-  send<T, Default extends ResponseMode = 'response', Override extends ResponseMode | undefined = undefined>(
+  send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
     command: Command<T, Default>,
     device: Device,
     options?: SendOptions<Override>,
@@ -391,7 +407,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
     /**
      * Broadcast a command to the local network.
      */
-    broadcast<T>(command: Command<T>) {
+    broadcast<T>(command: Command<T, ResponseMode>) {
       if (disposed) throw new DisposedClientError(source);
       
       const bytes = encode(
@@ -410,7 +426,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
     /**
      * Send a command to a device without expecting a response or acknowledgement.
      */
-    sendUnacknowledged<T>(command: Command<T>, device: Device) {
+    sendUnacknowledged<T>(command: Command<T, ResponseMode>, device: Device) {
       if (disposed) throw new DisposedClientError(source);
 
       const sequence = nextSequence(device.serialNumber);
@@ -436,7 +452,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
      * transport — surfaces as a rejected promise, so fan-outs like
      * `Promise.all(devices.map(...))` observe all failures uniformly.
      */
-    send<T, Default extends ResponseMode = 'response', Override extends ResponseMode | undefined = undefined>(
+    send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
       command: Command<T, Default>,
       device: Device,
       options?: SendOptions<Override>,
