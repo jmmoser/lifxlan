@@ -132,8 +132,8 @@ describe('router', () => {
       false, // tagged
       source, // source
       new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]), // target
-      false, // res_required
-      false, // ack_required
+      false, // resRequired
+      false, // ackRequired
       10, // sequence
       Type.StatePower, // type
       new Uint8Array([0xff, 0xff]) // payload
@@ -170,8 +170,8 @@ describe('router', () => {
       false, // tagged
       54321, // source
       new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]), // target
-      false, // res_required
-      false, // ack_required
+      false, // resRequired
+      false, // ackRequired
       5, // sequence
       Type.StateLabel, // type
       new Uint8Array([0x41, 0x42, 0x43]) // payload
@@ -196,8 +196,8 @@ describe('router', () => {
       false, // tagged
       99999, // source (not registered)
       new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]), // target
-      false, // res_required
-      false, // ack_required
+      false, // resRequired
+      false, // ackRequired
       1, // sequence
       Type.GetService, // type
       new Uint8Array() // payload
@@ -264,8 +264,8 @@ describe('router', () => {
       false, // tagged
       source, // source
       new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]), // target
-      false, // res_required
-      false, // ack_required
+      false, // resRequired
+      false, // ackRequired
       1, // sequence
       Type.GetService, // type
       new Uint8Array() // payload

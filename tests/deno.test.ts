@@ -209,7 +209,7 @@ describe('openLan (deno)', () => {
 
     const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
     conn.failNextSend(new Error('NetworkUnreachable'));
-    lan.client.unicast(GetPower(), device); // fire-and-forget: nothing to await
+    lan.client.sendUnacknowledged(GetPower(), device); // fire-and-forget: nothing to await
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(errors.length, 1);

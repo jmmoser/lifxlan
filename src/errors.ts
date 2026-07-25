@@ -4,6 +4,10 @@
 
 /**
  * Base class for all LIFX protocol errors.
+ *
+ * Every subclass passes its structured data as `context`, so `context` (and
+ * therefore `toJSON()`) always carries the same information as the subclass's
+ * typed fields — useful for structured logging without instanceof checks.
  */
 export class LifxError extends Error {
   public readonly context: Record<string, unknown>;
@@ -12,7 +16,7 @@ export class LifxError extends Error {
     super(message);
     this.name = this.constructor.name;
     this.context = context;
-    
+
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
@@ -36,7 +40,7 @@ export class TimeoutError extends LifxError {
   public readonly operation: string;
 
   constructor(timeoutMs: number, operation = 'operation') {
-    super(`${operation} timed out after ${timeoutMs}ms`);
+    super(`${operation} timed out after ${timeoutMs}ms`, { timeoutMs, operation });
     this.timeoutMs = timeoutMs;
     this.operation = operation;
   }
@@ -50,7 +54,7 @@ export class UnhandledCommandError extends LifxError {
   public readonly deviceSerial: string | undefined;
 
   constructor(commandType: number, deviceSerial?: string) {
-    super(`Device ${deviceSerial || 'unknown'} returned unhandled command type: ${commandType}`);
+    super(`Device ${deviceSerial || 'unknown'} returned unhandled command type: ${commandType}`, { commandType, deviceSerial });
     this.commandType = commandType;
     this.deviceSerial = deviceSerial;
   }
@@ -73,7 +77,7 @@ export class SequenceExhaustionError extends LifxError {
   public readonly serialNumber: string;
 
   constructor(serialNumber: string) {
-    super(`All sequence numbers for device ${serialNumber} are in flight. Wait for pending requests to settle or reduce concurrency.`);
+    super(`All sequence numbers for device ${serialNumber} are in flight. Wait for pending requests to settle or reduce concurrency.`, { serialNumber });
     this.serialNumber = serialNumber;
   }
 }
@@ -85,7 +89,7 @@ export class DisposedClientError extends LifxError {
   public readonly source: number;
 
   constructor(source: number) {
-    super(`Cannot use disposed client with source ${source}`);
+    super(`Cannot use disposed client with source ${source}`, { source });
     this.source = source;
   }
 }
@@ -97,7 +101,7 @@ export class AbortError extends LifxError {
   public readonly operation: string;
 
   constructor(operation = 'operation') {
-    super(`${operation} was aborted`);
+    super(`${operation} was aborted`, { operation });
     this.operation = operation;
   }
 }
@@ -111,7 +115,7 @@ export class ValidationError extends LifxError {
   public readonly reason: string | undefined;
 
   constructor(parameter: string, value: unknown, reason?: string) {
-    super(`Invalid ${parameter}: ${value}${reason ? ` (${reason})` : ''}`);
+    super(`Invalid ${parameter}: ${value}${reason ? ` (${reason})` : ''}`, { parameter, value, reason });
     this.parameter = parameter;
     this.value = value;
     this.reason = reason;

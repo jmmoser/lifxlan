@@ -78,13 +78,13 @@ import { SetColor } from 'lifxlan';
 
 // Set to bright red
 await client.send(
-  SetColor(0, 65535, 65535, 3500, 0), // hue, saturation, brightness, kelvin, duration
+  SetColor({ hue: 0, saturation: 65535, brightness: 65535, kelvin: 3500 }),
   device
 );
 
 // Set to blue with 2-second transition
 await client.send(
-  SetColor(43690, 65535, 65535, 3500, 2000),
+  SetColor({ hue: 43690, saturation: 65535, brightness: 65535, kelvin: 3500, duration: 2000 }),
   device
 );
 ```
@@ -141,7 +141,7 @@ const state = await client.send(SetPower(true), device, { responseMode: 'respons
 
 > **Protocol caveat:** forcing `'response'` (or `'both'`) on a Set command asks the device for a State reply that may reflect the state from *before* the change was applied, and waiting on two UDP packets gives a call more ways to time out without confirming anything extra. To verify a change took effect, wait for the ack and then send the matching Get (see the [examples below](#response-mode-control-examples)).
 
-**Fire-and-forget:** Use `client.unicast()` for commands that don't need confirmation
+**Fire-and-forget:** Use `client.sendUnacknowledged()` for commands that don't need confirmation
 
 ## Examples by Runtime
 
@@ -239,7 +239,7 @@ setTimeout(() => {
 Bun's `socket.sendMany()` can send multiple datagrams in a single syscall on
 supported operating systems. Buffer outgoing messages in `onSend` and flush them
 on a microtask to collapse every send issued in the same tick into one
-`sendMany`. Ordinary `send()`, `unicast()`, `broadcast()`, and `Promise.all`
+`sendMany`. Ordinary `send()`, `sendUnacknowledged()`, `broadcast()`, and `Promise.all`
 fan-outs then batch automatically, with no API changes:
 
 ```javascript
@@ -482,7 +482,7 @@ try {
 
 Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.get()` accepts the same options: `devices.get(serialNumber, { signal, timeoutMs })`.
 
-**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `unicast()` throw synchronously instead, since they have no promise to reject.)
+**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `sendUnacknowledged()` throw synchronously instead, since they have no promise to reject.)
 
 Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
 
@@ -491,7 +491,7 @@ Each client can have up to 255 requests in flight per device; sequence numbers a
 LIFX's guidance is to send **at most 20 messages per second to any single device**. The library deliberately does not throttle — every operation maps to exactly one packet, and pacing policy (drop, queue, coalesce) belongs to your application — so staying under the limit is your code's job:
 
 - For animations, space per-device updates at least 50ms apart; the [Party Mode](#party-mode-animated-colors) example's 100ms cadence stays comfortably inside the limit.
-- Exceeding it doesn't produce an error — the protocol has no signal for overrun. LIFX documents the consequence only as "unexpected device or protocol message behavior"; in practice an overdriven device delays or silently discards messages, which surfaces as `TimeoutError` on acknowledged sends and skipped frames on `unicast()`.
+- Exceeding it doesn't produce an error — the protocol has no signal for overrun. LIFX documents the consequence only as "unexpected device or protocol message behavior"; in practice an overdriven device delays or silently discards messages, which surfaces as `TimeoutError` on acknowledged sends and skipped frames on `sendUnacknowledged()`.
 - Broadcasts multiply: one `GetService` broadcast elicits a reply from *every* device on the network, so discovery traffic scales with fleet size — this is why `discover()` backs its broadcast interval off to once a minute.
 - If you need a real throttle (a token bucket, per-device queues), `Router({ onSend })` is the seam: every outgoing packet passes through it, and the `serialNumber` argument identifies the destination device for per-device pacing. The [`sendMany` batching example](#batching-sends-with-sendmany) uses the same seam for the opposite purpose.
 
@@ -552,13 +552,13 @@ A client also implements `Symbol.dispose`, so a `using` declaration disposes it 
 // Confirm a change, then read back the applied state. This is the reliable
 // verify pattern: a State reply forced out of a Set with responseMode:
 // 'response' may reflect the state from before the change was applied.
-await client.send(SetColor(120, 100, 100, 3500, 0), device); // ack-only by default
+await client.send(SetColor({ hue: 120, saturation: 100, brightness: 100, kelvin: 3500 }), device); // ack-only by default
 const currentState = await client.send(GetColor(), device);  // Promise<LightState>
 console.log('Light is now:', currentState.hue);
 
 // Fast mode: fire-and-forget for animations (no promise)
 for (let i = 0; i < 360; i += 10) {
-  client.unicast(SetColor(i * 182, 65535, 65535, 3500, 100), device);
+  client.sendUnacknowledged(SetColor({ hue: i * 182, saturation: 65535, brightness: 65535, kelvin: 3500, duration: 100 }), device);
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
@@ -608,8 +608,8 @@ for (const group of byGroup.values()) {
 
 One protocol subtlety if you track labels: devices can disagree about a
 group's label, because a rename only reaches devices that were powered on at
-the time. `StateGroup` carries an `updated_at` timestamp for exactly this —
-the label reported with the newest `updated_at` is the current one, so keep
+the time. `StateGroup` carries an `updatedAt` timestamp for exactly this —
+the label reported with the newest `updatedAt` is the current one, so keep
 the newest timestamp per UUID and ignore label reports older than it.
 
 ### Party Mode (Animated Colors)
@@ -628,8 +628,8 @@ while (true) {
     const [hue, saturation, brightness, kelvin] = 
       PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
     
-    client.unicast(
-      SetColor(hue, saturation, brightness, kelvin, 1000), 
+    client.sendUnacknowledged(
+      SetColor({ hue, saturation, brightness, kelvin, duration: 1000 }), 
       device
     );
     

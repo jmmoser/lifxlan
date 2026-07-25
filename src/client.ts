@@ -243,9 +243,10 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    * Fire-and-forget to one device: no acknowledgement or response is
    * requested and delivery is not confirmed. Use it for high-rate updates
    * where the next packet supersedes the last; use `send()` when the
-   * outcome matters.
+   * outcome matters. (Named for what it skips — `send()` also unicasts,
+   * but correlates a reply.)
    */
-  unicast<T>(command: Command<T>, device: Device): void;
+  sendUnacknowledged<T>(command: Command<T>, device: Device): void;
 
   send<T, Default extends ResponseMode = 'response', Override extends ResponseMode | undefined = undefined>(
     command: Command<T, Default>,
@@ -409,7 +410,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
     /**
      * Send a command to a device without expecting a response or acknowledgement.
      */
-    unicast<T>(command: Command<T>, device: Device) {
+    sendUnacknowledged<T>(command: Command<T>, device: Device) {
       if (disposed) throw new DisposedClientError(source);
 
       const sequence = nextSequence(device.serialNumber);

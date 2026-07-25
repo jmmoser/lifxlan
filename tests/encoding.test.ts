@@ -58,8 +58,8 @@ describe('encoding', () => {
     assert.equal(header.origin, 0);
     assert.equal(header.source, 3381435545);
     assert.deepEqual(header.target, new Uint8Array([1, 2, 3, 4, 5, 6]));
-    assert.equal(header.res_required, true);
-    assert.equal(header.ack_required, false);
+    assert.equal(header.resRequired, true);
+    assert.equal(header.ackRequired, false);
     assert.equal(header.reserved3, 0);
     assert.equal(header.sequence, 5);
 
@@ -67,8 +67,8 @@ describe('encoding', () => {
       header.tagged,
       header.source,
       header.target,
-      header.res_required,
-      header.ack_required,
+      header.resRequired,
+      header.ackRequired,
       header.sequence,
       header.type,
     );
@@ -303,17 +303,17 @@ describe('encoding', () => {
     
     // Skip reserved (8 bytes)
     
-    // Set version_minor and version_major
-    view.setUint16(16, 42, true); // version_minor
-    view.setUint16(18, 1, true);  // version_major
+    // Set versionMinor and versionMajor
+    view.setUint16(16, 42, true); // versionMinor
+    view.setUint16(18, 1, true);  // versionMajor
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateHostFirmware(bytes, offsetRef);
     
     assert.equal(result.build.getTime(), Number(timestamp / 1000000n));
     assert.equal(result.reserved().length, 8);
-    assert.equal(result.version_minor, 42);
-    assert.equal(result.version_major, 1);
+    assert.equal(result.versionMinor, 42);
+    assert.equal(result.versionMajor, 1);
     assert.equal(offsetRef.current, 20);
   });
 
@@ -342,17 +342,17 @@ describe('encoding', () => {
     
     // Skip reserved6 (8 bytes)
     
-    // Set version_minor and version_major
-    view.setUint16(16, 15, true); // version_minor
-    view.setUint16(18, 2, true);  // version_major
+    // Set versionMinor and versionMajor
+    view.setUint16(16, 15, true); // versionMinor
+    view.setUint16(18, 2, true);  // versionMajor
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateWifiFirmware(bytes, offsetRef);
     
     assert.equal(result.build.getTime(), Number(timestamp / 1000000n));
     assert.equal(result.reserved6().length, 8);
-    assert.equal(result.version_minor, 15);
-    assert.equal(result.version_major, 2);
+    assert.equal(result.versionMinor, 15);
+    assert.equal(result.versionMajor, 2);
     assert.equal(offsetRef.current, 20);
   });
 
@@ -387,8 +387,8 @@ describe('encoding', () => {
 
     assert.equal(result.time.getTime(), Number(time / 1000000n));
     // uptime/downtime are durations, decoded as raw nanosecond counts.
-    assert.equal(result.uptime_ns, uptime);
-    assert.equal(result.downtime_ns, downtime);
+    assert.equal(result.uptimeNs, uptime);
+    assert.equal(result.downtimeNs, downtime);
     assert.equal(offsetRef.current, 24);
   });
 
@@ -417,7 +417,7 @@ describe('encoding', () => {
     
     assert.deepEqual(result.location, locationBytes);
     assert.equal(result.label, label);
-    assert.equal(result.updated_at.getTime(), Number(timestamp / 1000000n));
+    assert.equal(result.updatedAt.getTime(), Number(timestamp / 1000000n));
     assert.equal(offsetRef.current, 56);
   });
 
@@ -446,7 +446,7 @@ describe('encoding', () => {
     
     assert.equal(result.group, '4e0352bf19944ff2b4251c4455479f33');
     assert.equal(result.label, label);
-    assert.equal(result.updated_at.getTime(), timestamp);
+    assert.equal(result.updatedAt.getTime(), timestamp);
     assert.equal(offsetRef.current, 56);
   });
 
@@ -532,16 +532,16 @@ describe('encoding', () => {
   test('decodeStateHevCycle', () => {
     const bytes = new Uint8Array(9);
     const view = new DataView(bytes.buffer);
-    view.setUint32(0, 3600, true);  // duration_s
-    view.setUint32(4, 1800, true);  // remaining_s
-    view.setUint8(8, 1);            // last_power
+    view.setUint32(0, 3600, true);  // durationSeconds
+    view.setUint32(4, 1800, true);  // remainingSeconds
+    view.setUint8(8, 1);            // lastPower
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateHevCycle(bytes, offsetRef);
     
-    assert.equal(result.duration_s, 3600);
-    assert.equal(result.remaining_s, 1800);
-    assert.equal(result.last_power, true);
+    assert.equal(result.durationSeconds, 3600);
+    assert.equal(result.remainingSeconds, 1800);
+    assert.equal(result.lastPower, true);
     assert.equal(offsetRef.current, 9);
   });
 
@@ -549,13 +549,13 @@ describe('encoding', () => {
     const bytes = new Uint8Array(5);
     const view = new DataView(bytes.buffer);
     view.setUint8(0, 1);           // indication
-    view.setUint32(1, 7200, true); // duration_s
+    view.setUint32(1, 7200, true); // durationSeconds
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateHevCycleConfiguration(bytes, offsetRef);
     
     assert.equal(result.indication, 1);
-    assert.equal(result.duration_s, 7200);
+    assert.equal(result.durationSeconds, 7200);
     assert.equal(offsetRef.current, 5);
   });
 
@@ -573,73 +573,73 @@ describe('encoding', () => {
   test('decodeStateRPower', () => {
     const bytes = new Uint8Array(3);
     const view = new DataView(bytes.buffer);
-    view.setUint8(0, 2);           // relay_index
+    view.setUint8(0, 2);           // relayIndex
     view.setUint16(1, 32000, true); // level
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateRPower(bytes, offsetRef);
     
-    assert.equal(result.relay_index, 2);
+    assert.equal(result.relayIndex, 2);
     assert.equal(result.level, 32000);
     assert.equal(offsetRef.current, 3);
   });
 
   test('decodeStateDeviceChain', () => {
-    // Calculate correct size: 1 byte start_index + 16 devices * 55 bytes each + 1 byte tile_devices_count
+    // Calculate correct size: 1 byte startIndex + 16 devices * 55 bytes each + 1 byte tileDevicesCount
     const deviceSize = 2 + 2 + 2 + 2 + 4 + 4 + 1 + 1 + 1 + 4 + 4 + 4 + 8 + 8 + 2 + 2 + 4; // = 55 bytes per device
     const totalSize = 1 + 16 * deviceSize + 1; // = 881 bytes
     const bytes = new Uint8Array(totalSize);
     const view = new DataView(bytes.buffer);
     
-    view.setUint8(0, 5); // start_index
+    view.setUint8(0, 5); // startIndex
     
     // Fill first device data only (other devices will be zeros which is fine)
     let offset = 1;
-    view.setInt16(offset, -100, true); offset += 2; // accel_meas_x
-    view.setInt16(offset, 200, true); offset += 2;  // accel_meas_y
-    view.setInt16(offset, 50, true); offset += 2;   // accel_meas_z
+    view.setInt16(offset, -100, true); offset += 2; // accelMeasX
+    view.setInt16(offset, 200, true); offset += 2;  // accelMeasY
+    view.setInt16(offset, 50, true); offset += 2;   // accelMeasZ
     view.setUint8(offset, 0xab); view.setUint8(offset + 1, 0xcd); offset += 2; // reserved6
-    view.setFloat32(offset, 1.5, true); offset += 4; // user_x
-    view.setFloat32(offset, 2.5, true); offset += 4; // user_y
+    view.setFloat32(offset, 1.5, true); offset += 4; // userX
+    view.setFloat32(offset, 2.5, true); offset += 4; // userY
     view.setUint8(offset, 8); offset += 1;  // width
     view.setUint8(offset, 8); offset += 1;  // height
     offset += 1; // reserved7
-    view.setUint32(offset, 1, true); offset += 4;   // device_version_vendor
-    view.setUint32(offset, 22, true); offset += 4;  // device_version_product
+    view.setUint32(offset, 1, true); offset += 4;   // deviceVersionVendor
+    view.setUint32(offset, 22, true); offset += 4;  // deviceVersionProduct
     offset += 4; // reserved8
     
-    // firmware_build timestamp
+    // firmwareBuild timestamp
     const timestamp = BigInt(Date.now()) * 1000000n;
     view.setBigUint64(offset, timestamp, true); offset += 8;
     offset += 8; // reserved9
-    view.setUint16(offset, 42, true); offset += 2; // firmware_version_minor
-    view.setUint16(offset, 3, true); offset += 2;  // firmware_version_major
+    view.setUint16(offset, 42, true); offset += 2; // firmwareVersionMinor
+    view.setUint16(offset, 3, true); offset += 2;  // firmwareVersionMajor
     // offset += 4; // reserved10 - already zeros
     
-    // Set tile_devices_count at the very end
-    view.setUint8(totalSize - 1, 1); // tile_devices_count
+    // Set tileDevicesCount at the very end
+    view.setUint8(totalSize - 1, 1); // tileDevicesCount
     
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateDeviceChain(bytes, offsetRef);
     
-    assert.equal(result.start_index, 5);
+    assert.equal(result.startIndex, 5);
     assert.equal(result.devices.length, 16);
-    assert.equal(result.tile_devices_count, 1);
+    assert.equal(result.tileDevicesCount, 1);
     
     const firstDevice = result.devices[0];
     assert.ok(firstDevice);
-    assert.equal(firstDevice.accel_meas_x, -100);
-    assert.equal(firstDevice.accel_meas_y, 200);
-    assert.equal(firstDevice.accel_meas_z, 50);
-    assert.equal(firstDevice.user_x, 1.5);
-    assert.equal(firstDevice.user_y, 2.5);
+    assert.equal(firstDevice.accelMeasX, -100);
+    assert.equal(firstDevice.accelMeasY, 200);
+    assert.equal(firstDevice.accelMeasZ, 50);
+    assert.equal(firstDevice.userX, 1.5);
+    assert.equal(firstDevice.userY, 2.5);
     assert.equal(firstDevice.width, 8);
     assert.equal(firstDevice.height, 8);
-    assert.equal(firstDevice.device_version_vendor, 1);
-    assert.equal(firstDevice.device_version_product, 22);
-    assert.equal(firstDevice.firmware_build.getTime(), Number(timestamp / 1000000n));
-    assert.equal(firstDevice.firmware_version_minor, 42);
-    assert.equal(firstDevice.firmware_version_major, 3);
+    assert.equal(firstDevice.deviceVersionVendor, 1);
+    assert.equal(firstDevice.deviceVersionProduct, 22);
+    assert.equal(firstDevice.firmwareBuild.getTime(), Number(timestamp / 1000000n));
+    assert.equal(firstDevice.firmwareVersionMinor, 42);
+    assert.equal(firstDevice.firmwareVersionMajor, 3);
 
     // Reserved fields are exposed as lazy accessors that slice the backing buffer.
     assert.deepEqual(firstDevice.reserved6(), new Uint8Array([0xab, 0xcd]));
@@ -655,7 +655,7 @@ describe('encoding', () => {
     const bytes = new Uint8Array(517); // 1 + 1 + 1 + 1 + 1 + 64*8
     const view = new DataView(bytes.buffer);
     
-    bytes[0] = 2;  // tile_index
+    bytes[0] = 2;  // tileIndex
     bytes[1] = 0;  // reserved6
     bytes[2] = 1;  // x
     bytes[3] = 2;  // y
@@ -671,7 +671,7 @@ describe('encoding', () => {
     const offsetRef = { current: 0 };
     const result = Encoding.decodeState64(bytes, offsetRef);
     
-    assert.equal(result.tile_index, 2);
+    assert.equal(result.tileIndex, 2);
     assert.equal(result.reserved6.length, 1);
     assert.equal(result.x, 1);
     assert.equal(result.y, 2);
@@ -692,8 +692,8 @@ describe('encoding', () => {
     const bytes = new Uint8Array(10);
     const view = new DataView(bytes.buffer);
     
-    view.setUint8(0, 16);          // zones_count
-    view.setUint8(1, 5);           // zone_index
+    view.setUint8(0, 16);          // zonesCount
+    view.setUint8(1, 5);           // zoneIndex
     view.setUint16(2, 240, true);  // hue
     view.setUint16(4, 65535, true); // saturation
     view.setUint16(6, 40000, true); // brightness
@@ -702,8 +702,8 @@ describe('encoding', () => {
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateZone(bytes, offsetRef);
     
-    assert.equal(result.zones_count, 16);
-    assert.equal(result.zone_index, 5);
+    assert.equal(result.zonesCount, 16);
+    assert.equal(result.zoneIndex, 5);
     assert.equal(result.hue, 240);
     assert.equal(result.saturation, 65535);
     assert.equal(result.brightness, 40000);
@@ -715,8 +715,8 @@ describe('encoding', () => {
     const bytes = new Uint8Array(66); // 1 + 1 + 8*8
     const view = new DataView(bytes.buffer);
     
-    view.setUint8(0, 16); // zones_count
-    view.setUint8(1, 0);  // zone_index
+    view.setUint8(0, 16); // zonesCount
+    view.setUint8(1, 0);  // zoneIndex
     
     // Set first color
     let offset = 2;
@@ -728,8 +728,8 @@ describe('encoding', () => {
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateMultiZone(bytes, offsetRef);
     
-    assert.equal(result.zones_count, 16);
-    assert.equal(result.zone_index, 0);
+    assert.equal(result.zonesCount, 16);
+    assert.equal(result.zoneIndex, 0);
     assert.equal(result.colors.length, 8);
     
     const firstColor = result.colors[0];
@@ -746,7 +746,7 @@ describe('encoding', () => {
     const bytes = new Uint8Array(59);
     const view = new DataView(bytes.buffer);
     
-    view.setUint32(0, 12345, true);  // instanceid
+    view.setUint32(0, 12345, true);  // instanceId
     view.setUint8(4, 2);             // type
     // reserved6 (2 bytes) at offset 5
     view.setUint32(7, 1000, true);   // speed
@@ -759,7 +759,7 @@ describe('encoding', () => {
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateMultiZoneEffect(bytes, offsetRef);
     
-    assert.equal(result.instanceid, 12345);
+    assert.equal(result.instanceId, 12345);
     assert.equal(result.type, 2);
     assert.equal(result.reserved6().length, 2);
     assert.equal(result.speed, 1000);
@@ -775,9 +775,9 @@ describe('encoding', () => {
     const bytes = new Uint8Array(661); // 2 + 2 + 1 + 82*8
     const view = new DataView(bytes.buffer);
     
-    view.setUint16(0, 82, true);  // zones_count
-    view.setUint16(2, 0, true);   // zone_index
-    view.setUint8(4, 10);         // colors_count
+    view.setUint16(0, 82, true);  // zonesCount
+    view.setUint16(2, 0, true);   // zoneIndex
+    view.setUint8(4, 10);         // colorsCount
     
     // Set first color
     let offset = 5;
@@ -789,9 +789,9 @@ describe('encoding', () => {
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateExtendedColorZones(bytes, offsetRef);
     
-    assert.equal(result.zones_count, 82);
-    assert.equal(result.zone_index, 0);
-    assert.equal(result.colors_count, 10);
+    assert.equal(result.zonesCount, 82);
+    assert.equal(result.zoneIndex, 0);
+    assert.equal(result.colorsCount, 10);
     assert.equal(result.colors.length, 82);
     
     const firstColor = result.colors[0];
@@ -809,7 +809,7 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     
     view.setUint8(0, 0);             // reserved0
-    view.setUint32(1, 98765, true);  // instanceid
+    view.setUint32(1, 98765, true);  // instanceId
     view.setUint8(5, 3);             // type
     view.setUint32(6, 2000, true);   // speed
     view.setBigUint64(10, 10000n, true); // duration
@@ -821,7 +821,7 @@ describe('encoding', () => {
     // reserved4 (3 bytes) at offset 31
     view.setUint8(34, 80);           // cloudSaturationMax
     // reserved5 (23 bytes) at offset 35
-    view.setUint8(58, 5);            // palette_count
+    view.setUint8(58, 5);            // paletteCount
     
     // Set first palette color
     let offset = 59;
@@ -834,7 +834,7 @@ describe('encoding', () => {
     const result = Encoding.decodeStateTileEffect(bytes, offsetRef);
     
     assert.equal(result.reserved0, 0);
-    assert.equal(result.instanceid, 98765);
+    assert.equal(result.instanceId, 98765);
     assert.equal(result.type, 3);
     assert.equal(result.speed, 2000);
     assert.equal(result.duration, 10000n);
@@ -846,7 +846,7 @@ describe('encoding', () => {
     assert.equal(result.reserved4().length, 3);
     assert.equal(result.cloudSaturationMax, 80);
     assert.equal(result.reserved5().length, 23);
-    assert.equal(result.palette_count, 5);
+    assert.equal(result.paletteCount, 5);
     assert.equal(result.palette.length, 16);
     
     const firstPaletteColor = result.palette[0];
@@ -1150,7 +1150,7 @@ describe('encoding', () => {
     parameters.set([1, 2, 3, 4, 5], 0);
     
     const payload = Encoding.encodeSetMultiZoneEffect(
-      12345,     // instanceid
+      12345,     // instanceId
       2,         // effectType
       1000,      // speed
       5000n,     // duration
@@ -1160,7 +1160,7 @@ describe('encoding', () => {
     assert.equal(payload.length, 59);
     
     const view = new DataView(payload.buffer);
-    assert.equal(view.getUint32(0, true), 12345);      // instanceid
+    assert.equal(view.getUint32(0, true), 12345);      // instanceId
     assert.equal(view.getUint8(4), 2);                 // effectType
     assert.equal(view.getUint8(5), 0);                 // reserved
     assert.equal(view.getUint8(6), 0);                 // reserved
@@ -1273,7 +1273,7 @@ describe('encoding', () => {
     ];
     
     const payload = Encoding.encodeSetTileEffect(
-      98765,  // instanceid
+      98765,  // instanceId
       3,      // effectType
       2000,   // speed
       10000n, // duration
@@ -1289,7 +1289,7 @@ describe('encoding', () => {
     const view = new DataView(payload.buffer);
     assert.equal(view.getUint8(0), 0);                 // reserved0
     assert.equal(view.getUint8(1), 0);                 // reserved1
-    assert.equal(view.getUint32(2, true), 98765);      // instanceid
+    assert.equal(view.getUint32(2, true), 98765);      // instanceId
     assert.equal(view.getUint8(6), 3);                 // effectType
     assert.equal(view.getUint32(7, true), 2000);       // speed
     assert.equal(view.getBigUint64(11, true), 10000n); // duration

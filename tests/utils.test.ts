@@ -3,11 +3,6 @@ import assert from 'node:assert';
 import * as Utils from '../src/utils/index.js';
 
 describe('utils', () => {
-  test('NOOP function', () => {
-    assert.equal(Utils.NOOP(42), undefined);
-    assert.equal(Utils.NOOP('test'), undefined);
-    assert.equal(Utils.NOOP(null), undefined);
-  });
 
   test('PromiseWithResolvers creates resolvable promise', async () => {
     const { promise, resolve } = Utils.PromiseWithResolvers<string>();

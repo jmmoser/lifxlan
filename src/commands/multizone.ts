@@ -1,6 +1,7 @@
 import * as Encoding from '../encoding.js';
-import { Type } from '../constants/index.js';
-import type { MultiZoneApplicationRequest, MultiZoneEffectType, MultiZoneExtendedApplicationRequest } from '../constants/index.js';
+import { Type, MultiZoneApplicationRequest, MultiZoneExtendedApplicationRequest } from '../constants/index.js';
+import type { MultiZoneEffectType } from '../constants/index.js';
+import { ValidationError } from '../errors.js';
 import type { Command, Decoder } from './index.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
@@ -26,12 +27,12 @@ export function GetColorZones(
 
       if (responseType === Type.StateZone) {
         response = Encoding.decodeStateZone(bytes, offsetRef);
-        expectedZones.delete(response.zone_index);
+        expectedZones.delete(response.zoneIndex);
       } else if (responseType === Type.StateMultiZone) {
         response = Encoding.decodeStateMultiZone(bytes, offsetRef);
         // Remove all zones covered by this response
         for (let i = 0; i < response.colors.length; i++) {
-          expectedZones.delete(response.zone_index + i);
+          expectedZones.delete(response.zoneIndex + i);
         }
       }
 
@@ -66,19 +67,42 @@ export function GetColorZones(
   } satisfies Command<ColorZoneResponse[], 'response'>;
 }
 
-export function SetColorZones(
-  startIndex: number, 
-  endIndex: number, 
-  hue: number, 
-  saturation: number, 
-  brightness: number, 
-  kelvin: number, 
-  duration: number, 
-  apply: MultiZoneApplicationRequest
-) {
+export interface SetColorZonesOptions {
+  /** First zone the color applies to (inclusive). */
+  startIndex: number;
+  /** Last zone the color applies to (inclusive). */
+  endIndex: number;
+  /** Hue as an unsigned 16-bit value (0-65535 maps to 0-360 degrees). */
+  hue: number;
+  /** Saturation as an unsigned 16-bit value (0-65535 maps to 0-100%). */
+  saturation: number;
+  /** Brightness as an unsigned 16-bit value (0-65535 maps to 0-100%). */
+  brightness: number;
+  /** Color temperature in Kelvin (relevant when saturation is low). */
+  kelvin: number;
+  /** Transition time in milliseconds. Defaults to 0 (immediate). */
+  duration?: number;
+  /**
+   * Whether the device applies the change immediately (APPLY, the default),
+   * buffers it for a later APPLY (NO_APPLY), or applies the buffered changes
+   * without this one (APPLY_ONLY).
+   */
+  apply?: MultiZoneApplicationRequest;
+}
+
+export function SetColorZones(options: SetColorZonesOptions) {
   return {
     type: Type.SetColorZones,
-    payload: Encoding.encodeSetColorZones(startIndex, endIndex, hue, saturation, brightness, kelvin, duration, apply),
+    payload: Encoding.encodeSetColorZones(
+      options.startIndex,
+      options.endIndex,
+      options.hue,
+      options.saturation,
+      options.brightness,
+      options.kelvin,
+      options.duration ?? 0,
+      options.apply ?? MultiZoneApplicationRequest.APPLY,
+    ),
     decode: Encoding.decodeStateMultiZone,
     defaultResponseMode: 'ack-only',
   } satisfies Command<Encoding.StateMultiZone, 'ack-only'>;
@@ -92,16 +116,32 @@ export function GetMultiZoneEffect() {
   } satisfies Command<Encoding.StateMultiZoneEffect, 'response'>;
 }
 
-export function SetMultiZoneEffect(
-  instanceid: number, 
-  effectType: MultiZoneEffectType, 
-  speed: number, 
-  duration: bigint, 
-  parameters: Uint8Array
-) {
+export interface SetMultiZoneEffectOptions {
+  /** Caller-chosen identifier for this run of the effect. */
+  instanceId: number;
+  effectType: MultiZoneEffectType;
+  /** Time in milliseconds one cycle of the effect takes. */
+  speed: number;
+  /** How long the effect runs, in nanoseconds. 0 means until changed. */
+  duration: bigint;
+  /**
+   * The 32-byte effect parameter block; only the MOVE effect reads it (the
+   * direction field). Defaults to all zeros. Longer inputs are truncated to
+   * 32 bytes.
+   */
+  parameters?: Uint8Array;
+}
+
+export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
   return {
     type: Type.SetMultiZoneEffect,
-    payload: Encoding.encodeSetMultiZoneEffect(instanceid, effectType, speed, duration, parameters),
+    payload: Encoding.encodeSetMultiZoneEffect(
+      options.instanceId,
+      options.effectType,
+      options.speed,
+      options.duration,
+      options.parameters ?? new Uint8Array(0),
+    ),
     decode: Encoding.decodeStateMultiZoneEffect,
     defaultResponseMode: 'ack-only',
   } satisfies Command<Encoding.StateMultiZoneEffect, 'ack-only'>;
@@ -126,15 +166,15 @@ export function GetExtendedColorZones(
         response = Encoding.decodeStateExtendedColorZones(bytes, offsetRef);
 
         // On first response, calculate expected zone indexes based on total zones
-        if (firstResponse && response.zones_count > 82) {
+        if (firstResponse && response.zonesCount > 82) {
           firstResponse = false;
           // Each response can contain up to 82 zones
-          for (let i = 0; i < response.zones_count; i += 82) {
+          for (let i = 0; i < response.zonesCount; i += 82) {
             expectedZoneIndexes.add(i);
           }
         }
 
-        expectedZoneIndexes.delete(response.zone_index);
+        expectedZoneIndexes.delete(response.zoneIndex);
       }
 
       // Update continuation to indicate if more responses are expected
@@ -167,16 +207,39 @@ export function GetExtendedColorZones(
   } satisfies Command<Encoding.StateExtendedColorZones[], 'response'>;
 }
 
-export function SetExtendedColorZones(
-  duration: number, 
-  apply: MultiZoneExtendedApplicationRequest, 
-  zoneIndex: number, 
-  colorsCount: number, 
-  colors: Encoding.Color[]
-) {
+export interface SetExtendedColorZonesOptions {
+  /** Index of the first zone the colors apply to. */
+  zoneIndex: number;
+  /**
+   * Between 1 and 82 colors, applied to consecutive zones starting at
+   * zoneIndex. The wire-level colors_count field is derived from this
+   * array's length. To address more than 82 zones, send multiple commands
+   * with NO_APPLY and finish with APPLY.
+   */
+  colors: Encoding.Color[];
+  /** Transition time in milliseconds. Defaults to 0 (immediate). */
+  duration?: number;
+  /**
+   * Whether the device applies the change immediately (APPLY, the default),
+   * buffers it for a later APPLY (NO_APPLY), or applies the buffered changes
+   * without this one (APPLY_ONLY).
+   */
+  apply?: MultiZoneExtendedApplicationRequest;
+}
+
+export function SetExtendedColorZones(options: SetExtendedColorZonesOptions) {
+  if (options.colors.length < 1 || options.colors.length > 82) {
+    throw new ValidationError('colors', options.colors.length, 'must contain between 1 and 82 colors');
+  }
   return {
     type: Type.SetExtendedColorZones,
-    payload: Encoding.encodeSetExtendedColorZones(duration, apply, zoneIndex, colorsCount, colors),
+    payload: Encoding.encodeSetExtendedColorZones(
+      options.duration ?? 0,
+      options.apply ?? MultiZoneExtendedApplicationRequest.APPLY,
+      options.zoneIndex,
+      options.colors.length,
+      options.colors,
+    ),
     decode: Encoding.decodeStateExtendedColorZones,
     defaultResponseMode: 'ack-only',
   } satisfies Command<Encoding.StateExtendedColorZones, 'ack-only'>;

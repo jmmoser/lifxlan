@@ -13,7 +13,25 @@ export interface RegistrationMessage {
   header: { target: Uint8Array };
 }
 
+/**
+ * A device's network identity. The fields are read-only for callers: the
+ * registry updates a device's `address`/`port` in place when the device
+ * reappears at a new location, so every reference stays routable — writing
+ * to the fields yourself would desync those references from the registry.
+ */
 export interface Device {
+  readonly address: string;
+  readonly port: number;
+  readonly target: Uint8Array;
+  readonly serialNumber: string;
+}
+
+/**
+ * The registry's internal, writable view of {@link Device}. Structurally
+ * identical, so it satisfies the public read-only type without casts; only
+ * code in this module may mutate.
+ */
+interface MutableDevice {
   address: string;
   port: number;
   target: Uint8Array;
@@ -28,6 +46,10 @@ export interface DeviceConfig {
 }
 
 export function Device(config: DeviceConfig): Device {
+  return createDevice(config);
+}
+
+function createDevice(config: DeviceConfig): MutableDevice {
   if (!config.address) {
     throw new ValidationError('address', config.address, 'is required');
   }
@@ -87,6 +109,12 @@ export interface GetDeviceOptions {
 }
 
 export interface DevicesInstance {
+  /**
+   * A live, read-only view of the registry's internal map — not a snapshot.
+   * Entries appear, update, and disappear as devices are registered and
+   * removed; iterate defensively (or copy) if you mutate the registry while
+   * walking it.
+   */
   readonly registered: ReadonlyMap<string, Device>;
   /**
    * Registers (or updates the address of) the device that sent a message just
@@ -125,7 +153,7 @@ interface ListenerRecord {
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
 
-  const knownDevices = new Map<string, Device>();
+  const knownDevices = new Map<string, MutableDevice>();
 
   const deviceResolvers = new Map<string, Set<(device: Device) => void>>();
 
@@ -168,7 +196,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
       return existingDevice;
     }
-    const device = Device(target ? {
+    const device = createDevice(target ? {
       serialNumber, port, address, target,
     } : {
       serialNumber, port, address,

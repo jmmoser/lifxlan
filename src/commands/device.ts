@@ -1,6 +1,5 @@
 import * as Encoding from '../encoding.js';
 import { Type } from '../constants/index.js';
-import { NOOP } from '../utils/index.js';
 import type { Command } from './index.js';
 
 export function GetService() {
@@ -88,7 +87,6 @@ export function GetInfo() {
 export function SetReboot() {
   return {
     type: Type.SetReboot,
-    decode: NOOP,
     defaultResponseMode: 'ack-only',
   } satisfies Command<void, 'ack-only'>;
 }
@@ -101,7 +99,12 @@ export function GetLocation() {
   } satisfies Command<Encoding.StateLocation, 'response'>;
 }
 
-export function SetLocation(location: Uint8Array | string, label: string, updatedAt: Date) {
+/**
+ * @param updatedAt When this location assignment was made — devices resolve
+ * conflicting location labels by newest timestamp. Defaults to now, which is
+ * right unless you are replaying a historical assignment.
+ */
+export function SetLocation(location: Uint8Array | string, label: string, updatedAt: Date = new Date()) {
   return {
     type: Type.SetLocation,
     payload: Encoding.encodeSetLocation(location, label, updatedAt),
@@ -118,7 +121,12 @@ export function GetGroup() {
   } satisfies Command<Encoding.StateGroup, 'response'>;
 }
 
-export function SetGroup(group: Uint8Array | string, label: string, updatedAt: Date) {
+/**
+ * @param updatedAt When this group assignment was made — devices resolve
+ * conflicting group labels by newest timestamp. Defaults to now, which is
+ * right unless you are replaying a historical assignment.
+ */
+export function SetGroup(group: Uint8Array | string, label: string, updatedAt: Date = new Date()) {
   return {
     type: Type.SetGroup,
     payload: Encoding.encodeSetGroup(group, label, updatedAt),

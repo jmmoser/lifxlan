@@ -48,7 +48,12 @@ export type StateLocation = ReturnType<typeof decodeStateLocation>;
 
 export type StateGroup = ReturnType<typeof decodeStateGroup>;
 
-export type SetColor = ReturnType<typeof decodeSetColor>;
+/**
+ * The decoded payload of a SetColor request packet (what {@link decodeSetColor}
+ * returns). Named `SetColorPayload` so it cannot be confused with the
+ * `SetColor` command factory exported from the package root.
+ */
+export type SetColorPayload = ReturnType<typeof decodeSetColor>;
 
 export type LightState = ReturnType<typeof decodeLightState>;
 
@@ -308,8 +313,8 @@ const FIRMWARE_SIZE = 20;
  */
 class HostFirmwareMessage {
   readonly build: Date;
-  readonly version_minor: number;
-  readonly version_major: number;
+  readonly versionMinor: number;
+  readonly versionMajor: number;
 
   readonly #bytes: Uint8Array;
   readonly #offset: number;
@@ -320,8 +325,8 @@ class HostFirmwareMessage {
 
     this.build = readTimestamp(bytes, offset);
     // reserved: offset + 8 .. offset + 16
-    this.version_minor = readUint16(bytes, offset + 16);
-    this.version_major = readUint16(bytes, offset + 18);
+    this.versionMinor = readUint16(bytes, offset + 16);
+    this.versionMajor = readUint16(bytes, offset + 18);
   }
 
   reserved(): Uint8Array {
@@ -387,8 +392,8 @@ export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): Wi
  */
 class WifiFirmwareMessage {
   readonly build: Date;
-  readonly version_minor: number;
-  readonly version_major: number;
+  readonly versionMinor: number;
+  readonly versionMajor: number;
 
   readonly #bytes: Uint8Array;
   readonly #offset: number;
@@ -399,8 +404,8 @@ class WifiFirmwareMessage {
 
     this.build = readTimestamp(bytes, offset);
     // reserved6: offset + 8 .. offset + 16
-    this.version_minor = readUint16(bytes, offset + 16);
-    this.version_major = readUint16(bytes, offset + 18);
+    this.versionMinor = readUint16(bytes, offset + 16);
+    this.versionMajor = readUint16(bytes, offset + 18);
   }
 
   reserved6(): Uint8Array {
@@ -443,37 +448,37 @@ export function decodeStateInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
   // `time` is an absolute timestamp (nanoseconds since epoch), so it decodes
   // to a Date; `uptime`/`downtime` are durations in nanoseconds — time since
   // power on and length of the last power-off period — so they stay raw
-  // uint64 values, suffixed with their unit like StateHevCycle's duration_s.
+  // uint64 values, suffixed with their unit like StateHevCycle's durationSeconds.
   const time = decodeTimestamp(bytes, offsetRef);
-  const uptime_ns = decodeUint64(bytes, offsetRef);
-  const downtime_ns = decodeUint64(bytes, offsetRef);
+  const uptimeNs = decodeUint64(bytes, offsetRef);
+  const downtimeNs = decodeUint64(bytes, offsetRef);
   return {
     time,
-    uptime_ns,
-    downtime_ns,
+    uptimeNs,
+    downtimeNs,
   };
 }
 
 export function decodeStateLocation(bytes: Uint8Array, offsetRef: OffsetRef) {
   const location = decodeBytes(bytes, offsetRef, 16);
   const label = decodeString(bytes, offsetRef, 32);
-  const updated_at = decodeTimestamp(bytes, offsetRef);
+  const updatedAt = decodeTimestamp(bytes, offsetRef);
   return {
     location,
     label,
-    updated_at,
+    updatedAt,
   };
 }
 
 export function decodeStateGroup(bytes: Uint8Array, offsetRef: OffsetRef) {
   const group = decodeUuid(bytes, offsetRef);
   const label = decodeString(bytes, offsetRef, 32);
-  const updated_at = decodeTimestamp(bytes, offsetRef);
+  const updatedAt = decodeTimestamp(bytes, offsetRef);
 
   return {
     group,
     label,
-    updated_at,
+    updatedAt,
   };
 }
 
@@ -710,10 +715,10 @@ export function encodeSetColorZones(startIndex: number, endIndex: number, hue: n
   return payload;
 }
 
-export function encodeSetMultiZoneEffect(instanceid: number, effectType: MultiZoneEffectType, speed: number, duration: bigint, parameters: Uint8Array): Uint8Array {
+export function encodeSetMultiZoneEffect(instanceId: number, effectType: MultiZoneEffectType, speed: number, duration: bigint, parameters: Uint8Array): Uint8Array {
   const payload = new Uint8Array(59);
   const view = new DataView(payload.buffer);
-  view.setUint32(0, instanceid, true);
+  view.setUint32(0, instanceId, true);
   view.setUint8(4, effectType);
   view.setUint8(5, 0); // reserved
   view.setUint8(6, 0); // reserved
@@ -788,12 +793,12 @@ export function encodeGetTileEffect(): Uint8Array {
   return payload;
 }
 
-export function encodeSetTileEffect(instanceid: number, effectType: TileEffectType, speed: number, duration: bigint, skyType: TileEffectSkyType, cloudSaturationMin: number, cloudSaturationMax: number, paletteCount: number, palette: Color[]): Uint8Array {
+export function encodeSetTileEffect(instanceId: number, effectType: TileEffectType, speed: number, duration: bigint, skyType: TileEffectSkyType, cloudSaturationMin: number, cloudSaturationMax: number, paletteCount: number, palette: Color[]): Uint8Array {
   const payload = new Uint8Array(188);
   const view = new DataView(payload.buffer);
   view.setUint8(0, 0); // reserved0
   view.setUint8(1, 0); // reserved1
-  view.setUint32(2, instanceid, true);
+  view.setUint32(2, instanceId, true);
   view.setUint8(6, effectType);
   view.setUint32(7, speed, true);
   view.setBigUint64(11, duration, true);
@@ -886,14 +891,14 @@ export function decodeStateInfrared(bytes: Uint8Array, offsetRef: OffsetRef): nu
 export function decodeStateHevCycle(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   ensureSize(bytes, o, 9);
-  const duration_s = readUint32(bytes, o);
-  const remaining_s = readUint32(bytes, o + 4);
-  const last_power = !!bytes[o + 8]!;
+  const durationSeconds = readUint32(bytes, o);
+  const remainingSeconds = readUint32(bytes, o + 4);
+  const lastPower = !!bytes[o + 8]!;
   offsetRef.current = o + 9;
   return {
-    duration_s,
-    remaining_s,
-    last_power,
+    durationSeconds,
+    remainingSeconds,
+    lastPower,
   };
 }
 
@@ -901,11 +906,11 @@ export function decodeStateHevCycleConfiguration(bytes: Uint8Array, offsetRef: O
   const o = offsetRef.current;
   ensureSize(bytes, o, 5);
   const indication = bytes[o]!;
-  const duration_s = readUint32(bytes, o + 1);
+  const durationSeconds = readUint32(bytes, o + 1);
   offsetRef.current = o + 5;
   return {
     indication,
-    duration_s,
+    durationSeconds,
   };
 }
 
@@ -918,11 +923,11 @@ export function decodeStateLastHevCycleResult(bytes: Uint8Array, offsetRef: Offs
 export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   ensureSize(bytes, o, 3);
-  const relay_index = bytes[o]!;
+  const relayIndex = bytes[o]!;
   const level = readUint16(bytes, o + 1);
   offsetRef.current = o + 3;
   return {
-    relay_index,
+    relayIndex,
     level,
   };
 }
@@ -938,18 +943,18 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
 const DEVICE_CHAIN_DEVICE_SIZE = 55;
 
 class DeviceChainEntry {
-  readonly accel_meas_x: number;
-  readonly accel_meas_y: number;
-  readonly accel_meas_z: number;
-  readonly user_x: number;
-  readonly user_y: number;
+  readonly accelMeasX: number;
+  readonly accelMeasY: number;
+  readonly accelMeasZ: number;
+  readonly userX: number;
+  readonly userY: number;
   readonly width: number;
   readonly height: number;
-  readonly device_version_vendor: number;
-  readonly device_version_product: number;
-  readonly firmware_build: Date;
-  readonly firmware_version_minor: number;
-  readonly firmware_version_major: number;
+  readonly deviceVersionVendor: number;
+  readonly deviceVersionProduct: number;
+  readonly firmwareBuild: Date;
+  readonly firmwareVersionMinor: number;
+  readonly firmwareVersionMajor: number;
 
   readonly #bytes: Uint8Array;
   readonly #offset: number;
@@ -958,22 +963,22 @@ class DeviceChainEntry {
     this.#bytes = bytes;
     this.#offset = offset;
 
-    this.accel_meas_x = readInt16(bytes, offset);
-    this.accel_meas_y = readInt16(bytes, offset + 2);
-    this.accel_meas_z = readInt16(bytes, offset + 4);
+    this.accelMeasX = readInt16(bytes, offset);
+    this.accelMeasY = readInt16(bytes, offset + 2);
+    this.accelMeasZ = readInt16(bytes, offset + 4);
     // reserved6: offset + 6 .. offset + 8
-    this.user_x = readFloat32(bytes, offset + 8);
-    this.user_y = readFloat32(bytes, offset + 12);
+    this.userX = readFloat32(bytes, offset + 8);
+    this.userY = readFloat32(bytes, offset + 12);
     this.width = bytes[offset + 16]!;
     this.height = bytes[offset + 17]!;
     // reserved7: offset + 18 .. offset + 19
-    this.device_version_vendor = readUint32(bytes, offset + 19);
-    this.device_version_product = readUint32(bytes, offset + 23);
+    this.deviceVersionVendor = readUint32(bytes, offset + 19);
+    this.deviceVersionProduct = readUint32(bytes, offset + 23);
     // reserved8: offset + 27 .. offset + 31
-    this.firmware_build = readTimestamp(bytes, offset + 31);
+    this.firmwareBuild = readTimestamp(bytes, offset + 31);
     // reserved9: offset + 39 .. offset + 47
-    this.firmware_version_minor = readUint16(bytes, offset + 47);
-    this.firmware_version_major = readUint16(bytes, offset + 49);
+    this.firmwareVersionMinor = readUint16(bytes, offset + 47);
+    this.firmwareVersionMajor = readUint16(bytes, offset + 49);
     // reserved10: offset + 51 .. offset + 55
   }
 
@@ -1000,24 +1005,24 @@ class DeviceChainEntry {
 
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
   ensureSize(bytes, offsetRef.current, 1 + 16 * DEVICE_CHAIN_DEVICE_SIZE + 1);
-  const start_index = bytes[offsetRef.current]!; offsetRef.current += 1;
+  const startIndex = bytes[offsetRef.current]!; offsetRef.current += 1;
   const devices: DeviceChainEntry[] = new Array(16);
   for (let i = 0; i < 16; i++) {
     const o = offsetRef.current;
     devices[i] = new DeviceChainEntry(bytes, o);
     offsetRef.current = o + DEVICE_CHAIN_DEVICE_SIZE;
   }
-  const tile_devices_count = bytes[offsetRef.current]!; offsetRef.current += 1;
+  const tileDevicesCount = bytes[offsetRef.current]!; offsetRef.current += 1;
   return {
-    start_index,
+    startIndex,
     devices,
-    tile_devices_count,
+    tileDevicesCount,
   };
 }
 
 export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
   ensureSize(bytes, offsetRef.current, 5 + 64 * 8);
-  const tile_index = bytes[offsetRef.current]!; offsetRef.current += 1;
+  const tileIndex = bytes[offsetRef.current]!; offsetRef.current += 1;
   const reserved6 = decodeBytes(bytes, offsetRef, 1);
   const x = bytes[offsetRef.current]!; offsetRef.current += 1;
   const y = bytes[offsetRef.current]!; offsetRef.current += 1;
@@ -1030,7 +1035,7 @@ export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
   }
   offsetRef.current = o;
   return {
-    tile_index,
+    tileIndex,
     reserved6,
     x,
     y,
@@ -1042,13 +1047,13 @@ export function decodeState64(bytes: Uint8Array, offsetRef: OffsetRef) {
 export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   const o = offsetRef.current;
   ensureSize(bytes, o, 10);
-  const zones_count = bytes[o]!;
-  const zone_index = bytes[o + 1]!;
+  const zonesCount = bytes[o]!;
+  const zoneIndex = bytes[o + 1]!;
   const color = readColor(bytes, o + 2);
   offsetRef.current = o + 10;
   return {
-    zones_count,
-    zone_index,
+    zonesCount,
+    zoneIndex,
     hue: color.hue,
     saturation: color.saturation,
     brightness: color.brightness,
@@ -1059,8 +1064,8 @@ export function decodeStateZone(bytes: Uint8Array, offsetRef: OffsetRef) {
 export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   let o = offsetRef.current;
   ensureSize(bytes, o, 2 + 8 * 8);
-  const zones_count = bytes[o]!;
-  const zone_index = bytes[o + 1]!;
+  const zonesCount = bytes[o]!;
+  const zoneIndex = bytes[o + 1]!;
   o += 2;
 
   const colors: Color[] = new Array(8);
@@ -1071,8 +1076,8 @@ export function decodeStateMultiZone(bytes: Uint8Array, offsetRef: OffsetRef) {
   offsetRef.current = o;
 
   return {
-    zones_count,
-    zone_index,
+    zonesCount,
+    zoneIndex,
     colors,
   };
 }
@@ -1086,7 +1091,7 @@ const MULTIZONE_EFFECT_SIZE = 59;
  * the DecodedHeader pattern.
  */
 class MultiZoneEffectMessage {
-  readonly instanceid: number;
+  readonly instanceId: number;
   readonly type: number;
   readonly speed: number;
   readonly duration: bigint;
@@ -1099,7 +1104,7 @@ class MultiZoneEffectMessage {
     this.#bytes = bytes;
     this.#offset = offset;
 
-    this.instanceid = readUint32(bytes, offset);
+    this.instanceId = readUint32(bytes, offset);
     this.type = bytes[offset + 4]!;
     // reserved6: offset + 5 .. offset + 7
     this.speed = readUint32(bytes, offset + 7);
@@ -1132,9 +1137,9 @@ export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetR
 export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: OffsetRef) {
   let o = offsetRef.current;
   ensureSize(bytes, o, 5 + 82 * 8);
-  const zones_count = readUint16(bytes, o);
-  const zone_index = readUint16(bytes, o + 2);
-  const colors_count = bytes[o + 4]!;
+  const zonesCount = readUint16(bytes, o);
+  const zoneIndex = readUint16(bytes, o + 2);
+  const colorsCount = bytes[o + 4]!;
   o += 5;
 
   const colors: Color[] = new Array(82);
@@ -1145,9 +1150,9 @@ export function decodeStateExtendedColorZones(bytes: Uint8Array, offsetRef: Offs
   offsetRef.current = o;
 
   return {
-    zones_count,
-    zone_index,
-    colors_count,
+    zonesCount,
+    zoneIndex,
+    colorsCount,
     colors,
   };
 }
@@ -1166,14 +1171,14 @@ const TILE_EFFECT_SIZE = TILE_EFFECT_HEADER_SIZE + TILE_EFFECT_PALETTE_COUNT * 8
 
 class TileEffectMessage {
   readonly reserved0: number;
-  readonly instanceid: number;
+  readonly instanceId: number;
   readonly type: number;
   readonly speed: number;
   readonly duration: bigint;
   readonly skyType: number;
   readonly cloudSaturationMin: number;
   readonly cloudSaturationMax: number;
-  readonly palette_count: number;
+  readonly paletteCount: number;
   readonly palette: Color[];
 
   readonly #bytes: Uint8Array;
@@ -1184,7 +1189,7 @@ class TileEffectMessage {
     this.#offset = offset;
 
     this.reserved0 = bytes[offset]!;
-    this.instanceid = readUint32(bytes, offset + 1);
+    this.instanceId = readUint32(bytes, offset + 1);
     this.type = bytes[offset + 5]!;
     this.speed = readUint32(bytes, offset + 6);
     this.duration = readBigUint64(bytes, offset + 10);
@@ -1196,7 +1201,7 @@ class TileEffectMessage {
     // reserved4: offset + 31 .. offset + 34
     this.cloudSaturationMax = bytes[offset + 34]!;
     // reserved5: offset + 35 .. offset + 58
-    this.palette_count = bytes[offset + 58]!;
+    this.paletteCount = bytes[offset + 58]!;
 
     const palette: Color[] = new Array(TILE_EFFECT_PALETTE_COUNT);
     let po = offset + TILE_EFFECT_HEADER_SIZE;
@@ -1245,8 +1250,8 @@ export function decodeSensorStateAmbientLight(bytes: Uint8Array, offsetRef: Offs
 
 /**
  * Button wire format (https://github.com/LIFX/public-protocol):
- * a ButtonAction is gesture (uint16) + target_type (uint16) + a 16-byte
- * target whose interpretation depends on target_type; a Button is an action
+ * a ButtonAction is gesture (uint16) + targetType (uint16) + a 16-byte
+ * target whose interpretation depends on targetType; a Button is an action
  * count followed by 5 actions; Set/StateButton carry a fixed array of 8
  * buttons.
  */
@@ -1259,13 +1264,13 @@ const STATE_BUTTON_SIZE = 3 + BUTTONS_PER_MESSAGE * BUTTON_SIZE;
 
 export interface ButtonAction {
   gesture: number;
-  target_type: number;
-  /** 16 bytes; interpretation depends on target_type (relays, serial, location/group/scene id). */
+  targetType: number;
+  /** 16 bytes; interpretation depends on targetType (relays, serial, location/group/scene id). */
   target: Uint8Array;
 }
 
 export interface Button {
-  actions_count: number;
+  actionsCount: number;
   actions: ButtonAction[];
 }
 
@@ -1286,23 +1291,23 @@ export function decodeStateButton(bytes: Uint8Array, offsetRef: OffsetRef) {
   ensureSize(bytes, o, STATE_BUTTON_SIZE);
   const count = bytes[o]!;
   const index = bytes[o + 1]!;
-  const buttons_count = bytes[o + 2]!;
+  const buttonsCount = bytes[o + 2]!;
 
   const buttons: Button[] = new Array(BUTTONS_PER_MESSAGE);
   let buttonOffset = o + 3;
   for (let i = 0; i < BUTTONS_PER_MESSAGE; i++) {
-    const actions_count = bytes[buttonOffset]!;
+    const actionsCount = bytes[buttonOffset]!;
     const actions: ButtonAction[] = new Array(BUTTON_ACTIONS_PER_BUTTON);
     let actionOffset = buttonOffset + 1;
     for (let j = 0; j < BUTTON_ACTIONS_PER_BUTTON; j++) {
       actions[j] = {
         gesture: readUint16(bytes, actionOffset),
-        target_type: readUint16(bytes, actionOffset + 2),
+        targetType: readUint16(bytes, actionOffset + 2),
         target: bytes.subarray(actionOffset + 4, actionOffset + BUTTON_ACTION_SIZE),
       };
       actionOffset += BUTTON_ACTION_SIZE;
     }
-    buttons[i] = { actions_count, actions };
+    buttons[i] = { actionsCount, actions };
     buttonOffset += BUTTON_SIZE;
   }
 
@@ -1310,7 +1315,7 @@ export function decodeStateButton(bytes: Uint8Array, offsetRef: OffsetRef) {
   return {
     count,
     index,
-    buttons_count,
+    buttonsCount,
     buttons,
   };
 }
@@ -1377,8 +1382,8 @@ class DecodedHeader {
   readonly origin: number;
   readonly source: number;
   readonly target: Uint8Array;
-  readonly res_required: boolean;
-  readonly ack_required: boolean;
+  readonly resRequired: boolean;
+  readonly ackRequired: boolean;
   readonly reserved3: number;
   readonly sequence: number;
   readonly type: number;
@@ -1404,8 +1409,8 @@ class DecodedHeader {
     this.target = getHeaderTarget(bytes, offset);
 
     const responseFlags = getHeaderResponseFlags(bytes, offset);
-    this.res_required = getHeaderResponseRequired(responseFlags);
-    this.ack_required = getHeaderAcknowledgeRequired(responseFlags);
+    this.resRequired = getHeaderResponseRequired(responseFlags);
+    this.ackRequired = getHeaderAcknowledgeRequired(responseFlags);
     this.reserved3 = (responseFlags & 0b11111100) >> 2;
 
     this.sequence = getHeaderSequence(bytes, offset);

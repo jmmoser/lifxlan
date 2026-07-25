@@ -129,8 +129,8 @@ describe('client', () => {
         onSend(message) {
           const header = decodeHeader(message);
           // A Set command defaults to ack-only: request an ack, not a response.
-          assert.equal(header.ack_required, true);
-          assert.equal(header.res_required, false);
+          assert.equal(header.ackRequired, true);
+          assert.equal(header.resRequired, false);
           client.router.receive(
             encode(
               header.tagged,
@@ -202,7 +202,7 @@ describe('client', () => {
       }),
     });
 
-    client.unicast(GetService(), sharedDevice);
+    client.sendUnacknowledged(GetService(), sharedDevice);
   });
 
   test('abort send', async () => {
@@ -340,8 +340,8 @@ describe('client', () => {
           // stays open (expectMore) and must be settled by the timeout.
           const payload = new Uint8Array(10);
           const view = new DataView(payload.buffer);
-          view.setUint8(0, 2); // zones_count
-          view.setUint8(1, 0); // zone_index
+          view.setUint8(0, 2); // zonesCount
+          view.setUint8(1, 0); // zoneIndex
           client.router.receive(
             encode(
               header.tagged,
@@ -662,8 +662,8 @@ describe('client', () => {
             const stateZoneBytes = new Uint8Array(36 + 13);
             const view = new DataView(stateZoneBytes.buffer);
             view.setUint16(32, Type.StateZone, true); // message type
-            view.setUint8(36, 2); // zones_count
-            view.setUint8(37, 0); // zone_index
+            view.setUint8(36, 2); // zonesCount
+            view.setUint8(37, 0); // zoneIndex
             view.setUint16(38, 120, true); // hue
             view.setUint16(40, 65535, true); // saturation
             view.setUint16(42, 32768, true); // brightness
@@ -689,8 +689,8 @@ describe('client', () => {
             const stateZoneBytes = new Uint8Array(36 + 13);
             const view = new DataView(stateZoneBytes.buffer);
             view.setUint16(32, Type.StateZone, true); // message type
-            view.setUint8(36, 2); // zones_count
-            view.setUint8(37, 1); // zone_index
+            view.setUint8(36, 2); // zonesCount
+            view.setUint8(37, 1); // zoneIndex
             view.setUint16(38, 240, true); // hue
             view.setUint16(40, 65535, true); // saturation
             view.setUint16(42, 32768, true); // brightness
@@ -728,12 +728,12 @@ describe('client', () => {
     assert.equal(result.length, 2);
     const color0 = result[0];
     assert.ok(color0);
-    assert.equal(color0.zone_index, 0);
+    assert.equal(color0.zoneIndex, 0);
     assert.ok('hue' in color0);
     assert.equal(color0.hue, 120);
     const color1 = result[1];
     assert.ok(color1);
-    assert.equal(color1.zone_index, 1);
+    assert.equal(color1.zoneIndex, 1);
     assert.ok('hue' in color1);
     assert.equal(color1.hue, 240);
     assert.equal(responseCount, 2); // Verify both responses were received
@@ -750,8 +750,8 @@ describe('client', () => {
           for (const zoneIndex of [0, 1]) {
             const payload = new Uint8Array(10);
             const view = new DataView(payload.buffer);
-            view.setUint8(0, 2); // zones_count
-            view.setUint8(1, zoneIndex); // zone_index
+            view.setUint8(0, 2); // zonesCount
+            view.setUint8(1, zoneIndex); // zoneIndex
             view.setUint16(2, 120 + zoneIndex, true); // hue
             client.router.receive(
               encode(
@@ -784,10 +784,10 @@ describe('client', () => {
     // shared array interleaving both devices' responses.
     assert.equal(resultA.length, 2);
     assert.equal(resultB.length, 2);
-    assert.equal(resultA[0]?.zone_index, 0);
-    assert.equal(resultA[1]?.zone_index, 1);
-    assert.equal(resultB[0]?.zone_index, 0);
-    assert.equal(resultB[1]?.zone_index, 1);
+    assert.equal(resultA[0]?.zoneIndex, 0);
+    assert.equal(resultA[1]?.zoneIndex, 1);
+    assert.equal(resultB[0]?.zoneIndex, 0);
+    assert.equal(resultB[1]?.zoneIndex, 1);
 
     client.dispose();
   });
@@ -853,7 +853,7 @@ describe('client', () => {
     );
 
     assert.throws(
-      () => client.unicast(GetService(), device),
+      () => client.sendUnacknowledged(GetService(), device),
       (error) => Error.isError(error) && error.name === 'DisposedClientError',
     );
 
@@ -980,8 +980,8 @@ describe('client', () => {
         onSend(message) {
           const header = decodeHeader(message);
           assert.equal(header.source, client.source);
-          assert.equal(header.ack_required, true);
-          assert.equal(header.res_required, true);
+          assert.equal(header.ackRequired, true);
+          assert.equal(header.resRequired, true);
           
           // Send both acknowledgment and response
           client.router.receive(
@@ -1027,7 +1027,7 @@ describe('client', () => {
       router: Router({
         onSend(message) {
           const header = decodeHeader(message);
-          assert.equal(header.res_required, true); // Should default to 'response'
+          assert.equal(header.resRequired, true); // Should default to 'response'
 
           const payload = new Uint8Array(2);
           new DataView(payload.buffer).setUint16(0, 65535, true);
@@ -1114,7 +1114,7 @@ describe('client', () => {
     // Send 256 messages to observe increment and wrap (255 is reserved, so
     // sequences run 0..254 then wrap back to 0).
     for (let i = 0; i < 256; i++) {
-      client.unicast(GetService(), device);
+      client.sendUnacknowledged(GetService(), device);
     }
 
     assert.equal(sequences[0], 0);
@@ -1145,9 +1145,9 @@ describe('client', () => {
       address: '1.2.3.4',
     });
 
-    a.unicast(GetService(), device);
-    a.unicast(GetService(), device);
-    b.unicast(GetService(), device);
+    a.sendUnacknowledged(GetService(), device);
+    a.sendUnacknowledged(GetService(), device);
+    b.sendUnacknowledged(GetService(), device);
 
     // Each client owns its own sequence space; b's counter is not advanced
     // by a's sends even though they target the same device.
