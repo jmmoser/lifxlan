@@ -83,15 +83,15 @@ import { Type } from '../src/constants/types.js';
 //     client.broadcast(command);
 //   });
 
-//   bench('Client Unicast Setup', () => {
+//   bench('Client SendUnacknowledged Setup', () => {
 //     const device = Device({
 //       address: '192.168.1.100',
 //       serialNumber: 'd073d5123456'
 //     });
-    
+
 //     const command = GetColor();
 //     // Benchmark the message preparation (without network I/O)
-//     client.unicast(command, device);
+//     client.sendUnacknowledged(command, device);
 //   });
 // });
 

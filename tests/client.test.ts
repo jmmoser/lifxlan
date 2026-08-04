@@ -194,7 +194,7 @@ describe('client', () => {
     client.broadcast(GetService());
   });
 
-  test('unicast', () => {
+  test('sendUnacknowledged', () => {
     const client = Client({
       defaultTimeoutMs: 0,
       router: Router({
