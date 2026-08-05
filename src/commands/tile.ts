@@ -1,7 +1,7 @@
 import * as Encoding from '../encoding.js';
-import { Type } from '../constants/index.js';
+import { Type, TileEffectSkyType } from '../constants/index.js';
 import { ValidationError } from '../errors.js';
-import type { TileEffectType, TileEffectSkyType } from '../constants/index.js';
+import type { TileEffectType } from '../constants/index.js';
 import type { Command, Decoder } from './index.js';
 
 export function GetDeviceChain() {
@@ -181,7 +181,7 @@ export function SetTileEffect(options: SetTileEffectOptions) {
       options.effectType,
       options.speed,
       options.duration,
-      options.skyType ?? 0,
+      options.skyType ?? TileEffectSkyType.SUNRISE,
       options.cloudSaturationMin ?? 0,
       options.cloudSaturationMax ?? 0,
       options.palette.length,

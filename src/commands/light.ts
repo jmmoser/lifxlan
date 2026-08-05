@@ -93,7 +93,11 @@ export function GetLightPower() {
   } satisfies Command<number, 'response'>;
 }
 
-export function SetLightPower(level: number | boolean, duration: number) {
+/**
+ * @param level A boolean (on/off) or an unsigned 16-bit power level.
+ * @param duration Transition time in milliseconds. Defaults to 0 (immediate).
+ */
+export function SetLightPower(level: number | boolean, duration = 0) {
   return {
     type: Type.SetLightPower,
     payload: Encoding.encodeSetLightPower(level, duration),
@@ -102,20 +106,24 @@ export function SetLightPower(level: number | boolean, duration: number) {
   } satisfies Command<number, 'ack-only'>;
 }
 
+/**
+ * Omit any HSBK component to leave it unchanged during the waveform — by
+ * default a component is applied exactly when it is provided (see
+ * setHue/setSaturation/setBrightness/setKelvin to override).
+ */
 export interface SetWaveformOptionalOptions {
   /**
    * When true the light returns to its current color when the effect ends.
    * Defaults to false (the light stays on the effect's color).
    */
   transient?: boolean;
-  /**
-   * HSBK components. Omit a component to leave it unchanged during the
-   * waveform — by default a component is applied exactly when it is provided
-   * (see setHue/setSaturation/setBrightness/setKelvin to override).
-   */
+  /** Hue as an unsigned 16-bit value (0-65535 maps to 0-360 degrees). Omit to leave unchanged. */
   hue?: number;
+  /** Saturation as an unsigned 16-bit value (0-65535 maps to 0-100%). Omit to leave unchanged. */
   saturation?: number;
+  /** Brightness as an unsigned 16-bit value (0-65535 maps to 0-100%). Omit to leave unchanged. */
   brightness?: number;
+  /** Color temperature in Kelvin (relevant when saturation is low). Omit to leave unchanged. */
   kelvin?: number;
   /** Length of one waveform cycle in milliseconds. */
   period: number;
