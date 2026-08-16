@@ -71,24 +71,6 @@ for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
 await close();
 ```
 
-### Change light color
-
-```javascript
-import { SetColor } from 'lifxlan';
-
-// Set to bright red
-await client.send(
-  SetColor({ hue: 0, saturation: 65535, brightness: 65535, kelvin: 3500 }),
-  device
-);
-
-// Set to blue with 2-second transition
-await client.send(
-  SetColor({ hue: 43690, saturation: 65535, brightness: 65535, kelvin: 3500, duration: 2000 }),
-  device
-);
-```
-
 ## Core Concepts
 
 ### Architecture Overview
