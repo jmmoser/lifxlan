@@ -70,7 +70,7 @@ export interface ClientRouter {
    * call so two registrations can never be handed the same source.
    *
    * Pass an explicit `source` to reserve a caller-chosen id instead; it is
-   * validated (2..4294967295) and must not already be registered. This is the
+   * validated (an integer in 2..4294967295) and must not already be registered. This is the
    * escape hatch for callers that manage their own source ids.
    */
   register(handler: MessageHandler, source?: number): number;
@@ -136,8 +136,10 @@ export function Router(options: RouterOptions): RouterInstance {
       if (source === undefined) {
         resolved = allocateSource();
       } else {
-        if (source <= 1 || source > MAX_SOURCE) {
-          throw new ValidationError('source', source, 'must be between 2 and 4294967295');
+        // Integer check included: encode() writes the source with bitwise
+        // math, so a fractional id would silently alias another client's.
+        if (!Number.isInteger(source) || source <= 1 || source > MAX_SOURCE) {
+          throw new ValidationError('source', source, 'must be an integer between 2 and 4294967295');
         }
         if (handlers.has(source)) {
           throw new ValidationError('source', source, 'already registered');

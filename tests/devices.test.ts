@@ -1,6 +1,10 @@
 import { describe, test, spyOn, expect } from 'bun:test';
 import assert from 'node:assert';
 import { Devices, Device, type RegistrationMessage } from '../src/devices.js';
+import { Router } from '../src/router.js';
+import { encode } from '../src/encoding.js';
+import { Type } from '../src/constants/index.js';
+import { DeviceRemovedError, ValidationError } from '../src/errors.js';
 import { received } from './helpers.js';
 
 describe('devices', () => {
@@ -265,41 +269,88 @@ describe('devices', () => {
     expect(removed).toBe(false);
   });
 
-  test('remove() drops the resolver set so a later register does not satisfy the dropped promise', async () => {
+  test('remove() rejects pending get() waiters with DeviceRemovedError', async () => {
+    // No timeout and no signal: before, such a waiter hung forever after
+    // remove() dropped its resolver. It must settle now, and a later
+    // registration must not resurrect it.
+    const devices = Devices({ defaultTimeoutMs: 0 });
+
+    const p = devices.get('abcdef123456');
+    const rejection = assert.rejects(p, (error: unknown) => (
+      error instanceof DeviceRemovedError && error.serialNumber === 'abcdef123456'
+    ));
+
+    expect(devices.remove('abcdef123456')).toBe(false);
+    await rejection;
+
+    devices.register(56700, '1.2.3.4', received('abcdef123456'));
+  });
+
+  test('remove() of a known device rejects waiters that raced in after it registered and was removed', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
+    devices.register(56700, '1.2.3.4', received('abcdef123456'));
+    devices.remove('abcdef123456');
 
     const c = new AbortController();
     const p = devices.get('abcdef123456', { signal: c.signal });
+    devices.remove('abcdef123456');
+    await assert.rejects(p, (error: unknown) => error instanceof DeviceRemovedError);
 
-    // remove() before registration: drop the pending resolver state.
-    devices.remove('abcdef123456'); // returns false but should clear deviceResolvers entry
-
-    // Registering now must NOT resolve the dropped promise; the caller's
-    // abort/timeout is still the only thing that will settle it.
-    devices.register(56700, '1.2.3.4', received('abcdef123456'));
-
+    // The rejected waiter released its abort listener: aborting now is a no-op.
     c.abort();
-    await assert.rejects(p, /aborted/);
   });
 
-  test('a stale waiter settling after remove() does not drop a newer waiter for the same serial', async () => {
+  test('a waiter rejected by remove() does not drop a newer waiter for the same serial', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
-    // Waiter A's resolver lands in a set that remove() then orphans.
-    const c1 = new AbortController();
-    const p1 = devices.get('abcdef123456', { signal: c1.signal });
+    const p1 = devices.get('abcdef123456');
     devices.remove('abcdef123456');
+    await assert.rejects(p1, (error: unknown) => error instanceof DeviceRemovedError);
 
-    // Waiter B registers a fresh resolver set for the same serial.
+    // Waiter B registers a fresh set for the same serial after the removal.
     const p2 = devices.get('abcdef123456');
 
-    // A settles late — it must not delete B's resolver set on its way out.
+    devices.register(56700, '192.168.1.1', received('abcdef123456'));
+    const device = await p2;
+    expect(device.serialNumber).toBe('abcdef123456');
+  });
+
+  test('a stale waiter settling late does not drop a newer waiter for the same serial', async () => {
+    const devices = Devices({ defaultTimeoutMs: 60000 });
+
+    const c1 = new AbortController();
+    const p1 = devices.get('abcdef123456', { signal: c1.signal });
+    const p2 = devices.get('abcdef123456');
+
+    // A settles first — it must only remove its own waiter, not B's.
     c1.abort();
     await assert.rejects(p1, /aborted/);
 
     devices.register(56700, '192.168.1.1', received('abcdef123456'));
     const device = await p2;
     expect(device.serialNumber).toBe('abcdef123456');
+  });
+
+  test('Device requires a serialNumber or target', () => {
+    // An address-only device would send fine but responses carry the real
+    // serial, so nothing could ever correlate — every send() would time out.
+    assert.throws(
+      () => Device({ address: '1.2.3.4' } as any),
+      (error: unknown) => error instanceof ValidationError && /serialNumber or target is required/.test(error.message),
+    );
+  });
+
+  test('register() ignores messages whose target is all zeros', () => {
+    // A socket bound to 56700 sees other controllers' tagged GetService
+    // broadcasts, whose target is the all-zero broadcast address.
+    const added: string[] = [];
+    const devices = Devices({ onAdded(device) { added.push(device.serialNumber); } });
+    const message = Router({ onSend() {} }).receive(
+      encode(true, 2, new Uint8Array(6), true, false, 255, Type.GetService),
+    );
+    expect(devices.register(56700, '1.2.3.4', message)).toBeUndefined();
+    expect(devices.registered.size).toBe(0);
+    expect(added).toEqual([]);
   });
 
   test('aborted get does not block subsequent get for same serial number', async () => {
@@ -338,16 +389,19 @@ describe('devices', () => {
   test('Device factory validates port range', () => {
     expect(() => Device({ 
       address: '192.168.1.1', 
+      serialNumber: 'abcdef123456',
       port: 0 
     })).toThrow('Invalid port: 0 (must be between 1 and 65535)');
     
     expect(() => Device({ 
       address: '192.168.1.1', 
+      serialNumber: 'abcdef123456',
       port: 65536 
     })).toThrow('Invalid port: 65536 (must be between 1 and 65535)');
     
     expect(() => Device({ 
       address: '192.168.1.1', 
+      serialNumber: 'abcdef123456',
       port: -1 
     })).toThrow('Invalid port: -1 (must be between 1 and 65535)');
   });

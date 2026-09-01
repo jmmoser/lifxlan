@@ -5,6 +5,7 @@ import type { Command } from './index.js';
 export function SensorGetAmbientLight() {
   return {
     type: Type.SensorGetAmbientLight,
+    responseType: Type.SensorStateAmbientLight,
     decode: Encoding.decodeSensorStateAmbientLight,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.SensorStateAmbientLight, 'response'>;

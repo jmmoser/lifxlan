@@ -5,6 +5,7 @@ import type { Command } from './index.js';
 export function GetButton() {
   return {
     type: Type.GetButton,
+    responseType: Type.StateButton,
     decode: Encoding.decodeStateButton,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateButton, 'response'>;
@@ -13,6 +14,7 @@ export function GetButton() {
 export function SetButton(index: number, buttons: readonly Encoding.ButtonInput[]) {
   return {
     type: Type.SetButton,
+    responseType: Type.StateButton,
     payload: Encoding.encodeSetButton(index, buttons),
     decode: Encoding.decodeStateButton,
     defaultResponseMode: 'ack-only',

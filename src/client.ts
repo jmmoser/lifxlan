@@ -43,6 +43,7 @@ function registerHandler<T>(
   serialNumber: string,
   sequence: number,
   decode: Decoder<T> | undefined,
+  responseType: number | undefined,
   timeoutMs: number,
   responseHandlerMap: Map<string, Map<number, PendingHandler>>,
   pendingBySequence: Map<number, PendingHandler>,
@@ -124,8 +125,24 @@ function registerHandler<T>(
       }
 
       if (type === Type.StateUnhandled) {
-        const requestType = decodeStateUnhandled(bytes, offsetRef);
+        // Decoding runs inside the socket's receive path, so a truncated
+        // StateUnhandled (which anyone on the LAN can send) must reject this
+        // exchange rather than throw out of router.receive().
+        let requestType: number;
+        try {
+          requestType = decodeStateUnhandled(bytes, offsetRef);
+        } catch (err) {
+          settleReject(err instanceof Error ? err : new Error(String(err)));
+          return;
+        }
         settleReject(new UnhandledCommandError(requestType, serialNumber));
+        return;
+      }
+
+      // A packet of a type the command does not expect is a stray — most
+      // likely a late reply to an earlier exchange whose sequence number has
+      // since been reused. Ignore it and keep waiting for the real one.
+      if (responseType !== undefined && type !== responseType) {
         return;
       }
 
@@ -260,7 +277,9 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    * where the next packet supersedes the last; use `send()` when the
    * outcome matters. (Named for what it skips — `send()` also unicasts,
    * but correlates a reply.) Accepts any command regardless of its default
-   * response mode, since no exchange is performed.
+   * response mode, since no exchange is performed. Shares the device's
+   * sequence space with `send()` and skips sequence numbers still held by
+   * in-flight exchanges, throwing SequenceExhaustionError if none is free.
    */
   sendUnacknowledged<T>(command: Command<T, ResponseMode>, device: Device): void;
 
@@ -302,21 +321,23 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
   // keep independent sequence spaces.
   const sequences = new Map<string, number>();
 
-  function nextSequence(serialNumber: string): number {
-    const sequence = sequences.get(serialNumber) ?? 0;
-    sequences.set(serialNumber, (sequence + 1) % SEQUENCE_SPACE);
-    return sequence;
-  }
-
   /**
    * Allocates the next sequence number that has no pending exchange. A
    * sequence is only unavailable while a send() to the same device is still
    * in flight, so a slow response (or a timeoutMs: 0 call) never collides
-   * with new sends — the counter simply skips over it. Returns undefined
-   * when all 255 sequence numbers are in flight.
+   * with new sends — the counter simply skips over it. Used by
+   * sendUnacknowledged() as well: Get messages are answered whether or not
+   * res_required is set, so an unacknowledged Get that reused a pending
+   * sequence would have its reply delivered to that exchange's decoder.
+   * Returns undefined when all 255 sequence numbers are in flight.
    */
-  function nextFreeSequence(serialNumber: string, pendingBySequence: Map<number, PendingHandler>): number | undefined {
+  function nextFreeSequence(serialNumber: string): number | undefined {
+    const pendingBySequence = responseHandlerMap.get(serialNumber);
     let candidate = sequences.get(serialNumber) ?? 0;
+    if (pendingBySequence === undefined || pendingBySequence.size === 0) {
+      sequences.set(serialNumber, (candidate + 1) % SEQUENCE_SPACE);
+      return candidate;
+    }
     for (let i = 0; i < SEQUENCE_SPACE; i++) {
       if (!pendingBySequence.has(candidate)) {
         sequences.set(serialNumber, (candidate + 1) % SEQUENCE_SPACE);
@@ -429,7 +450,10 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
     sendUnacknowledged<T>(command: Command<T, ResponseMode>, device: Device) {
       if (disposed) throw new DisposedClientError(source);
 
-      const sequence = nextSequence(device.serialNumber);
+      const sequence = nextFreeSequence(device.serialNumber);
+      if (sequence === undefined) {
+        throw new SequenceExhaustionError(device.serialNumber);
+      }
 
       const bytes = encode(
         false,
@@ -524,7 +548,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
           responseHandlerMap.set(device.serialNumber, pendingBySequence);
         }
 
-        const sequence = nextFreeSequence(device.serialNumber, pendingBySequence);
+        const sequence = nextFreeSequence(device.serialNumber);
         if (sequence === undefined) {
           throw new SequenceExhaustionError(device.serialNumber);
         }
@@ -542,7 +566,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
 
         const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
 
-        const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, timeoutMs, responseHandlerMap, pendingBySequence, signal);
+        const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, command.responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
 
         try {
           router.send(bytes, device.port, device.address, device.serialNumber);

@@ -5,6 +5,7 @@ import type { Command } from './index.js';
 export function GetService() {
   return {
     type: Type.GetService,
+    responseType: Type.StateService,
     decode: Encoding.decodeStateService,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateService, 'response'>;
@@ -13,6 +14,7 @@ export function GetService() {
 export function GetHostFirmware() {
   return {
     type: Type.GetHostFirmware,
+    responseType: Type.StateHostFirmware,
     decode: Encoding.decodeStateHostFirmware,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateHostFirmware, 'response'>;
@@ -21,6 +23,7 @@ export function GetHostFirmware() {
 export function GetWifiInfo() {
   return {
     type: Type.GetWifiInfo,
+    responseType: Type.StateWifiInfo,
     decode: Encoding.decodeStateWifiInfo,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateWifiInfo, 'response'>;
@@ -29,6 +32,7 @@ export function GetWifiInfo() {
 export function GetWifiFirmware() {
   return {
     type: Type.GetWifiFirmware,
+    responseType: Type.StateWifiFirmware,
     decode: Encoding.decodeStateWifiFirmware,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateWifiFirmware, 'response'>;
@@ -37,6 +41,7 @@ export function GetWifiFirmware() {
 export function GetPower() {
   return {
     type: Type.GetPower,
+    responseType: Type.StatePower,
     decode: Encoding.decodeStatePower,
     defaultResponseMode: 'response',
   } satisfies Command<number, 'response'>;
@@ -45,6 +50,7 @@ export function GetPower() {
 export function SetPower(power: number | boolean) {
   return {
     type: Type.SetPower,
+    responseType: Type.StatePower,
     payload: Encoding.encodeSetPower(power),
     decode: Encoding.decodeStatePower,
     defaultResponseMode: 'ack-only',
@@ -54,6 +60,7 @@ export function SetPower(power: number | boolean) {
 export function GetLabel() {
   return {
     type: Type.GetLabel,
+    responseType: Type.StateLabel,
     decode: Encoding.decodeStateLabel,
     defaultResponseMode: 'response',
   } satisfies Command<string, 'response'>;
@@ -62,6 +69,7 @@ export function GetLabel() {
 export function SetLabel(label: string) {
   return {
     type: Type.SetLabel,
+    responseType: Type.StateLabel,
     payload: Encoding.encodeString(label, 32),
     decode: Encoding.decodeStateLabel,
     defaultResponseMode: 'ack-only',
@@ -71,6 +79,7 @@ export function SetLabel(label: string) {
 export function GetVersion() {
   return {
     type: Type.GetVersion,
+    responseType: Type.StateVersion,
     decode: Encoding.decodeStateVersion,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateVersion, 'response'>;
@@ -79,6 +88,7 @@ export function GetVersion() {
 export function GetInfo() {
   return {
     type: Type.GetInfo,
+    responseType: Type.StateInfo,
     decode: Encoding.decodeStateInfo,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateInfo, 'response'>;
@@ -98,6 +108,7 @@ export function SetReboot(): Command<void, 'ack-only'> {
 export function GetLocation() {
   return {
     type: Type.GetLocation,
+    responseType: Type.StateLocation,
     decode: Encoding.decodeStateLocation,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateLocation, 'response'>;
@@ -111,6 +122,7 @@ export function GetLocation() {
 export function SetLocation(location: Uint8Array | string, label: string, updatedAt: Date = new Date()) {
   return {
     type: Type.SetLocation,
+    responseType: Type.StateLocation,
     payload: Encoding.encodeSetLocation(location, label, updatedAt),
     decode: Encoding.decodeStateLocation,
     defaultResponseMode: 'ack-only',
@@ -120,6 +132,7 @@ export function SetLocation(location: Uint8Array | string, label: string, update
 export function GetGroup() {
   return {
     type: Type.GetGroup,
+    responseType: Type.StateGroup,
     decode: Encoding.decodeStateGroup,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateGroup, 'response'>;
@@ -133,6 +146,7 @@ export function GetGroup() {
 export function SetGroup(group: Uint8Array | string, label: string, updatedAt: Date = new Date()) {
   return {
     type: Type.SetGroup,
+    responseType: Type.StateGroup,
     payload: Encoding.encodeSetGroup(group, label, updatedAt),
     decode: Encoding.decodeStateGroup,
     defaultResponseMode: 'ack-only',
@@ -142,6 +156,7 @@ export function SetGroup(group: Uint8Array | string, label: string, updatedAt: D
 export function EchoRequest(echoing: Uint8Array) {
   return {
     type: Type.EchoRequest,
+    responseType: Type.EchoResponse,
     payload: Encoding.encodeEchoRequest(echoing),
     decode: Encoding.decodeEchoResponse,
     defaultResponseMode: 'response',

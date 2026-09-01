@@ -415,7 +415,8 @@ describe('encoding', () => {
     const offsetRef = { current: 0 };
     const result = Encoding.decodeStateLocation(bytes, offsetRef);
     
-    assert.deepEqual(result.location, locationBytes);
+    // Same 32-hex-digit form as StateGroup.group.
+    assert.equal(result.location, Array.from(locationBytes, (b) => b.toString(16).padStart(2, '0')).join(''));
     assert.equal(result.label, label);
     assert.equal(result.updatedAt.getTime(), Number(timestamp / 1000000n));
     assert.equal(offsetRef.current, 56);

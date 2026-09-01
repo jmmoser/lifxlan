@@ -107,6 +107,20 @@ export class AbortError extends LifxError {
 }
 
 /**
+ * Rejected by a pending `devices.get()` when the registry's `remove()` is
+ * called for the serial number it is waiting on: the caller explicitly
+ * dropped the device, so the lookup can no longer be satisfied.
+ */
+export class DeviceRemovedError extends LifxError {
+  public readonly serialNumber: string;
+
+  constructor(serialNumber: string) {
+    super(`Device ${serialNumber} was removed from the registry while a lookup was pending`, { serialNumber });
+    this.serialNumber = serialNumber;
+  }
+}
+
+/**
  * Thrown when validation of input parameters fails.
  */
 export class ValidationError extends LifxError {

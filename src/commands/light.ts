@@ -6,6 +6,7 @@ import type { Command } from './index.js';
 export function GetColor() {
   return {
     type: Type.GetColor,
+    responseType: Type.LightState,
     decode: Encoding.decodeLightState,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.LightState, 'response'>;
@@ -27,6 +28,7 @@ export interface SetColorOptions {
 export function SetColor(options: SetColorOptions) {
   return {
     type: Type.SetColor,
+    responseType: Type.LightState,
     payload: Encoding.encodeSetColor(
       options.hue,
       options.saturation,
@@ -69,6 +71,7 @@ export interface SetWaveformOptions {
 export function SetWaveform(options: SetWaveformOptions) {
   return {
     type: Type.SetWaveform,
+    responseType: Type.LightState,
     payload: Encoding.encodeSetWaveform(
       options.transient ?? false,
       options.hue,
@@ -88,6 +91,7 @@ export function SetWaveform(options: SetWaveformOptions) {
 export function GetLightPower() {
   return {
     type: Type.GetLightPower,
+    responseType: Type.StateLightPower,
     decode: Encoding.decodeStateLightPower,
     defaultResponseMode: 'response',
   } satisfies Command<number, 'response'>;
@@ -100,6 +104,7 @@ export function GetLightPower() {
 export function SetLightPower(level: number | boolean, duration = 0) {
   return {
     type: Type.SetLightPower,
+    responseType: Type.StateLightPower,
     payload: Encoding.encodeSetLightPower(level, duration),
     decode: Encoding.decodeStateLightPower,
     defaultResponseMode: 'ack-only',
@@ -151,6 +156,7 @@ export interface SetWaveformOptionalOptions {
 export function SetWaveformOptional(options: SetWaveformOptionalOptions) {
   return {
     type: Type.SetWaveformOptional,
+    responseType: Type.LightState,
     payload: Encoding.encodeSetWaveformOptional(
       options.transient ?? false,
       options.hue ?? 0,
@@ -174,6 +180,7 @@ export function SetWaveformOptional(options: SetWaveformOptionalOptions) {
 export function GetInfrared() {
   return {
     type: Type.GetInfrared,
+    responseType: Type.StateInfrared,
     decode: Encoding.decodeStateInfrared,
     defaultResponseMode: 'response',
   } satisfies Command<number, 'response'>;
@@ -182,6 +189,7 @@ export function GetInfrared() {
 export function SetInfrared(brightness: number) {
   return {
     type: Type.SetInfrared,
+    responseType: Type.StateInfrared,
     payload: Encoding.encodeSetInfrared(brightness),
     decode: Encoding.decodeStateInfrared,
     defaultResponseMode: 'ack-only',
@@ -191,6 +199,7 @@ export function SetInfrared(brightness: number) {
 export function GetHevCycle() {
   return {
     type: Type.GetHevCycle,
+    responseType: Type.StateHevCycle,
     decode: Encoding.decodeStateHevCycle,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateHevCycle, 'response'>;
@@ -199,6 +208,7 @@ export function GetHevCycle() {
 export function SetHevCycle(enable: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycle,
+    responseType: Type.StateHevCycle,
     payload: Encoding.encodeSetHevCycle(enable, durationSeconds),
     decode: Encoding.decodeStateHevCycle,
     defaultResponseMode: 'ack-only',
@@ -208,6 +218,7 @@ export function SetHevCycle(enable: boolean, durationSeconds: number) {
 export function GetHevCycleConfiguration() {
   return {
     type: Type.GetHevCycleConfiguration,
+    responseType: Type.StateHevCycleConfiguration,
     decode: Encoding.decodeStateHevCycleConfiguration,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateHevCycleConfiguration, 'response'>;
@@ -216,6 +227,7 @@ export function GetHevCycleConfiguration() {
 export function SetHevCycleConfiguration(indication: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycleConfiguration,
+    responseType: Type.StateHevCycleConfiguration,
     payload: Encoding.encodeSetHevCycleConfiguration(indication, durationSeconds),
     decode: Encoding.decodeStateHevCycleConfiguration,
     defaultResponseMode: 'ack-only',
@@ -225,6 +237,7 @@ export function SetHevCycleConfiguration(indication: boolean, durationSeconds: n
 export function GetLastHevCycleResult() {
   return {
     type: Type.GetLastHevCycleResult,
+    responseType: Type.StateLastHevCycleResult,
     decode: Encoding.decodeStateLastHevCycleResult,
     defaultResponseMode: 'response',
   } satisfies Command<number, 'response'>;

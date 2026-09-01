@@ -5,8 +5,8 @@ import { Router, type ClientRouter, type MessageHandler } from '../src/router.js
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
-import { GetPower, GetService, GetColorZones, SetPower } from '../src/commands/index.js';
-import { UnhandledCommandError, TimeoutError } from '../src/errors.js';
+import { GetPower, GetService, GetColor, GetColorZones, SetPower } from '../src/commands/index.js';
+import { UnhandledCommandError, TimeoutError, ValidationError, SequenceExhaustionError } from '../src/errors.js';
 
 describe('client', () => {
   const sharedDevice = Device({
@@ -359,7 +359,7 @@ describe('client', () => {
     });
 
     await assert.rejects(
-      () => client.send(GetColorZones(0, 1), sharedDevice, { timeoutMs: 10 }),
+      () => client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), sharedDevice, { timeoutMs: 10 }),
       (error) => error instanceof TimeoutError,
     );
 
@@ -721,7 +721,7 @@ describe('client', () => {
     });
 
     // Request zones 0-1, should receive 2 StateZone responses
-    const result = await client.send(GetColorZones(0, 1), device);
+    const result = await client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), device);
     
     // TODO: is it possible to get more than 1 response?
     assert.equal(Array.isArray(result), true);
@@ -774,7 +774,7 @@ describe('client', () => {
     const deviceB = Device({ serialNumber: 'abcdef123402', port: 1234, address: '1.2.3.5' });
 
     // The same command object drives both exchanges.
-    const command = GetColorZones(0, 1);
+    const command = GetColorZones({ startIndex: 0, endIndex: 1 });
     const [resultA, resultB] = await Promise.all([
       client.send(command, deviceA),
       client.send(command, deviceB),
@@ -1224,5 +1224,136 @@ describe('client', () => {
     assert.doesNotThrow(() => {
       client.dispose();
     });
+  });
+
+  test('a truncated StateUnhandled rejects the exchange instead of throwing out of receive()', async () => {
+    // receive() runs inside the socket's message handler, where an exception
+    // is an uncaught error that takes the process down; a hostile LAN sender
+    // can craft this packet, so it must surface as a rejection instead.
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          assert.doesNotThrow(() => {
+            client.router.receive(
+              encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StateUnhandled),
+            );
+          });
+        },
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetPower(), sharedDevice),
+      (error) => error instanceof ValidationError,
+    );
+
+    client.dispose();
+  });
+
+  test('a response of an unexpected type is ignored and the exchange keeps waiting', async () => {
+    // The LightState packet carries the sequence of the GetPower exchange
+    // (a late reply from a reused sequence, say). It must neither resolve
+    // the GetPower call with garbage nor reject it; the real StatePower
+    // that follows does.
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const stray = new Uint8Array(52);
+          new DataView(stray.buffer).setUint16(10, 1, true); // power = 1
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.LightState, stray),
+          );
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+          );
+        },
+      }),
+    });
+
+    assert.equal(GetPower().responseType, Type.StatePower);
+    assert.equal(GetColor().responseType, Type.LightState);
+    assert.equal(await client.send(GetPower(), sharedDevice), 65535);
+
+    client.dispose();
+  });
+
+  test('GetColorZones completes when the requested range exceeds the device zone count', async () => {
+    // The LIFX-documented way to read every zone is 0..255; a 16-zone
+    // device answers with two StateMultiZone packets and nothing more.
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          for (const zoneIndex of [0, 8]) {
+            const payload = new Uint8Array(66);
+            payload[0] = 16; // zonesCount
+            payload[1] = zoneIndex;
+            client.router.receive(
+              encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StateMultiZone, payload),
+            );
+          }
+        },
+      }),
+    });
+
+    const zones = await client.send(GetColorZones({ startIndex: 0, endIndex: 255 }), sharedDevice, { timeoutMs: 50 });
+    assert.equal(zones.length, 2);
+
+    client.dispose();
+  });
+
+  test('sendUnacknowledged skips sequence numbers held by in-flight exchanges', () => {
+    // Get messages are answered even without res_required, so an
+    // unacknowledged Get that reused a pending sequence would have its reply
+    // delivered to that exchange's decoder.
+    const sequences: number[] = [];
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          sequences.push(decodeHeader(message).sequence);
+        },
+      }),
+    });
+
+    // Occupy 0 with a pending send(), then wrap the counter around to it.
+    const pending = client.send(GetPower(), sharedDevice);
+    for (let i = 0; i < 254; i++) {
+      client.sendUnacknowledged(GetService(), sharedDevice);
+    }
+    client.sendUnacknowledged(GetService(), sharedDevice);
+
+    assert.equal(sequences[0], 0);
+    assert.equal(sequences[254], 254);
+    assert.equal(sequences[255], 1); // 0 is still in flight, so it is skipped
+
+    client.dispose();
+    return assert.rejects(pending);
+  });
+
+  test('sendUnacknowledged throws SequenceExhaustionError when every sequence is in flight', () => {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({ onSend() {} }),
+    });
+
+    const pending: Promise<unknown>[] = [];
+    for (let i = 0; i < 255; i++) {
+      pending.push(client.send(GetPower(), sharedDevice));
+    }
+    assert.throws(
+      () => client.sendUnacknowledged(GetService(), sharedDevice),
+      (error) => error instanceof SequenceExhaustionError,
+    );
+
+    client.dispose();
+    return Promise.all(pending.map((p) => assert.rejects(p)));
   });
 });
