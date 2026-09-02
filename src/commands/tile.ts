@@ -4,9 +4,13 @@ import { ValidationError } from '../errors.js';
 import type { TileEffectType } from '../constants/index.js';
 import type { Command, Decoder } from './index.js';
 
+/** The pixel-grid row width of every current LIFX tile device. */
+const TILE_WIDTH = 8;
+
 export function GetDeviceChain() {
   return {
     type: Type.GetDeviceChain,
+    responseType: Type.StateDeviceChain,
     decode: Encoding.decodeStateDeviceChain,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateDeviceChain, 'response'>;
@@ -24,8 +28,8 @@ export interface Get64Options {
   x?: number;
   /** Topmost pixel row to fetch. Defaults to 0 (use 0 with width 8). */
   y?: number;
-  /** Pixel-grid row width; 8 for all current LIFX tile devices. */
-  width: number;
+  /** Pixel-grid row width. Defaults to 8, which every current LIFX tile device uses. */
+  width?: number;
   /**
    * Called once per State64 packet as it arrives. Return false to stop
    * waiting for further packets and resolve with what has accumulated.
@@ -78,7 +82,8 @@ export function Get64(options: Get64Options) {
 
   return {
     type: Type.Get64,
-    payload: Encoding.encodeGet64(options.tileIndex, tileCount, options.x ?? 0, options.y ?? 0, options.width),
+    responseType: Type.State64,
+    payload: Encoding.encodeGet64(options.tileIndex, tileCount, options.x ?? 0, options.y ?? 0, options.width ?? TILE_WIDTH),
     createDecoder,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.State64[], 'response'>;
@@ -109,8 +114,8 @@ export interface Set64Options {
   x?: number;
   /** Topmost pixel row the frame starts at. Defaults to 0 (use 0 with width 8). */
   y?: number;
-  /** Pixel-grid row width; 8 for all current LIFX tile devices. */
-  width: number;
+  /** Pixel-grid row width. Defaults to 8, which every current LIFX tile device uses. */
+  width?: number;
   /** Transition time in milliseconds. Defaults to 0 (immediate). */
   duration?: number;
   /** The frame: up to 64 colors in row-major order. Missing entries stay zero. */
@@ -132,7 +137,7 @@ export function Set64(options: Set64Options): Command<void, 'ack-only'> & { payl
       options.tileCount ?? 1,
       options.x ?? 0,
       options.y ?? 0,
-      options.width,
+      options.width ?? TILE_WIDTH,
       options.duration ?? 0,
       options.colors,
     ),
@@ -143,6 +148,7 @@ export function Set64(options: Set64Options): Command<void, 'ack-only'> & { payl
 export function GetTileEffect() {
   return {
     type: Type.GetTileEffect,
+    responseType: Type.StateTileEffect,
     payload: Encoding.encodeGetTileEffect(),
     decode: Encoding.decodeStateTileEffect,
     defaultResponseMode: 'response',
@@ -176,6 +182,7 @@ export function SetTileEffect(options: SetTileEffectOptions) {
   }
   return {
     type: Type.SetTileEffect,
+    responseType: Type.StateTileEffect,
     payload: Encoding.encodeSetTileEffect(
       options.instanceId,
       options.effectType,

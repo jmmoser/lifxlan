@@ -1,6 +1,6 @@
-import { NO_TARGET, PORT } from './constants/index.js';
+import { PORT } from './constants/index.js';
 import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
-import { AbortError, TimeoutError, ValidationError } from './errors.js';
+import { AbortError, DeviceRemovedError, TimeoutError, ValidationError } from './errors.js';
 
 /**
  * The minimal decoded-message shape `register()` reads. `ReceivedMessage`
@@ -38,11 +38,27 @@ interface MutableDevice {
   serialNumber: string;
 }
 
-export interface DeviceConfig {
+interface DeviceConfigBase {
   address: string;
-  serialNumber?: string;
   port?: number;
-  target?: Uint8Array;
+}
+
+/**
+ * A device needs an identity as well as an address: responses carry the
+ * device's serial number in their target field, and that is how `send()`
+ * correlates a reply with its request. Provide the serial number (the
+ * 12-hex-digit MAC printed on the device), the 6-byte wire target, or both;
+ * an address alone would send fine but could never match a reply.
+ */
+export type DeviceConfig =
+  | (DeviceConfigBase & { serialNumber: string; target?: Uint8Array })
+  | (DeviceConfigBase & { target: Uint8Array; serialNumber?: string });
+
+function isZeroTarget(target: Uint8Array): boolean {
+  for (let i = 0; i < target.length; i++) {
+    if (target[i] !== 0) return false;
+  }
+  return true;
 }
 
 export function Device(config: DeviceConfig): Device {
@@ -66,7 +82,17 @@ function createDevice(config: DeviceConfig): MutableDevice {
     throw new ValidationError('target', config.target, 'must be 6 bytes (or 8 with two trailing reserved bytes)');
   }
 
-  const target = config.target ?? (config.serialNumber ? convertSerialNumberToTarget(config.serialNumber) : NO_TARGET);
+  let target: Uint8Array;
+  if (config.target !== undefined) {
+    target = config.target;
+  } else if (config.serialNumber) {
+    target = convertSerialNumberToTarget(config.serialNumber);
+  } else {
+    // Responses carry the device's real serial in their target field, so a
+    // device without one could be sent to but never matched to a reply:
+    // every send() would time out.
+    throw new ValidationError('serialNumber', config.serialNumber, 'serialNumber or target is required');
+  }
   const serialNumber = config.serialNumber
     ?? convertTargetToSerialNumber(target.length > 6 ? target.subarray(0, 6) : target);
 
@@ -120,16 +146,27 @@ export interface DevicesInstance {
    * Registers (or updates the address of) the device that sent a message just
    * decoded by `router.receive()`. Pass that result straight through:
    * `received` may be `undefined` (a malformed packet), in which case nothing
-   * is registered and `undefined` is returned. Re-registering a known serial at
-   * a new port/address updates it in place and emits `onChanged`.
+   * is registered and `undefined` is returned. A message whose target is all
+   * zeros is also ignored (returning `undefined`): that is the broadcast
+   * address, used by other controllers' GetService broadcasts, not a device
+   * identity. Re-registering a known serial at a new port/address updates it
+   * in place and emits `onChanged`.
    */
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
+  /**
+   * Forgets a device. Any `get()` still waiting on this serial number rejects
+   * with {@link DeviceRemovedError} — a removed device is one the caller no
+   * longer wants, so a lookup for it cannot be satisfied by a later
+   * re-registration. Returns whether the device was known.
+   */
   remove(serialNumber: string): boolean;
   /**
    * Waits for the device with this serial number to be registered — a
    * discovery rendezvous, not a lookup. A known device resolves immediately;
-   * otherwise the promise settles on a future `register()`, the timeout, or
-   * the signal. For a synchronous check, use {@link DevicesInstance.registered}.
+   * otherwise the promise settles on a future `register()`, the timeout, the
+   * signal, or a `remove()` of the same serial (rejecting with
+   * {@link DeviceRemovedError}). For a synchronous check, use
+   * {@link DevicesInstance.registered}.
    */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   /**
@@ -155,7 +192,12 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
   const knownDevices = new Map<string, MutableDevice>();
 
-  const deviceResolvers = new Map<string, Set<(device: Device) => void>>();
+  interface Waiter {
+    resolve(device: Device): void;
+    reject(reason: Error): void;
+  }
+
+  const deviceResolvers = new Map<string, Set<Waiter>>();
 
   // One listener set per event, so dispatching an event never walks handlers
   // that don't observe it. Each handler is wrapped in a per-subscription
@@ -212,13 +254,19 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     if (received === undefined) {
       return undefined;
     }
+    // An all-zero target is the broadcast address, not a device: a socket
+    // bound to 56700 sees every other controller's tagged GetService, and
+    // registering those would plant a phantom serial 000000000000.
+    if (isZeroTarget(received.header.target)) {
+      return undefined;
+    }
     const device = registerDevice(received.serialNumber, port, address, received.header.target);
 
-    const resolvers = deviceResolvers.get(received.serialNumber);
-    if (resolvers) {
+    const waiters = deviceResolvers.get(received.serialNumber);
+    if (waiters) {
       deviceResolvers.delete(received.serialNumber);
-      resolvers.forEach((resolver) => {
-        try { resolver(device); } catch { /* one resolver throwing must not block others */ }
+      waiters.forEach((waiter) => {
+        try { waiter.resolve(device); } catch { /* one resolver throwing must not block others */ }
       });
     }
 
@@ -233,13 +281,19 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     remove(serialNumber: string): boolean {
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
-      // Pending get() promises for this serial would otherwise hang
-      // until their abort/timeout fires. Drop their resolvers; the abort
-      // listeners and timeouts they own remain in place and will reject
-      // the awaiting caller with an AbortError or TimeoutError, but the
-      // resolver Set must be cleared so they aren't accidentally
-      // resolved by a future re-registration.
-      deviceResolvers.delete(serialNumber);
+      // Pending get() promises for this serial must not be satisfied by a
+      // future re-registration of a device the caller just discarded — and
+      // a call with no timeout would otherwise hang forever — so settle them
+      // now. Each waiter's reject() also detaches its own timeout and abort
+      // listener.
+      const waiters = deviceResolvers.get(serialNumber);
+      if (waiters) {
+        deviceResolvers.delete(serialNumber);
+        const error = new DeviceRemovedError(serialNumber);
+        waiters.forEach((waiter) => {
+          try { waiter.reject(error); } catch { /* one waiter throwing must not block others */ }
+        });
+      }
       if (device) {
         emit(removedListeners, device);
       }
@@ -295,12 +349,12 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
       function settleReject(reason: unknown) {
         cleanup();
-        // Remove only this call's resolver, and only if the set still holds
-        // it: after a remove() orphans the set, a fresh get() for the same
-        // serial owns a new set, and blindly deleting the map entry here
-        // would silently drop that newer waiter's resolver.
-        const resolvers = deviceResolvers.get(serialNumber);
-        if (resolvers && resolvers.delete(resolver) && resolvers.size === 0) {
+        // Remove only this call's waiter, and only if the set still holds
+        // it: after a remove() settles and drops the set, a fresh get() for
+        // the same serial owns a new set, and blindly deleting the map entry
+        // here would silently drop that newer waiter.
+        const waiters = deviceResolvers.get(serialNumber);
+        if (waiters && waiters.delete(waiter) && waiters.size === 0) {
           deviceResolvers.delete(serialNumber);
         }
         reject(reason);
@@ -310,9 +364,17 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         settleReject(signal?.reason ?? new AbortError('device lookup'));
       }
 
-      const resolver = (device: Device) => {
-        cleanup();
-        resolve(device);
+      const waiter: Waiter = {
+        resolve(device) {
+          cleanup();
+          resolve(device);
+        },
+        reject(reason) {
+          // register()/remove() already dropped the set; only the timers
+          // and the abort listener are left to release.
+          cleanup();
+          reject(reason);
+        },
       };
 
       // The timeout and the signal are independent: a device that never
@@ -327,11 +389,11 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
       }
 
-      const resolvers = deviceResolvers.get(serialNumber);
-      if (!resolvers) {
-        deviceResolvers.set(serialNumber, new Set([resolver]));
+      const waiters = deviceResolvers.get(serialNumber);
+      if (!waiters) {
+        deviceResolvers.set(serialNumber, new Set([waiter]));
       } else {
-        resolvers.add(resolver);
+        waiters.add(waiter);
       }
 
       return promise;

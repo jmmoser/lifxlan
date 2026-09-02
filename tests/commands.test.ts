@@ -502,7 +502,7 @@ describe('commands', () => {
   });
 
   test('GetColorZones basic usage without callback', () => {
-    const cmd = Commands.GetColorZones(0, 15);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 15 });
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(cmd.payload.length, 2);
     
@@ -514,15 +514,15 @@ describe('commands', () => {
 
   test('GetColorZones with callback', () => {
     const responses: Commands.ColorZoneResponse[] = [];
-    const cmd = Commands.GetColorZones(0, 3, (response) => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 3, onResponse: (response) => {
       responses.push(response);
-    });
+    } });
     assert.equal(cmd.type, Type.GetColorZones);
     assert.equal(typeof cmd.createDecoder, 'function');
   });
 
   test('GetColorZones decode handles StateZone responses', () => {
-    const cmd = Commands.GetColorZones(0, 2);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 2 });
     
     // Mock StateZone response (Type.StateZone = 503)
     const stateZoneBytes = new Uint8Array(36 + 13); // header + payload
@@ -554,7 +554,7 @@ describe('commands', () => {
   });
 
   test('GetColorZones decode handles StateMultiZone responses', () => {
-    const cmd = Commands.GetColorZones(0, 2);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 2 });
     
     // Mock StateMultiZone response (Type.StateMultiZone = 506)
     // StateMultiZone always contains 8 colors (fixed size)
@@ -593,9 +593,9 @@ describe('commands', () => {
 
   test('GetColorZones callback receives responses', () => {
     const receivedResponses: Commands.ColorZoneResponse[] = [];
-    const cmd = Commands.GetColorZones(0, 1, (response) => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 1, onResponse: (response) => {
       receivedResponses.push(response);
-    });
+    } });
     
     // Mock StateZone response for zone 0
     const stateZoneBytes = new Uint8Array(36 + 13);
@@ -626,10 +626,10 @@ describe('commands', () => {
   test('GetColorZones callback can stop early', () => {
     const receivedResponses: Commands.ColorZoneResponse[] = [];
     
-    const cmd = Commands.GetColorZones(0, 5, (response) => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 5, onResponse: (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    });
+    } });
     
     // Mock StateZone response for zone 0
     const stateZoneBytes = new Uint8Array(36 + 13);
@@ -654,7 +654,7 @@ describe('commands', () => {
 
 
   test('GetColorZones accumulates responses correctly', () => {
-    const cmd = Commands.GetColorZones(0, 2);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 2 });
     
     // First call should return array with 1 item
     const stateZoneBytes1 = new Uint8Array(36 + 13);
@@ -704,7 +704,7 @@ describe('commands', () => {
   });
 
   test('GetColorZones ignores unknown response types', () => {
-    const cmd = Commands.GetColorZones(0, 1);
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 1 });
     
     // Mock unknown response type
     const unknownBytes = new Uint8Array(36 + 10);
@@ -890,9 +890,9 @@ describe('commands', () => {
 
   test('GetExtendedColorZones callback receives responses', () => {
     const receivedResponses: StateExtendedColorZones[] = [];
-    const cmd = Commands.GetExtendedColorZones((response) => {
+    const cmd = Commands.GetExtendedColorZones({ onResponse: (response) => {
       receivedResponses.push(response);
-    });
+    } });
     
     // Mock StateExtendedColorZones response - decoder always reads 82 colors
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
@@ -925,10 +925,10 @@ describe('commands', () => {
 
   test('GetExtendedColorZones callback can stop early', () => {
     const receivedResponses: StateExtendedColorZones[] = [];
-    const cmd = Commands.GetExtendedColorZones((response) => {
+    const cmd = Commands.GetExtendedColorZones({ onResponse: (response) => {
       receivedResponses.push(response);
       return false; // Stop early
-    });
+    } });
     
     // Mock first response for device with >82 zones
     const stateExtendedBytes = new Uint8Array(36 + 5 + 82 * 8);
@@ -1105,5 +1105,60 @@ describe('commands', () => {
     const cmd = Commands.SensorGetAmbientLight();
     assert.equal(cmd.type, Type.SensorGetAmbientLight);
     assert.equal(typeof cmd.decode, 'function');
+  });
+
+  test('Get64 and Set64 default width to 8', () => {
+    const get = Commands.Get64({ tileIndex: 1 });
+    assert.equal(new DataView(get.payload.buffer).getUint8(5), 8);
+    const set = Commands.Set64({ tileIndex: 1, colors: [] });
+    assert.equal(new DataView(set.payload.buffer).getUint8(5), 8);
+  });
+
+  test('every single-packet command declares the State type of its response', () => {
+    const pairs: [{ type: number; responseType?: number }, number][] = [
+      [Commands.GetService(), Type.StateService],
+      [Commands.GetPower(), Type.StatePower],
+      [Commands.SetPower(true), Type.StatePower],
+      [Commands.GetLabel(), Type.StateLabel],
+      [Commands.SetLabel('x'), Type.StateLabel],
+      [Commands.GetColor(), Type.LightState],
+      [Commands.SetColor({ hue: 0, saturation: 0, brightness: 0, kelvin: 3500 }), Type.LightState],
+      [Commands.EchoRequest(new Uint8Array(0)), Type.EchoResponse],
+      [Commands.SetColorZones({ startIndex: 0, endIndex: 0, hue: 0, saturation: 0, brightness: 0, kelvin: 3500 }), Type.StateMultiZone],
+      [Commands.GetExtendedColorZones(), Type.StateExtendedColorZones],
+      [Commands.Get64({ tileIndex: 0 }), Type.State64],
+      [Commands.GetRPower(0), Type.StateRPower],
+      [Commands.GetButton(), Type.StateButton],
+      [Commands.SensorGetAmbientLight(), Type.SensorStateAmbientLight],
+    ];
+    for (const [cmd, expected] of pairs) {
+      assert.equal(cmd.responseType, expected, `type ${cmd.type}`);
+    }
+    // Two possible response types: the decoder filters instead.
+    assert.ok(!('responseType' in Commands.GetColorZones({ startIndex: 0, endIndex: 1 })));
+    // No response packet at all.
+    assert.ok(!('responseType' in Commands.SetReboot()));
+    assert.ok(!('responseType' in Commands.Set64({ tileIndex: 0, colors: [] })));
+  });
+
+  test('GetColorZones stops expecting zones the device does not have', () => {
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 255 });
+    const decode = cmd.createDecoder();
+    const continuation = { expectMore: false };
+
+    // A 3-zone device answering with StateZone packets (single zone each).
+    for (const zoneIndex of [0, 1]) {
+      const bytes = new Uint8Array(10);
+      bytes[0] = 3; // zonesCount
+      bytes[1] = zoneIndex;
+      decode(bytes, { current: 0 }, continuation, Type.StateZone);
+      assert.equal(continuation.expectMore, true, `zone ${zoneIndex}`);
+    }
+    const last = new Uint8Array(10);
+    last[0] = 3;
+    last[1] = 2;
+    const responses = decode(last, { current: 0 }, continuation, Type.StateZone);
+    assert.equal(responses.length, 3);
+    assert.equal(continuation.expectMore, false); // zones 3..255 will never arrive
   });
 });

@@ -30,15 +30,57 @@ export interface OffsetRef {
   current: number;
 }
 
-export type Header = ReturnType<typeof decodeHeader>;
+/**
+ * A decoded frame header. Scalar fields are eager; the reserved padding is
+ * exposed through lazy accessors that slice the backing buffer on demand.
+ * The decoded-message types in this module are plain interfaces, so a test
+ * or mock can satisfy them with an object literal.
+ */
+export interface Header {
+  readonly size: number;
+  readonly protocol: number;
+  readonly addressable: boolean;
+  readonly tagged: boolean;
+  readonly origin: number;
+  readonly source: number;
+  /** The 6-byte device serial (the wire field's two trailing reserved bytes are in `reserved1()`). */
+  readonly target: Uint8Array;
+  readonly resRequired: boolean;
+  readonly ackRequired: boolean;
+  readonly reserved3: number;
+  readonly sequence: number;
+  readonly type: number;
+  /** The 2 reserved bytes following the 6-byte target. */
+  reserved1(): Uint8Array;
+  reserved2(): Uint8Array;
+  reserved4(): Uint8Array;
+  reserved5(): Uint8Array;
+}
 
 export type StateService = ReturnType<typeof decodeStateService>;
 
-export type StateHostFirmware = ReturnType<typeof decodeStateHostFirmware>;
+export interface StateHostFirmware {
+  readonly build: Date;
+  readonly versionMinor: number;
+  readonly versionMajor: number;
+  /** The 8 reserved bytes between `build` and the version fields. */
+  reserved(): Uint8Array;
+}
 
-export type StateWifiInfo = ReturnType<typeof decodeStateWifiInfo>;
+export interface StateWifiInfo {
+  readonly signal: number;
+  reserved6(): Uint8Array;
+  reserved7(): Uint8Array;
+  reserved8(): Uint8Array;
+}
 
-export type StateWifiFirmware = ReturnType<typeof decodeStateWifiFirmware>;
+export interface StateWifiFirmware {
+  readonly build: Date;
+  readonly versionMinor: number;
+  readonly versionMajor: number;
+  /** The 8 reserved bytes between `build` and the version fields. */
+  reserved6(): Uint8Array;
+}
 
 export type StateVersion = ReturnType<typeof decodeStateVersion>;
 
@@ -55,7 +97,16 @@ export type StateGroup = ReturnType<typeof decodeStateGroup>;
  */
 export type SetColorPayload = ReturnType<typeof decodeSetColor>;
 
-export type LightState = ReturnType<typeof decodeLightState>;
+export interface LightState {
+  readonly hue: number;
+  readonly saturation: number;
+  readonly brightness: number;
+  readonly kelvin: number;
+  readonly power: number;
+  readonly label: string;
+  reserved2(): Uint8Array;
+  reserved8(): Uint8Array;
+}
 
 export type StateHevCycle = ReturnType<typeof decodeStateHevCycle>;
 
@@ -63,8 +114,27 @@ export type StateHevCycleConfiguration = ReturnType<typeof decodeStateHevCycleCo
 
 export type StateRPower = ReturnType<typeof decodeStateRPower>;
 
+export interface DeviceChainDevice {
+  readonly accelMeasX: number;
+  readonly accelMeasY: number;
+  readonly accelMeasZ: number;
+  readonly userX: number;
+  readonly userY: number;
+  readonly width: number;
+  readonly height: number;
+  readonly deviceVersionVendor: number;
+  readonly deviceVersionProduct: number;
+  readonly firmwareBuild: Date;
+  readonly firmwareVersionMinor: number;
+  readonly firmwareVersionMajor: number;
+  reserved6(): Uint8Array;
+  reserved7(): Uint8Array;
+  reserved8(): Uint8Array;
+  reserved9(): Uint8Array;
+  reserved10(): Uint8Array;
+}
+
 export type StateDeviceChain = ReturnType<typeof decodeStateDeviceChain>;
-export type DeviceChainDevice = StateDeviceChain['devices'][0];
 
 export type State64 = ReturnType<typeof decodeState64>;
 
@@ -72,11 +142,37 @@ export type StateZone = ReturnType<typeof decodeStateZone>;
 
 export type StateMultiZone = ReturnType<typeof decodeStateMultiZone>;
 
-export type StateMultiZoneEffect = ReturnType<typeof decodeStateMultiZoneEffect>;
+export interface StateMultiZoneEffect {
+  readonly instanceId: number;
+  readonly type: number;
+  readonly speed: number;
+  readonly duration: bigint;
+  /** The 32-byte effect parameter block. */
+  readonly parameters: Uint8Array;
+  reserved6(): Uint8Array;
+  reserved7(): Uint8Array;
+  reserved8(): Uint8Array;
+}
 
 export type StateExtendedColorZones = ReturnType<typeof decodeStateExtendedColorZones>;
 
-export type StateTileEffect = ReturnType<typeof decodeStateTileEffect>;
+export interface StateTileEffect {
+  readonly reserved0: number;
+  readonly instanceId: number;
+  readonly type: number;
+  readonly speed: number;
+  readonly duration: bigint;
+  readonly skyType: number;
+  readonly cloudSaturationMin: number;
+  readonly cloudSaturationMax: number;
+  readonly paletteCount: number;
+  readonly palette: Color[];
+  reserved1(): Uint8Array;
+  reserved2(): Uint8Array;
+  reserved3(): Uint8Array;
+  reserved4(): Uint8Array;
+  reserved5(): Uint8Array;
+}
 
 export type SensorStateAmbientLight = ReturnType<typeof decodeSensorStateAmbientLight>;
 
@@ -311,7 +407,7 @@ const FIRMWARE_SIZE = 20;
  * common path allocates no reserved subarrays. Mirrors the DecodedHeader
  * pattern.
  */
-class HostFirmwareMessage {
+class HostFirmwareMessage implements StateHostFirmware {
   readonly build: Date;
   readonly versionMinor: number;
   readonly versionMajor: number;
@@ -334,7 +430,7 @@ class HostFirmwareMessage {
   }
 }
 
-export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef): HostFirmwareMessage {
+export function decodeStateHostFirmware(bytes: Uint8Array, offsetRef: OffsetRef): StateHostFirmware {
   const o = offsetRef.current;
   ensureSize(bytes, o, FIRMWARE_SIZE);
   offsetRef.current = o + FIRMWARE_SIZE;
@@ -349,7 +445,7 @@ const WIFI_INFO_SIZE = 14;
  * common path allocates no reserved subarrays. Mirrors the DecodedHeader
  * pattern.
  */
-class WifiInfoMessage {
+class WifiInfoMessage implements StateWifiInfo {
   readonly signal: number;
 
   readonly #bytes: Uint8Array;
@@ -378,7 +474,7 @@ class WifiInfoMessage {
   }
 }
 
-export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): WifiInfoMessage {
+export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): StateWifiInfo {
   const o = offsetRef.current;
   ensureSize(bytes, o, WIFI_INFO_SIZE);
   offsetRef.current = o + WIFI_INFO_SIZE;
@@ -390,7 +486,7 @@ export function decodeStateWifiInfo(bytes: Uint8Array, offsetRef: OffsetRef): Wi
  * StateHostFirmware. Scalar fields are decoded eagerly; the reserved padding
  * is exposed as a lazy accessor. Mirrors the DecodedHeader pattern.
  */
-class WifiFirmwareMessage {
+class WifiFirmwareMessage implements StateWifiFirmware {
   readonly build: Date;
   readonly versionMinor: number;
   readonly versionMajor: number;
@@ -413,7 +509,7 @@ class WifiFirmwareMessage {
   }
 }
 
-export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef): WifiFirmwareMessage {
+export function decodeStateWifiFirmware(bytes: Uint8Array, offsetRef: OffsetRef): StateWifiFirmware {
   const o = offsetRef.current;
   ensureSize(bytes, o, FIRMWARE_SIZE);
   offsetRef.current = o + FIRMWARE_SIZE;
@@ -460,7 +556,9 @@ export function decodeStateInfo(bytes: Uint8Array, offsetRef: OffsetRef) {
 }
 
 export function decodeStateLocation(bytes: Uint8Array, offsetRef: OffsetRef) {
-  const location = decodeBytes(bytes, offsetRef, 16);
+  // Same 32-hex-digit form as StateGroup's `group`, so the two UUID-bearing
+  // responses share one representation (encodeSetLocation accepts it back).
+  const location = decodeUuid(bytes, offsetRef);
   const label = decodeString(bytes, offsetRef, 32);
   const updatedAt = decodeTimestamp(bytes, offsetRef);
   return {
@@ -831,7 +929,7 @@ const LIGHT_STATE_SIZE = 52;
  * reserved padding is exposed as lazy accessors so the common path allocates
  * no reserved subarrays. Mirrors the DecodedHeader pattern.
  */
-class LightStateMessage {
+class LightStateMessage implements LightState {
   readonly hue: number;
   readonly saturation: number;
   readonly brightness: number;
@@ -865,7 +963,7 @@ class LightStateMessage {
   }
 }
 
-export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef): LightStateMessage {
+export function decodeLightState(bytes: Uint8Array, offsetRef: OffsetRef): LightState {
   const o = offsetRef.current;
   ensureSize(bytes, o, LIGHT_STATE_SIZE);
   offsetRef.current = o + LIGHT_STATE_SIZE;
@@ -942,7 +1040,7 @@ export function decodeStateRPower(bytes: Uint8Array, offsetRef: OffsetRef) {
  */
 const DEVICE_CHAIN_DEVICE_SIZE = 55;
 
-class DeviceChainEntry {
+class DeviceChainEntry implements DeviceChainDevice {
   readonly accelMeasX: number;
   readonly accelMeasY: number;
   readonly accelMeasZ: number;
@@ -1006,7 +1104,7 @@ class DeviceChainEntry {
 export function decodeStateDeviceChain(bytes: Uint8Array, offsetRef: OffsetRef) {
   ensureSize(bytes, offsetRef.current, 1 + 16 * DEVICE_CHAIN_DEVICE_SIZE + 1);
   const startIndex = bytes[offsetRef.current]!; offsetRef.current += 1;
-  const devices: DeviceChainEntry[] = new Array(16);
+  const devices: DeviceChainDevice[] = new Array(16);
   for (let i = 0; i < 16; i++) {
     const o = offsetRef.current;
     devices[i] = new DeviceChainEntry(bytes, o);
@@ -1090,7 +1188,7 @@ const MULTIZONE_EFFECT_SIZE = 59;
  * as lazy accessors so the common path allocates no reserved subarrays. Mirrors
  * the DecodedHeader pattern.
  */
-class MultiZoneEffectMessage {
+class MultiZoneEffectMessage implements StateMultiZoneEffect {
   readonly instanceId: number;
   readonly type: number;
   readonly speed: number;
@@ -1127,7 +1225,7 @@ class MultiZoneEffectMessage {
   }
 }
 
-export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef): MultiZoneEffectMessage {
+export function decodeStateMultiZoneEffect(bytes: Uint8Array, offsetRef: OffsetRef): StateMultiZoneEffect {
   const o = offsetRef.current;
   ensureSize(bytes, o, MULTIZONE_EFFECT_SIZE);
   offsetRef.current = o + MULTIZONE_EFFECT_SIZE;
@@ -1169,7 +1267,7 @@ const TILE_EFFECT_HEADER_SIZE = 59;
 const TILE_EFFECT_PALETTE_COUNT = 16;
 const TILE_EFFECT_SIZE = TILE_EFFECT_HEADER_SIZE + TILE_EFFECT_PALETTE_COUNT * 8;
 
-class TileEffectMessage {
+class TileEffectMessage implements StateTileEffect {
   readonly reserved0: number;
   readonly instanceId: number;
   readonly type: number;
@@ -1233,7 +1331,7 @@ class TileEffectMessage {
   }
 }
 
-export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef): TileEffectMessage {
+export function decodeStateTileEffect(bytes: Uint8Array, offsetRef: OffsetRef): StateTileEffect {
   const o = offsetRef.current;
   ensureSize(bytes, o, TILE_EFFECT_SIZE);
   offsetRef.current = o + TILE_EFFECT_SIZE;
@@ -1374,7 +1472,7 @@ export const getPayload = (bytes: Uint8Array, offset = 0, size?: number): Uint8A
   size != null ? bytes.subarray(offset + 36, offset + size) : bytes.subarray(offset + 36)
 );
 
-class DecodedHeader {
+class DecodedHeader implements Header {
   readonly size: number;
   readonly protocol: number;
   readonly addressable: boolean;
@@ -1437,7 +1535,7 @@ class DecodedHeader {
   }
 }
 
-export function decodeHeader(bytes: Uint8Array, offset = 0): DecodedHeader {
+export function decodeHeader(bytes: Uint8Array, offset = 0): Header {
   if (offset < 0 || bytes.byteLength - offset < 36) {
     throw new ValidationError('message', bytes.byteLength, `must be at least 36 bytes from offset ${offset} for LIFX header`);
   }

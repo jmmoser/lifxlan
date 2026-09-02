@@ -5,6 +5,7 @@ import type { Command } from './index.js';
 export function GetRPower(relayIndex: number) {
   return {
     type: Type.GetRPower,
+    responseType: Type.StateRPower,
     payload: Encoding.encodeGetRPower(relayIndex),
     decode: Encoding.decodeStateRPower,
     defaultResponseMode: 'response',
@@ -14,6 +15,7 @@ export function GetRPower(relayIndex: number) {
 export function SetRPower(relayIndex: number, level: number) {
   return {
     type: Type.SetRPower,
+    responseType: Type.StateRPower,
     payload: Encoding.encodeSetRPower(relayIndex, level),
     decode: Encoding.decodeStateRPower,
     defaultResponseMode: 'ack-only',

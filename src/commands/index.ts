@@ -35,6 +35,17 @@ export interface Command<OutputType, Mode extends ResponseMode = 'response'> {
    */
   createDecoder?: () => Decoder<OutputType>;
   /**
+   * The message type of the State packet this command's response arrives in
+   * (e.g. `Type.LightState` for GetColor). When set, send() ignores any
+   * response packet of a different type instead of handing it to `decode`,
+   * so a stray or late reply — a wrapped sequence number colliding with an
+   * earlier exchange, a mis-addressed packet — cannot resolve the exchange
+   * with the wrong data. Leave it unset for commands whose responses may
+   * arrive as more than one type (GetColorZones answers with StateZone or
+   * StateMultiZone); their decoder then does its own filtering.
+   */
+  responseType?: number;
+  /**
    * The exchange send() performs when the caller does not pass a
    * `responseMode` override: Get commands declare `'response'`, Set commands
    * declare `'ack-only'`. Carrying the literal in the `Mode` type parameter

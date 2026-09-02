@@ -40,6 +40,9 @@ describe('router', () => {
     assert.throws(() => router.register(handler, 0), /Invalid source/);
     assert.throws(() => router.register(handler, 1), /Invalid source/);
     assert.throws(() => router.register(handler, 0x100000000), /Invalid source/);
+    // encode() writes the source with bitwise math, so 2.5 would go out as 2.
+    assert.throws(() => router.register(handler, 2.5), /Invalid source/);
+    assert.throws(() => router.register(handler, NaN), /Invalid source/);
   });
 
   test('register throws error for already registered source', () => {

@@ -485,7 +485,9 @@ import { openLan } from 'lifxlan/node';
 
 const { client, close } = await openLan();
 
-// Create the device directly — no discovery round trip needed
+// Create the device directly — no discovery round trip needed. The serial
+// number (or a 6-byte `target`) is required alongside the address: replies
+// carry the device's serial, and that is how send() matches them up.
 const device = Device({
   serialNumber: 'd07123456789',
   address: '192.168.1.50',
@@ -534,7 +536,9 @@ A client also implements `Symbol.dispose`, so a `using` declaration disposes it 
 // Confirm a change, then read back the applied state. This is the reliable
 // verify pattern: a State reply forced out of a Set with responseMode:
 // 'response' may reflect the state from before the change was applied.
-await client.send(SetColor({ hue: 120, saturation: 100, brightness: 100, kelvin: 3500 }), device); // ack-only by default
+// HSB fields are 16-bit (0-65535), not percentages or degrees: this is a
+// fully saturated green at full brightness.
+await client.send(SetColor({ hue: 21845, saturation: 65535, brightness: 65535, kelvin: 3500 }), device); // ack-only by default
 const currentState = await client.send(GetColor(), device);  // Promise<LightState>
 console.log('Light is now:', currentState.hue);
 
@@ -568,13 +572,20 @@ const byGroup = new Map(); // group uuid -> { label, devices: Map<serial, Device
 
 const devices = Devices({
   async onAdded(device) {
-    const state = await client.send(GetGroup(), device);
-    let group = byGroup.get(state.group);
-    if (!group) {
-      group = { label: state.label, devices: new Map() };
-      byGroup.set(state.group, group);
+    // The registry only guards against synchronous throws; an async
+    // handler owns its own rejections, or one unreachable device becomes
+    // an unhandled promise rejection.
+    try {
+      const state = await client.send(GetGroup(), device);
+      let group = byGroup.get(state.group);
+      if (!group) {
+        group = { label: state.label, devices: new Map() };
+        byGroup.set(state.group, group);
+      }
+      group.devices.set(device.serialNumber, device);
+    } catch (err) {
+      console.warn('could not read group of', device.serialNumber, err);
     }
-    group.devices.set(device.serialNumber, device);
   },
 });
 
@@ -640,6 +651,19 @@ if (features?.extended_multizone) {
 }
 ```
 
+### Multizone Strips
+
+`GetColorZones` takes an inclusive zone range; the LIFX-documented way to read every zone is `0..255`, and the exchange completes as soon as every zone the device actually has in that range has been reported (a 16-zone strip answers with two `StateMultiZone` packets). `onResponse` observes packets as they arrive; return `false` to stop early.
+
+```javascript
+import { GetColorZones, SetColorZones } from 'lifxlan';
+
+const packets = await client.send(GetColorZones({ startIndex: 0, endIndex: 255 }), device);
+console.log(packets[0].zonesCount, 'zones');
+
+await client.send(SetColorZones({ startIndex: 0, endIndex: 7, hue: 0, saturation: 65535, brightness: 65535, kelvin: 3500 }), device);
+```
+
 ### LIFX Switch (Relays and Buttons)
 
 ```javascript
@@ -670,6 +694,7 @@ function decodeCustom(bytes, offsetRef) {
 function CustomCommand() {
   return {
     type: 1234,
+    responseType: 1235, // the State packet type this command is answered with
     decode: decodeCustom,
   };
 }
@@ -678,7 +703,7 @@ const res = await client.send(CustomCommand(), device);
 console.log(res.val1, res.val2);
 ```
 
-`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices.
+`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. `responseType` is optional but recommended: with it set, `send()` ignores a reply of any other type (a late packet from an earlier exchange whose sequence number has been reused) instead of handing it to `decode`. Every built-in command declares it, except `GetColorZones`, whose two possible reply types its own decoder tells apart.
 
 ### Custom Multi-Response Commands
 

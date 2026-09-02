@@ -6,11 +6,27 @@ import type { Command, Decoder } from './index.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
 
-export function GetColorZones(
-  startIndex: number,
-  endIndex: number,
-  onResponse?: (response: ColorZoneResponse) => boolean | void
-) {
+export interface GetColorZonesOptions {
+  /** First zone to fetch (inclusive). */
+  startIndex: number;
+  /**
+   * Last zone to fetch (inclusive). May exceed the device's zone count — the
+   * LIFX-documented way to fetch every zone is 0..255 — since the exchange
+   * completes once every zone the device actually has in the range has been
+   * reported.
+   */
+  endIndex: number;
+  /**
+   * Called once per StateZone/StateMultiZone packet as it arrives. Return
+   * false to stop waiting for further packets and resolve with what has
+   * accumulated.
+   */
+  onResponse?: (response: ColorZoneResponse) => boolean | void;
+}
+
+export function GetColorZones(options: GetColorZonesOptions) {
+  const { startIndex, endIndex, onResponse } = options;
+
   // Accumulation state lives inside createDecoder so each send() gets a
   // fresh decoder, making this command safe to reuse across concurrent
   // sends and devices.
@@ -20,6 +36,14 @@ export function GetColorZones(
       expectedZones.add(i);
     }
 
+    // A device only reports zones it has, so anything requested at or past
+    // its zonesCount will never arrive and must not hold the exchange open.
+    const dropZonesFrom = (zonesCount: number) => {
+      for (const zone of expectedZones) {
+        if (zone >= zonesCount) expectedZones.delete(zone);
+      }
+    };
+
     const responses: ColorZoneResponse[] = [];
 
     return (bytes, offsetRef, continuation, responseType) => {
@@ -27,9 +51,11 @@ export function GetColorZones(
 
       if (responseType === Type.StateZone) {
         response = Encoding.decodeStateZone(bytes, offsetRef);
+        dropZonesFrom(response.zonesCount);
         expectedZones.delete(response.zoneIndex);
       } else if (responseType === Type.StateMultiZone) {
         response = Encoding.decodeStateMultiZone(bytes, offsetRef);
+        dropZonesFrom(response.zonesCount);
         // Remove all zones covered by this response
         for (let i = 0; i < response.colors.length; i++) {
           expectedZones.delete(response.zoneIndex + i);
@@ -93,6 +119,7 @@ export interface SetColorZonesOptions {
 export function SetColorZones(options: SetColorZonesOptions) {
   return {
     type: Type.SetColorZones,
+    responseType: Type.StateMultiZone,
     payload: Encoding.encodeSetColorZones(
       options.startIndex,
       options.endIndex,
@@ -111,6 +138,7 @@ export function SetColorZones(options: SetColorZonesOptions) {
 export function GetMultiZoneEffect() {
   return {
     type: Type.GetMultiZoneEffect,
+    responseType: Type.StateMultiZoneEffect,
     decode: Encoding.decodeStateMultiZoneEffect,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateMultiZoneEffect, 'response'>;
@@ -135,6 +163,7 @@ export interface SetMultiZoneEffectOptions {
 export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
   return {
     type: Type.SetMultiZoneEffect,
+    responseType: Type.StateMultiZoneEffect,
     payload: Encoding.encodeSetMultiZoneEffect(
       options.instanceId,
       options.effectType,
@@ -147,9 +176,18 @@ export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
   } satisfies Command<Encoding.StateMultiZoneEffect, 'ack-only'>;
 }
 
-export function GetExtendedColorZones(
-  onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void
-) {
+export interface GetExtendedColorZonesOptions {
+  /**
+   * Called once per StateExtendedColorZones packet as it arrives. Return
+   * false to stop waiting for further packets and resolve with what has
+   * accumulated.
+   */
+  onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void;
+}
+
+export function GetExtendedColorZones(options: GetExtendedColorZonesOptions = {}) {
+  const onResponse = options.onResponse;
+
   // Accumulation state lives inside createDecoder so each send() gets a
   // fresh decoder, making this command safe to reuse across concurrent
   // sends and devices.
@@ -202,6 +240,7 @@ export function GetExtendedColorZones(
 
   return {
     type: Type.GetExtendedColorZones,
+    responseType: Type.StateExtendedColorZones,
     createDecoder,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.StateExtendedColorZones[], 'response'>;
@@ -233,6 +272,7 @@ export function SetExtendedColorZones(options: SetExtendedColorZonesOptions) {
   }
   return {
     type: Type.SetExtendedColorZones,
+    responseType: Type.StateExtendedColorZones,
     payload: Encoding.encodeSetExtendedColorZones(
       options.duration ?? 0,
       options.apply ?? MultiZoneExtendedApplicationRequest.APPLY,
