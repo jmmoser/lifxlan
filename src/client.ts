@@ -42,6 +42,7 @@ function registerHandler<T>(
   ackMode: ResponseMode,
   serialNumber: string,
   sequence: number,
+  requestType: number,
   decode: Decoder<T> | undefined,
   responseType: number | undefined,
   timeoutMs: number,
@@ -128,14 +129,22 @@ function registerHandler<T>(
         // Decoding runs inside the socket's receive path, so a truncated
         // StateUnhandled (which anyone on the LAN can send) must reject this
         // exchange rather than throw out of router.receive().
-        let requestType: number;
+        let unhandledType: number;
         try {
-          requestType = decodeStateUnhandled(bytes, offsetRef);
+          unhandledType = decodeStateUnhandled(bytes, offsetRef);
         } catch (err) {
           settleReject(err instanceof Error ? err : new Error(String(err)));
           return;
         }
-        settleReject(new UnhandledCommandError(requestType, serialNumber));
+        // StateUnhandled names the request the device could not handle. One
+        // naming a different type is a stray — a late reply to an earlier
+        // exchange whose sequence number has since been reused — and must
+        // not reject this exchange, just as a stray State packet below
+        // does not resolve it.
+        if (unhandledType !== requestType) {
+          return;
+        }
+        settleReject(new UnhandledCommandError(unhandledType, serialNumber));
         return;
       }
 
@@ -566,7 +575,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
 
         const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
 
-        const promise = registerHandler(ackMode, device.serialNumber, sequence, decode, command.responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
+        const promise = registerHandler(ackMode, device.serialNumber, sequence, command.type, decode, command.responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
 
         try {
           router.send(bytes, device.port, device.address, device.serialNumber);

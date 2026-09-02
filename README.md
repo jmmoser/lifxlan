@@ -703,7 +703,7 @@ const res = await client.send(CustomCommand(), device);
 console.log(res.val1, res.val2);
 ```
 
-`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. `responseType` is optional but recommended: with it set, `send()` ignores a reply of any other type (a late packet from an earlier exchange whose sequence number has been reused) instead of handing it to `decode`. Every built-in command declares it, except `GetColorZones`, whose two possible reply types its own decoder tells apart.
+`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. `responseType` is optional but recommended: with it set, `send()` ignores a reply of any other type (a late packet from an earlier exchange whose sequence number has been reused) instead of handing it to `decode`. Every built-in command that decodes a reply declares it, except `GetColorZones`, whose two possible reply types its own decoder tells apart; commands with no reply packet (`SetReboot`, `Set64`, `SetUserPosition`) have nothing to declare. A `StateUnhandled` reply is filtered the same way: one naming a request type other than the command's own is ignored rather than rejecting the exchange.
 
 ### Custom Multi-Response Commands
 

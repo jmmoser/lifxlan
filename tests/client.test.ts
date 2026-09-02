@@ -161,7 +161,9 @@ describe('client', () => {
           const header = decodeHeader(messsage);
           assert.equal(header.source, client.source);
           const payload = new Uint8Array(2);
-          new DataView(payload.buffer).setUint16(0, Type.StatePower, true);
+          // StateUnhandled carries the type of the request the device could
+          // not handle.
+          new DataView(payload.buffer).setUint16(0, Type.GetPower, true);
           client.router.receive(
             encode(
               header.tagged,
@@ -179,8 +181,37 @@ describe('client', () => {
     });
 
     await assert.rejects(() => client.send(GetPower(), sharedDevice, { responseMode: 'ack-only' }), (error) => {
-      return error instanceof UnhandledCommandError && error.commandType === Type.StatePower;
+      return error instanceof UnhandledCommandError && error.commandType === Type.GetPower;
     });
+  });
+
+  test('a StateUnhandled naming a different request type is ignored and the exchange keeps waiting', async () => {
+    // The same stray-packet case as an unexpected State type: a late
+    // StateUnhandled for an earlier GetColor exchange arrives on a reused
+    // sequence. It must not reject the GetPower call; the real StatePower
+    // that follows resolves it.
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const stray = new Uint8Array(2);
+          new DataView(stray.buffer).setUint16(0, Type.GetColor, true);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StateUnhandled, stray),
+          );
+          const payload = new Uint8Array(2);
+          new DataView(payload.buffer).setUint16(0, 65535, true);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+          );
+        },
+      }),
+    });
+
+    assert.equal(await client.send(GetPower(), sharedDevice), 65535);
+
+    client.dispose();
   });
 
   test('broadcast', () => {

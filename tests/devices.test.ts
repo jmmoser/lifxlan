@@ -335,7 +335,8 @@ describe('devices', () => {
     // An address-only device would send fine but responses carry the real
     // serial, so nothing could ever correlate — every send() would time out.
     assert.throws(
-      () => Device({ address: '1.2.3.4' } as any),
+      // @ts-expect-error -- DeviceConfig requires a serialNumber or target
+      () => Device({ address: '1.2.3.4' }),
       (error: unknown) => error instanceof ValidationError && /serialNumber or target is required/.test(error.message),
     );
   });
@@ -382,8 +383,10 @@ describe('devices', () => {
   });
 
   test('Device factory validates address is required', () => {
-    expect(() => Device({ } as any)).toThrow('Invalid address: undefined (is required)');
-    expect(() => Device({ address: '' } as any)).toThrow('Invalid address:  (is required)');
+    // @ts-expect-error -- DeviceConfig requires an address
+    expect(() => Device({ })).toThrow('Invalid address: undefined (is required)');
+    // @ts-expect-error -- DeviceConfig requires a serialNumber or target
+    expect(() => Device({ address: '' })).toThrow('Invalid address:  (is required)');
   });
 
   test('Device factory validates port range', () => {
