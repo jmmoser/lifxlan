@@ -48,6 +48,14 @@ export interface OpenLanOptions extends DeviceEventHandlers {
    */
   onMessage?: MessageHandler;
   /**
+   * Observes inbound datagrams that could not be decoded and errors thrown
+   * by the `onMessage` tap (or a client's handler) while processing one,
+   * forwarded to {@link Router}. When omitted they are discarded, so neither
+   * a malformed packet nor a buggy callback can crash the process or stop
+   * reception.
+   */
+  onError?: (error: unknown, message: Uint8Array) => void;
+  /**
    * Observes socket-level errors: asynchronous send failures (e.g. a
    * transiently unreachable host) and any 'error' the socket emits after
    * binding. When omitted they are discarded, matching the library's
@@ -126,6 +134,7 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       });
     },
     ...(options.onMessage ? { onMessage: options.onMessage } : {}),
+    ...(options.onError ? { onError: options.onError } : {}),
   });
 
   const devices = Devices({

@@ -14,6 +14,44 @@ describe('devices', () => {
     address: '1.2.3.4',
   });
 
+  test('serial numbers are matched case-insensitively', async () => {
+    const devices = Devices();
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+
+    const found = await devices.get('D073D5AA0001', { timeoutMs: 50 });
+    assert.equal(found.serialNumber, 'd073d5aa0001');
+
+    const pending = devices.get('D073D5AA0002', { timeoutMs: 100 });
+    devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
+    assert.equal((await pending).serialNumber, 'd073d5aa0002');
+
+    assert.equal(devices.remove('D073D5AA0001'), true);
+    assert.equal(devices.registered.has('d073d5aa0001'), false);
+  });
+
+  test('Device rejects a serial number that disagrees with target', () => {
+    const target = new Uint8Array([0xd0, 0x73, 0xd5, 0x00, 0x00, 0x02]);
+    assert.throws(
+      () => Device({ serialNumber: 'd073d5000001', target, address: '1.2.3.4' }),
+      (error) => error instanceof ValidationError && error.parameter === 'serialNumber',
+    );
+    assert.throws(
+      () => Device({ serialNumber: 'd0:73:d5:00:00:02', target, address: '1.2.3.4' }),
+      (error) => error instanceof ValidationError && error.parameter === 'serialNumber',
+    );
+    // Agreeing values are accepted in either case, with a 6- or 8-byte target.
+    assert.equal(Device({ serialNumber: 'D073D5000002', target, address: '1.2.3.4' }).serialNumber, 'd073d5000002');
+    const padded = new Uint8Array(8);
+    padded.set(target);
+    assert.equal(Device({ serialNumber: 'd073d5000002', target: padded, address: '1.2.3.4' }).serialNumber, 'd073d5000002');
+  });
+
+  test('Device normalizes an uppercase serial number to lowercase', () => {
+    const device = Device({ serialNumber: 'D073D5ABCDEF', address: '1.2.3.4' });
+    assert.equal(device.serialNumber, 'd073d5abcdef');
+    assert.deepEqual(device.target, new Uint8Array([0xd0, 0x73, 0xd5, 0xab, 0xcd, 0xef]));
+  });
+
   test('Device rejects targets that are not 6 or 8 bytes', () => {
     // A wrong-length target would silently derive a serial number that can
     // never match an inbound response, so it must fail fast instead.

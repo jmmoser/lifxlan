@@ -52,6 +52,27 @@ describe('client', () => {
     assert.equal(res, 0xFFFF);
   });
 
+  test('send correlates replies to a device whose serial was given in uppercase', async () => {
+    // Inbound serials are derived from the wire target as lowercase hex; a
+    // serial copied in uppercase from a label must still match its replies.
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const payload = new Uint8Array([0xFF, 0xFF]);
+          client.router.receive(
+            encode(false, header.source, header.target, false, false, header.sequence, Type.StatePower, payload),
+          );
+        },
+      }),
+    });
+
+    const device = Device({ serialNumber: 'D073D5ABCDEF', address: '1.2.3.4' });
+    assert.equal(device.serialNumber, 'd073d5abcdef');
+    assert.equal(await client.send(GetPower(), device), 0xFFFF);
+  });
+
   test('works with a custom router that implements only ClientRouter', async () => {
     // This router has no receive() pipeline — it synthesizes responses in
     // send() — proving Client needs only ClientRouter, not RouterInstance.

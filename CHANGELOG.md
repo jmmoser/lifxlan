@@ -27,6 +27,17 @@ upgrading is a matter of reading this file.
 - `devices.remove()` rejects any pending `devices.get()` for that serial with
   the new `DeviceRemovedError`. Before, such a lookup was left to its timeout
   or signal, and one with neither hung forever.
+- `router.receive()` no longer throws when a registered handler or the
+  `onMessage` tap throws; the error goes to `onError` instead, and is
+  discarded when no `onError` is given. Before, such a throw was an uncaught
+  exception from the `lifxlan/node` socket and ended the `lifxlan/deno` read
+  loop, so nothing more was received. Code that wrapped `receive()` in
+  try/catch to observe these errors must pass `onError` now; `openLan()` on
+  both runtimes accepts and forwards a new `onError` option.
+- `Device({ serialNumber, target })` throws `ValidationError` when both are
+  given and the serial is not valid hex or names a different device than the
+  target. Such a device sent to one device while correlating replies under
+  another serial, so every `send()` timed out.
 - `router.register(handler, source)` rejects a non-integer `source` with a
   `ValidationError`.
 
@@ -57,6 +68,15 @@ upgrading is a matter of reading this file.
 - `devices.register()` ignores messages whose target is all zeros (other
   controllers' `GetService` broadcasts) instead of registering a phantom device
   with serial `000000000000`.
+- Serial numbers are case-insensitive. `Device()` stores the serial in
+  lowercase, and `devices.get()` and `devices.remove()` accept either case.
+  Before, a serial written in uppercase (as printed on labels and in the LIFX
+  app) never matched the lowercase serial derived from replies, so every
+  `send()` to that device timed out and `devices.get()` never resolved.
+- `Get64` counts distinct tiles in the requested range instead of packets, so
+  a duplicated `State64`, or a stray one for another tile, no longer finishes
+  the exchange before every requested tile has replied. Such packets are left
+  out of the result and do not reach `onResponse`.
 
 ## 1.0.0-rc.1
 

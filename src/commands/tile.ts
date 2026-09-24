@@ -31,21 +31,31 @@ export interface Get64Options {
   /** Pixel-grid row width. Defaults to 8, which every current LIFX tile device uses. */
   width?: number;
   /**
-   * Called once per State64 packet as it arrives. Return false to stop
-   * waiting for further packets and resolve with what has accumulated.
+   * Called once per distinct requested tile as its State64 packet arrives
+   * (duplicates and tiles outside the requested range are ignored). Return
+   * false to stop waiting for further packets and resolve with what has
+   * accumulated.
    */
   onResponse?: (response: Encoding.State64) => boolean | void;
 }
 
 export function Get64(options: Get64Options) {
   const tileCount = options.tileCount ?? 1;
+  const firstTile = options.tileIndex;
+  const endTile = firstTile + tileCount;
   const onResponse = options.onResponse;
 
   // Accumulation state lives inside createDecoder so each send() gets a
   // fresh decoder, making this command safe to reuse across concurrent
   // sends and devices.
   const createDecoder = (): Decoder<Encoding.State64[]> => {
-    let tilesSeen = 0;
+    // Track distinct tile indices rather than counting packets: UDP can
+    // deliver a State64 twice, and a duplicate must neither complete the
+    // exchange before every tile has reported nor appear in the result.
+    // Devices report absolute tile indices, so one outside the requested
+    // range is a stray (e.g. a late reply on a reused sequence number) and
+    // must not fill a slot either.
+    const tilesSeen = new Set<number>();
 
     const responses: Encoding.State64[] = [];
 
@@ -53,8 +63,12 @@ export function Get64(options: Get64Options) {
       let response: Encoding.State64 | undefined;
 
       if (responseType === Type.State64) {
-        response = Encoding.decodeState64(bytes, offsetRef);
-        tilesSeen++;
+        const decoded = Encoding.decodeState64(bytes, offsetRef);
+        const { tileIndex } = decoded;
+        if (tileIndex >= firstTile && tileIndex < endTile && !tilesSeen.has(tileIndex)) {
+          tilesSeen.add(tileIndex);
+          response = decoded;
+        }
       }
 
       // Update continuation to indicate if more responses are expected
@@ -69,10 +83,10 @@ export function Get64(options: Get64Options) {
             shouldContinue = result !== false; // false = stop early
           }
 
-          continuation.expectMore = shouldContinue && tilesSeen < tileCount;
+          continuation.expectMore = shouldContinue && tilesSeen.size < tileCount;
         } else {
-          // Unknown response type - still expect more responses
-          continuation.expectMore = tilesSeen < tileCount;
+          // Unknown response type, duplicate, or out-of-range tile - still expect more
+          continuation.expectMore = tilesSeen.size < tileCount;
         }
       }
 

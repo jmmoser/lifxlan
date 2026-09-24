@@ -124,6 +124,33 @@ describe('openLan', () => {
     }
   });
 
+  test('a throwing onMessage routes to onError instead of crashing', async () => {
+    const errors: unknown[] = [];
+    const boom = new Error('tap failed');
+    const fake = dgram.createSocket('udp4');
+    await bind(fake);
+    const lan = await openLan({
+      address: '127.0.0.1',
+      onMessage() { throw boom; },
+      onError(err) { errors.push(err); },
+    });
+    try {
+      const lanPort = lan.socket.address().port;
+      const announce = (serialNumber: string) => encode(
+        false, 99, convertSerialNumberToTarget(serialNumber), false, false, 0,
+        Type.StateService, new Uint8Array([1, 0x7c, 0xdd, 0x00, 0x00]),
+      );
+      fake.send(announce(SERIAL), lanPort, '127.0.0.1');
+      await lan.devices.get(SERIAL, { timeoutMs: 2000 });
+      fake.send(announce('d073d5abcdef'), lanPort, '127.0.0.1');
+      await lan.devices.get('d073d5abcdef', { timeoutMs: 2000 });
+      assert.deepEqual(errors, [boom, boom]);
+    } finally {
+      await lan.close();
+      await closeSocket(fake);
+    }
+  });
+
   test('close() rejects pending sends and is idempotent', async () => {
     const fake = dgram.createSocket('udp4');
     const silentPort = await bind(fake); // bound but never answers
