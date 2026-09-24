@@ -57,6 +57,18 @@ upgrading is a matter of reading this file.
 - `devices.register()` ignores messages whose target is all zeros (other
   controllers' `GetService` broadcasts) instead of registering a phantom device
   with serial `000000000000`.
+- Serial numbers are case-insensitive. `Device()` stores the serial in
+  lowercase, and `devices.get()` and `devices.remove()` accept either case.
+  Before, a serial written in uppercase (as printed on labels and in the LIFX
+  app) never matched the lowercase serial derived from replies, so every
+  `send()` to that device timed out and `devices.get()` never resolved.
+- `router.receive()` no longer throws when a registered handler or the
+  `onMessage` tap throws; the error goes to `onError`. Before, such a throw
+  was an uncaught exception from the `lifxlan/node` socket, and it ended the
+  `lifxlan/deno` read loop, so nothing more was received.
+- `Get64` counts distinct tiles instead of packets, so a duplicated `State64`
+  no longer finishes the exchange before every tile has replied. Duplicates
+  are left out of the result.
 
 ## 1.0.0-rc.1
 

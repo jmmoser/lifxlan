@@ -46,8 +46,10 @@ export interface RouterOptions {
   onMessage?: MessageHandler;
   /**
    * Called when an inbound message cannot be decoded (e.g. truncated or
-   * malformed packet). If not provided, malformed packets are silently
-   * discarded so a hostile sender cannot crash the host process.
+   * malformed packet), or when a registered handler or the `onMessage` tap
+   * throws while processing one. If not provided, these errors are silently
+   * discarded so neither a hostile sender nor a buggy callback can crash the
+   * host process or stop reception.
    */
   onError?: (error: unknown, message: Uint8Array) => void;
 }
@@ -94,7 +96,9 @@ export interface RouterInstance extends ClientRouter {
    * 3. the decoded `{ header, payload, serialNumber }` returned to the caller
    *    for synchronous inspection.
    *
-   * Returns `undefined` if the message could not be decoded.
+   * Returns `undefined` if the message could not be decoded. Never throws:
+   * decode failures and errors thrown by the handler or the tap are
+   * reported to {@link RouterOptions.onError}.
    *
    * Ownership: the buffer passed to `receive()` is consumed, not copied.
    * Decoded values — `header.target`, `payload`, and the results that
@@ -128,6 +132,16 @@ export function Router(options: RouterOptions): RouterInstance {
       }
     }
     throw new SourceExhaustionError();
+  }
+
+  function reportError(error: unknown, message: Uint8Array) {
+    if (options.onError) {
+      try {
+        options.onError(error, message);
+      } catch {
+        // A buggy onError callback must not crash receive().
+      }
+    }
   }
 
   return {
@@ -167,24 +181,31 @@ export function Router(options: RouterOptions): RouterInstance {
         payload = getPayload(message, 0, header.size);
         serialNumber = convertTargetToSerialNumber(header.target);
       } catch (err) {
-        if (options.onError) {
-          try {
-            options.onError(err, message);
-          } catch {
-            // A buggy onError callback must not crash receive().
-          }
-        }
+        reportError(err, message);
         return undefined;
       }
 
+      // receive() runs inside the socket's receive path, so a throwing
+      // handler or tap must not escape it: on Node that is an uncaught
+      // exception from the 'message' event, on Deno it ends the read loop and
+      // with it all reception. Each callback is isolated so one failing
+      // cannot starve the other; the error goes to onError.
       const handler = handlers.get(header.source);
 
       if (handler) {
-        handler(header, payload, serialNumber);
+        try {
+          handler(header, payload, serialNumber);
+        } catch (err) {
+          reportError(err, message);
+        }
       }
 
       if (options.onMessage) {
-        options.onMessage(header, payload, serialNumber);
+        try {
+          options.onMessage(header, payload, serialNumber);
+        } catch (err) {
+          reportError(err, message);
+        }
       }
 
       return {

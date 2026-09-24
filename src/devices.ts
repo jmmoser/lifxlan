@@ -47,8 +47,9 @@ interface DeviceConfigBase {
  * A device needs an identity as well as an address: responses carry the
  * device's serial number in their target field, and that is how `send()`
  * correlates a reply with its request. Provide the serial number (the
- * 12-hex-digit MAC printed on the device), the 6-byte wire target, or both;
- * an address alone would send fine but could never match a reply.
+ * 12-hex-digit MAC printed on the device, in either case), the 6-byte wire
+ * target, or both; an address alone would send fine but could never match a
+ * reply.
  */
 export type DeviceConfig =
   | (DeviceConfigBase & { serialNumber: string; target?: Uint8Array })
@@ -93,7 +94,11 @@ function createDevice(config: DeviceConfig): MutableDevice {
     // every send() would time out.
     throw new ValidationError('serialNumber', config.serialNumber, 'serialNumber or target is required');
   }
-  const serialNumber = config.serialNumber
+  // Inbound serials are derived from the wire target as lowercase hex, and
+  // replies are correlated by string equality, so a serial copied in
+  // uppercase from a label or the LIFX app must be normalized or every
+  // send() to it times out.
+  const serialNumber = config.serialNumber?.toLowerCase()
     ?? convertTargetToSerialNumber(target.length > 6 ? target.subarray(0, 6) : target);
 
   return {
@@ -157,7 +162,8 @@ export interface DevicesInstance {
    * Forgets a device. Any `get()` still waiting on this serial number rejects
    * with {@link DeviceRemovedError} — a removed device is one the caller no
    * longer wants, so a lookup for it cannot be satisfied by a later
-   * re-registration. Returns whether the device was known.
+   * re-registration. Returns whether the device was known. The serial number
+   * is matched case-insensitively.
    */
   remove(serialNumber: string): boolean;
   /**
@@ -165,8 +171,9 @@ export interface DevicesInstance {
    * discovery rendezvous, not a lookup. A known device resolves immediately;
    * otherwise the promise settles on a future `register()`, the timeout, the
    * signal, or a `remove()` of the same serial (rejecting with
-   * {@link DeviceRemovedError}). For a synchronous check, use
-   * {@link DevicesInstance.registered}.
+   * {@link DeviceRemovedError}). The serial number is matched
+   * case-insensitively. For a synchronous check, use
+   * {@link DevicesInstance.registered}, which is keyed by lowercase serial.
    */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
   /**
@@ -278,7 +285,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       return knownDevices;
     },
     register,
-    remove(serialNumber: string): boolean {
+    remove(serialNumberInput: string): boolean {
+      const serialNumber = serialNumberInput.toLowerCase();
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
       // Pending get() promises for this serial must not be satisfied by a
@@ -315,7 +323,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         if (removed) removedListeners.delete(removed);
       };
     },
-    get(serialNumber: string, options?: GetDeviceOptions): Promise<Device> {
+    get(serialNumberInput: string, options?: GetDeviceOptions): Promise<Device> {
+      const serialNumber = serialNumberInput.toLowerCase();
       const signal = options?.signal;
 
       if (signal?.aborted) {

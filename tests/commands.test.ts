@@ -399,6 +399,27 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Should expect more tiles (0, 1)
   });
 
+  test('Get64 ignores a duplicate State64 when counting tiles', () => {
+    const cmd = Commands.Get64({ tileIndex: 0, tileCount: 2, width: 8 });
+    const state64 = (tileIndex: number) => {
+      const bytes = new Uint8Array(5 + 64 * 8);
+      bytes[0] = tileIndex;
+      bytes[4] = 8;
+      return bytes;
+    };
+    const decode = cmd.createDecoder();
+    const continuation = { expectMore: false };
+
+    decode(state64(0), { current: 0 }, continuation, Type.State64);
+    assert.equal(continuation.expectMore, true);
+    // UDP can deliver the same packet twice; tile 1 is still outstanding.
+    decode(state64(0), { current: 0 }, continuation, Type.State64);
+    assert.equal(continuation.expectMore, true);
+    const result = decode(state64(1), { current: 0 }, continuation, Type.State64);
+    assert.equal(continuation.expectMore, false);
+    assert.deepEqual(result.map((tile) => tile.tileIndex), [0, 1]);
+  });
+
   test('Get64 callback receives responses', () => {
     const receivedResponses: State64[] = [];
     const cmd = Commands.Get64({ tileIndex: 0, tileCount: 2, width: 8, onResponse: (response) => {

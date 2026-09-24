@@ -332,6 +332,51 @@ describe('router', () => {
     assert.deepEqual(errorMessage, tooShort);
   });
 
+  test('receive isolates a throwing onMessage tap and reports it via onError', () => {
+    const boom = new Error('tap failed');
+    const errors: unknown[] = [];
+    let handled = 0;
+    const router = Router({
+      onSend() {},
+      onMessage() { throw boom; },
+      onError(err) { errors.push(err); },
+    });
+    const source = router.register(() => { handled++; });
+
+    const message = encode(false, source, new Uint8Array(6).fill(1), false, false, 0, Type.StatePower, new Uint8Array(2));
+    const result = router.receive(message);
+
+    assert.ok(result);
+    assert.equal(handled, 1);
+    assert.deepEqual(errors, [boom]);
+  });
+
+  test('receive isolates a throwing handler so the onMessage tap still runs', () => {
+    const boom = new Error('handler failed');
+    const errors: unknown[] = [];
+    let tapped = 0;
+    const router = Router({
+      onSend() {},
+      onMessage() { tapped++; },
+      onError(err) { errors.push(err); },
+    });
+    const source = router.register(() => { throw boom; });
+
+    const message = encode(false, source, new Uint8Array(6).fill(1), false, false, 0, Type.StatePower, new Uint8Array(2));
+    assert.ok(router.receive(message));
+    assert.equal(tapped, 1);
+    assert.deepEqual(errors, [boom]);
+  });
+
+  test('receive does not throw when a callback throws and no onError is provided', () => {
+    const router = Router({
+      onSend() {},
+      onMessage() { throw new Error('tap failed'); },
+    });
+    const message = encode(false, 2, new Uint8Array(6).fill(1), false, false, 0, Type.StatePower, new Uint8Array(2));
+    assert.ok(router.receive(message));
+  });
+
   test('receive silently swallows malformed packet when no onError provided', () => {
     const router = Router({
       onSend() {},
