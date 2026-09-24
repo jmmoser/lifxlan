@@ -48,8 +48,8 @@ interface DeviceConfigBase {
  * device's serial number in their target field, and that is how `send()`
  * correlates a reply with its request. Provide the serial number (the
  * 12-hex-digit MAC printed on the device, in either case), the 6-byte wire
- * target, or both; an address alone would send fine but could never match a
- * reply.
+ * target, or both (which must then name the same device); an address alone
+ * would send fine but could never match a reply.
  */
 export type DeviceConfig =
   | (DeviceConfigBase & { serialNumber: string; target?: Uint8Array })
@@ -86,6 +86,18 @@ function createDevice(config: DeviceConfig): MutableDevice {
   let target: Uint8Array;
   if (config.target !== undefined) {
     target = config.target;
+    if (config.serialNumber !== undefined) {
+      // The serial is the correlation key and the target is where packets
+      // go; if they name different devices (or the serial is not plain hex),
+      // replies are derived under a serial nothing is waiting on and every
+      // send() times out. Fail fast instead.
+      const serialTarget = convertSerialNumberToTarget(config.serialNumber);
+      for (let i = 0; i < 6; i++) {
+        if (serialTarget[i] !== target[i]) {
+          throw new ValidationError('serialNumber', config.serialNumber, 'does not match target');
+        }
+      }
+    }
   } else if (config.serialNumber) {
     target = convertSerialNumberToTarget(config.serialNumber);
   } else {

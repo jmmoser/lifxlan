@@ -176,6 +176,26 @@ describe('openLan (deno)', () => {
     await lan.close();
   });
 
+  test('a throwing onMessage routes to onError and does not end the read loop', async () => {
+    conn = fakeConn();
+    const errors: unknown[] = [];
+    const boom = new Error('tap failed');
+    const lan = await openLan({
+      onMessage() { throw boom; },
+      onError(err) { errors.push(err); },
+    });
+
+    const other = 'd073d5abcdef';
+    conn.push(stateServiceFrom(SERIAL), DEVICE_ADDR);
+    await lan.devices.get(SERIAL, { timeoutMs: 1000 });
+    // A second datagram still arrives: the throw did not kill the loop.
+    conn.push(stateServiceFrom(other), DEVICE_ADDR);
+    await lan.devices.get(other, { timeoutMs: 1000 });
+    assert.deepEqual(errors, [boom, boom]);
+
+    await lan.close();
+  });
+
   test('close() rejects pending sends, ends the read loop, and is idempotent', async () => {
     conn = fakeConn();
     const errors: Error[] = [];
