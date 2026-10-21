@@ -53,6 +53,11 @@ upgrading is a matter of reading this file.
   (or is all zeros); `send()` to an all-zero target; a `NaN` or fractional
   `Device()` port. `devices.register()` also now ignores request-type
   messages, invalid source ports, and message types missing from `Type`.
+- On `lifxlan/deno`, sending through the router throws synchronously (and
+  `send()` rejects at once) once `close()` begins or the read loop ends —
+  including after a receive error, which ends Deno's reception for good.
+  Before, those sends went out asynchronously and failures only reached
+  `onSocketError`. This matches `node:dgram` on a closed socket.
 
 ### Added
 
@@ -171,9 +176,10 @@ upgrading is a matter of reading this file.
   kept rebroadcasting (holding the process open), and `send()` waited for its
   timeout. Any client's `broadcast()`/`sendUnacknowledged()` through that
   router now throws at that point, and `send()` rejects at once.
-- `SetHevCycle()` and `SetHevCycleConfiguration()` default `durationSeconds`
-  to 0 (the device's configured default), so `SetHevCycle(false)` needs no
-  meaningless duration; an omitted one previously encoded 0 by accident.
+- `SetHevCycle()` defaults `durationSeconds` to 0 (the device's configured
+  default), so `SetHevCycle(false)` needs no meaningless duration; an omitted
+  one previously encoded 0 by accident. `SetHevCycleConfiguration()` keeps it
+  required, since its duration overwrites that stored default.
 - `devices.register()` registers only from message types devices send (State
   replies, `Acknowledgement`, `EchoResponse`) and ignores everything else. A
   socket bound to 56700 also receives other controllers' requests, including

@@ -229,10 +229,10 @@ export function GetHevCycleConfiguration() {
 }
 
 /**
- * @param durationSeconds The default cycle length used when a SetHevCycle
- * passes 0. Defaults to 0.
+ * @param durationSeconds The device's stored default cycle length, used
+ * when a SetHevCycle passes 0. Required: this message overwrites it.
  */
-export function SetHevCycleConfiguration(indication: boolean, durationSeconds = 0) {
+export function SetHevCycleConfiguration(indication: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycleConfiguration,
     responseType: Type.StateHevCycleConfiguration,

@@ -559,10 +559,11 @@ describe('commands', () => {
     assert.equal(Commands.Get64({ tileIndex: 0, tileCount: 255 }).type, Type.Get64);
   });
 
-  test('SetHevCycle and SetHevCycleConfiguration default durationSeconds to 0', () => {
-    // Turning HEV off needs no duration; 0 means the configured default.
+  test('SetHevCycle defaults durationSeconds to 0 (the configured default)', () => {
+    // Turning HEV off needs no duration. SetHevCycleConfiguration keeps it
+    // required: its duration *is* the stored default, so a default of 0
+    // would silently erase it.
     assert.deepEqual(Commands.SetHevCycle(false).payload, new Uint8Array([0, 0, 0, 0, 0]));
-    assert.deepEqual(Commands.SetHevCycleConfiguration(true).payload, new Uint8Array([1, 0, 0, 0, 0]));
   });
 
   test('GetColorZones rejects indices outside the uint8 wire range', () => {

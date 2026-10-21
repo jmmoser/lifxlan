@@ -73,7 +73,9 @@ export interface OpenLanOptions extends DeviceEventHandlers {
   onError?: (error: unknown, message: Uint8Array) => void;
   /**
    * Observes asynchronous send failures and an unexpected end of the read
-   * loop. When omitted they are discarded, matching the library's
+   * loop. Once the read loop has ended — by close(), the caller closing the
+   * raw socket, or a receive error — no reply can arrive, so further sends
+   * through the router throw synchronously (send() rejects) instead. When omitted they are discarded, matching the library's
    * UDP-is-best-effort semantics — a lost packet already surfaces as
    * TimeoutError on acknowledged sends. The interruption `close()` inflicts
    * on the read loop is normal shutdown and is never reported here.
