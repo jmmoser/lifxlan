@@ -113,14 +113,18 @@ upgrading is a matter of reading this file.
   wire, and the decoder compared replies against the unwrapped values: a
   wrapped value (`tileCount: 256` encodes as 0) asked for tiles the decoder
   never accepted, and a fractional count (`1.5` sends 1) left it waiting for
-  a fraction of a tile, so the call always timed out.
+  a fraction of a tile, so the call always timed out. It also rejects a range
+  with `tileIndex + tileCount` past 256, which names tiles that cannot exist.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check.
-- `devices.register()` ignores requests (Get/Set message types). A socket bound
-  to 56700 also receives other controllers' requests, including targeted ones
-  broadcast to reach a device by serial; their target names the device but
-  their sender is the controller, so registering from them re-addressed the
-  device to the other controller and every later `send()` timed out.
+- `devices.register()` registers only from message types devices send (State
+  replies, `Acknowledgement`, `EchoResponse`) and ignores everything else. A
+  socket bound to 56700 also receives other controllers' requests, including
+  targeted ones broadcast to reach a device by serial; their target names the
+  device but their sender is the controller, so registering from them
+  re-addressed the device to the other controller and every later `send()`
+  timed out. A message type missing from `Type` is ignored too, so a reply
+  of an unlisted type no longer registers or moves a device.
   `RegistrationMessage.header` gains an optional `type` for this; a custom
   pipeline that omits it keeps the previous behavior.
 - `devices.register()` ignores a datagram from an invalid source port (UDP

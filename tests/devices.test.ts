@@ -843,6 +843,10 @@ describe('devices subscribe', () => {
       expect(device?.address).toBe('10.0.0.7');
       expect(changed).toEqual([]);
 
+      // So is a request type missing from Type (CopyFrameBuffer, 716).
+      expect(devices.register(56700, '10.0.0.20', request(716))).toBeUndefined();
+      expect(device?.address).toBe('10.0.0.7');
+
       // A device's own replies (State types, acks) still update it.
       devices.register(56700, '10.0.0.8', request(Type.Acknowledgement));
       expect(device?.address).toBe('10.0.0.8');

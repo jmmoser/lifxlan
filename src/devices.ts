@@ -11,22 +11,24 @@ import { AbortError, DeviceRemovedError, TimeoutError, ValidationError } from '.
 export interface RegistrationMessage {
   serialNumber: string;
   /**
-   * When `type` is present and names a request (a Get/Set message), the
-   * message is ignored: it came from another controller addressing the
-   * device, not from the device itself.
+   * When `type` is present, only a message type devices send (a State
+   * reply, an Acknowledgement, an EchoResponse) registers; anything else —
+   * another controller's request addressing the device — is ignored.
    */
   header: { target: Uint8Array; type?: number };
 }
 
 /**
- * Message types only controllers send. A socket bound to 56700 also sees
- * other controllers' requests — including targeted ones broadcast to reach a
+ * The message types devices send. A socket bound to 56700 also sees other
+ * controllers' requests — including targeted ones broadcast to reach a
  * device by serial — whose target names the device but whose sender is the
  * controller, so registering from them would re-address the device to it.
+ * An allowlist rather than a list of requests: a request type missing from
+ * `Type` (CopyFrameBuffer, vendor messages) must not slip through.
  */
-const REQUEST_TYPES: ReadonlySet<number> = new Set(
+const DEVICE_MESSAGE_TYPES: ReadonlySet<number> = new Set(
   Object.entries(Type)
-    .filter(([name]) => /^(Sensor)?(Get|Set)|^EchoRequest$/.test(name))
+    .filter(([name]) => /^(Sensor)?State|^LightState$|^Acknowledgement$|^EchoResponse$/.test(name))
     .map(([, type]) => type),
 );
 
@@ -188,9 +190,9 @@ export interface DevicesInstance {
    * zeros is also ignored (returning `undefined`): that is the broadcast
    * address, used by other controllers' GetService broadcasts, not a device
    * identity. So is one whose `port` is not a valid UDP port (a datagram from
-   * source port 0), since nothing could be sent back to it, and so is a
-   * request (a Get/Set type) — another controller addressing the device,
-   * not the device itself. Re-registering a known serial at a new port/address updates it
+   * source port 0), since nothing could be sent back to it, and so is any
+   * message type devices do not send (a Get/Set request is another
+   * controller addressing the device, not the device itself). Re-registering a known serial at a new port/address updates it
    * in place and emits `onChanged`.
    */
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
@@ -323,7 +325,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     if (!isValidPort(port)) {
       return undefined;
     }
-    if (received.header.type !== undefined && REQUEST_TYPES.has(received.header.type)) {
+    if (received.header.type !== undefined && !DEVICE_MESSAGE_TYPES.has(received.header.type)) {
       return undefined;
     }
     const device = registerDevice(received.serialNumber, port, address, received.header.target);

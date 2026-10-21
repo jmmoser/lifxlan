@@ -22,6 +22,9 @@ export interface Get64Options {
   /**
    * How many tiles to fetch, starting at tileIndex — the protocol's `length`
    * field. Each tile answers with its own State64 packet. Defaults to 1.
+   * Keep `tileIndex + tileCount` within the chain (GetDeviceChain's
+   * `tileDevicesCount`): State64 carries no chain length, so a tile past the
+   * end never answers and the call waits for it until it times out.
    */
   tileCount?: number;
   /** Leftmost pixel column to fetch. Defaults to 0 (use 0 with width 8). */
@@ -53,6 +56,11 @@ export function Get64(options: Get64Options) {
   }
   if (!Number.isInteger(tileCount) || tileCount < 1 || tileCount > 255) {
     throw new ValidationError('tileCount', tileCount, 'must be an integer between 1 and 255');
+  }
+  // Tile indices are uint8, so a range running past 255 names tiles that
+  // cannot exist and the decoder would wait for them until the timeout.
+  if (firstTile + tileCount > 256) {
+    throw new ValidationError('tileCount', tileCount, `tileIndex + tileCount must not exceed 256 (tileIndex is ${firstTile})`);
   }
   const endTile = firstTile + tileCount;
   const onResponse = options.onResponse;
