@@ -4,7 +4,7 @@ import { Devices, Device, type RegistrationMessage } from '../src/devices.js';
 import { Router } from '../src/router.js';
 import { encode } from '../src/encoding.js';
 import { Type } from '../src/constants/index.js';
-import { DeviceRemovedError, ValidationError } from '../src/errors.js';
+import { DeviceRemovedError, TimeoutError, ValidationError } from '../src/errors.js';
 import { received } from './helpers.js';
 
 describe('devices', () => {
@@ -618,6 +618,9 @@ describe('devices', () => {
     // @ts-expect-error -- an untyped caller passing the controller itself
     const withController = devices.get('d073d5ffffff', { signal: new AbortController() });
     await assert.rejects(withController, ValidationError);
+    // null still means "no signal" (fetch()'s convention), not an error.
+    // @ts-expect-error -- an untyped caller passing null
+    await assert.rejects(devices.get('d073d5ffffff', { signal: null, timeoutMs: 1 }), TimeoutError);
     // Nor the all-zero broadcast serial, which register() never registers.
     await assert.rejects(devices.get('000000000000'), ValidationError);
     // Uppercase hex is still accepted.

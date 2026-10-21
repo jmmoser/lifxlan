@@ -521,6 +521,11 @@ describe('client', () => {
     // @ts-expect-error -- an untyped caller passing an AbortController for its .signal
     await assert.rejects(client.send(GetPower(), sharedDevice, { signal: new AbortController() }), ValidationError);
     assert.equal(sends, 0);
+    // null still means "no signal" (fetch()'s convention), not an error: the
+    // exchange goes out and times out normally.
+    // @ts-expect-error -- an untyped caller passing null
+    await assert.rejects(client.send(GetPower(), sharedDevice, { signal: null, timeoutMs: 1 }), TimeoutError);
+    assert.equal(sends, 1);
     client.dispose();
   });
 

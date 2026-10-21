@@ -529,7 +529,8 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       const signal = options?.signal;
       // A non-signal (e.g. an AbortController passed in place of its
       // .signal) is rejected before any per-device state is touched.
-      if (signal !== undefined && typeof signal.addEventListener !== 'function') {
+      // null means no signal, as in fetch()'s RequestInit.
+      if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
         return rejected(new ValidationError('signal', signal, 'must be an AbortSignal'));
       }
       if (signal?.aborted) {

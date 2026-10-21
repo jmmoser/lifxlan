@@ -196,6 +196,11 @@ describe('discovery', () => {
     // @ts-expect-error -- an untyped caller passing the controller itself
     expect(() => discover(router, Devices(), { signal: controller })).toThrow(ValidationError);
     expect(activeSources()).toBe(0);
+    // null still means "no signal" (fetch()'s convention), not an error.
+    // @ts-expect-error -- an untyped caller passing null
+    const discovery = discover(router, Devices(), { signal: null });
+    expect(activeSources()).toBe(1);
+    discovery.dispose();
   });
 
   test('a router whose register() throws leaves no registry subscription behind', () => {

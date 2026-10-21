@@ -131,7 +131,8 @@ export function discover(
   // A non-signal (e.g. an AbortController passed in place of its .signal)
   // would otherwise throw from addEventListener after the client and the
   // registry subscription exist, leaking both.
-  if (signal !== undefined && typeof signal.addEventListener !== 'function') {
+  // null means no signal, as in fetch()'s RequestInit.
+  if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
     throw new ValidationError('signal', signal, 'must be an AbortSignal');
   }
 

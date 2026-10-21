@@ -134,7 +134,8 @@ upgrading is a matter of reading this file.
   `AbortSignal` (e.g. an `AbortController` passed in place of its `.signal`)
   with `ValidationError`. Before, `get()` threw a `TypeError` synchronously,
   and `discover()` threw only after creating its client and subscribing to
-  the registry, leaking both.
+  the registry, leaking both. A `null` signal still means "no signal", as in
+  `fetch()`.
 - `client.send()` reads each command and device field once, before taking
   its per-device state, and re-checks the signal after running caller code.
   A getter (e.g. `payload`) that re-entered `send()` on the same device could

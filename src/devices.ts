@@ -399,7 +399,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       // A non-signal (e.g. an AbortController passed in place of its
       // .signal) would throw out of addEventListener below instead of
       // rejecting.
-      if (signal !== undefined && typeof signal.addEventListener !== 'function') {
+      // null means no signal, as in fetch()'s RequestInit.
+      if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
         return Promise.reject(new ValidationError('signal', signal, 'must be an AbortSignal'));
       }
 
