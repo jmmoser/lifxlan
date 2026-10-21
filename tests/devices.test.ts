@@ -629,6 +629,9 @@ describe('devices', () => {
     // @ts-expect-error -- an untyped caller passing undefined
     const fromUnsetEnv = devices.get(undefined);
     await assert.rejects(fromUnsetEnv, ValidationError);
+    // @ts-expect-error -- an untyped caller passing a number
+    const numeric = devices.get(0xd073d5123456);
+    await assert.rejects(numeric, ValidationError);
     // So does an AbortController passed in place of its .signal, which threw
     // synchronously out of addEventListener.
     // @ts-expect-error -- an untyped caller passing the controller itself
@@ -857,7 +860,7 @@ describe('devices subscribe', () => {
     });
 
     test('accepts a minimal RegistrationMessage from a custom decode pipeline', () => {
-      // register() reads only these two fields, so a custom decode pipeline
+      // register() reads only these fields (plus an optional header.type), so a custom decode pipeline
       // can drive the registry without fabricating a full ReceivedMessage.
       const devices = Devices();
       const message: RegistrationMessage = {
@@ -905,6 +908,20 @@ describe('devices subscribe', () => {
       expect(device?.address).toBe('10.0.0.11');
       devices.register(56700, '10.0.0.12', request(Type.StateUnhandled));
       expect(device?.address).toBe('10.0.0.12');
+    });
+
+    test('every request type in Type is ignored and every reply type registers', () => {
+      // Exhaustive over Type, classified by name independently of the
+      // registry's own allowlist: any widening that admits a request (or
+      // narrowing that drops a reply) fails here.
+      const router = Router({ onSend() {} });
+      const isRequest = (name: string) => /^(Sensor)?(Get|Set)|^EchoRequest$/.test(name);
+      for (const [name, type] of Object.entries(Type)) {
+        const devices = Devices();
+        const message = router.receive(encode(false, 7, target, false, false, 0, type, new Uint8Array(0)));
+        const device = devices.register(56700, '10.0.0.20', message);
+        expect([name, device === undefined]).toEqual([name, isRequest(name)]);
+      }
     });
 
     test('a datagram from an invalid source port (0) is ignored, not thrown', () => {

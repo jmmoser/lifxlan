@@ -558,6 +558,7 @@ describe('commands', () => {
     assert.throws(() => Commands.Get64({ tileIndex: 0.5 }), /Invalid tileIndex: 0.5/);
     // A range running past tile 255 names tiles that cannot exist.
     assert.throws(() => Commands.Get64({ tileIndex: 200, tileCount: 100 }), /tileIndex \+ tileCount must not exceed 256/);
+    assert.throws(() => Commands.Get64({ tileIndex: 255, tileCount: 2 }), /tileIndex \+ tileCount must not exceed 256/);
     assert.equal(Commands.Get64({ tileIndex: 255, tileCount: 1 }).type, Type.Get64);
     assert.equal(Commands.Get64({ tileIndex: 0, tileCount: 255 }).type, Type.Get64);
   });

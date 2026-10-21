@@ -2,7 +2,7 @@ import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { Client } from '../src/client.js';
 import { Router, type ClientRouter, type MessageHandler } from '../src/router.js';
-import { Device } from '../src/devices.js';
+import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader, type Header } from '../src/encoding.js';
 import type { Command } from '../src/commands/index.js';
@@ -613,6 +613,41 @@ describe('client', () => {
       defaultResponseMode: 'response',
     };
     const promise = client.send(command, sharedDevice);
+    await Promise.all(nested);
+    assert.ok(outer !== undefined);
+    client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
+    assert.equal(await promise, 0xFFFF);
+    client.dispose();
+  });
+
+  test('device getters that re-enter send() on every read do not strand the outer exchange', async () => {
+    // A getter that acts on each read (not just the first) pins that every
+    // device field is read once, before the per-device map is taken.
+    let inNested = false;
+    let outer: Header | undefined;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          if (inNested) throw new Error('transport down');
+          outer = decodeHeader(message);
+        },
+      }),
+    });
+    const nested: Promise<unknown>[] = [];
+    const reenter = () => {
+      if (inNested) return;
+      inNested = true;
+      nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+      inNested = false;
+    };
+    const device: DeviceType = {
+      get target() { reenter(); return sharedDevice.target; },
+      get serialNumber() { reenter(); return sharedDevice.serialNumber; },
+      address: sharedDevice.address,
+      port: sharedDevice.port,
+    };
+    const promise = client.send(GetPower(), device);
     await Promise.all(nested);
     assert.ok(outer !== undefined);
     client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
