@@ -13,8 +13,9 @@ import { convertSerialNumberToTarget } from '../src/utils/index.js';
  *
  * Seeding through the real decode path keeps the serial/target pair consistent
  * exactly as production does, rather than asserting a hand-built fixture. The
- * StateService payload is arbitrary — register() only reads serialNumber and
- * header.target — but a realistic one keeps the round trip honest.
+ * StateService type matters — register() reads serialNumber, header.target,
+ * and header.type, and registers only from device-sent message types — and
+ * its payload is arbitrary, but a realistic one keeps the round trip honest.
  */
 export function received(serialNumber: string): ReceivedMessage {
   const target = convertSerialNumberToTarget(serialNumber);

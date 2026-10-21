@@ -205,7 +205,11 @@ export function GetHevCycle() {
   } satisfies Command<Encoding.StateHevCycle, 'response'>;
 }
 
-export function SetHevCycle(enable: boolean, durationSeconds: number) {
+/**
+ * @param durationSeconds How long the cycle runs; 0 (the default) uses the
+ * device's configured duration. Meaningless when disabling a cycle.
+ */
+export function SetHevCycle(enable: boolean, durationSeconds = 0) {
   return {
     type: Type.SetHevCycle,
     responseType: Type.StateHevCycle,
@@ -224,6 +228,10 @@ export function GetHevCycleConfiguration() {
   } satisfies Command<Encoding.StateHevCycleConfiguration, 'response'>;
 }
 
+/**
+ * @param durationSeconds The device's stored default cycle length, used
+ * when a SetHevCycle passes 0. Required: this message overwrites it.
+ */
 export function SetHevCycleConfiguration(indication: boolean, durationSeconds: number) {
   return {
     type: Type.SetHevCycleConfiguration,

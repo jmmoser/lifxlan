@@ -357,8 +357,44 @@ function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number
   return value;
 }
 
+const MAX_UINT64 = 0xFFFFFFFFFFFFFFFFn;
+
+/**
+ * DataView.setUint32 wraps a negative value modulo 2**32, so a duration of
+ * -1 would encode as 0xFFFFFFFF — a ~49.7 day transition, or a ~136 year
+ * HEV cycle — rather than fail. Used for the time fields (durations,
+ * periods, speeds), where that wrap turns into a runaway effect.
+ */
+function assertUint32(parameter: string, value: number): void {
+  if (!(value >= 0 && value <= 0xFFFFFFFF)) {
+    throw new ValidationError(parameter, value, 'must be between 0 and 4294967295');
+  }
+}
+
+/**
+ * DataView.setBigUint64 wraps out-of-range values modulo 2**64 instead of
+ * throwing, so a negative or oversized value would silently encode as an
+ * unrelated one.
+ */
+function assertUint64(parameter: string, value: bigint): void {
+  if (typeof value !== 'bigint' || value < 0n || value > MAX_UINT64) {
+    throw new ValidationError(parameter, value, 'must be between 0 and 2^64 - 1');
+  }
+}
+
 export function encodeTimestampTo(view: DataView, offset: number, date: Date): void {
-  view.setBigUint64(offset, BigInt(date.getTime()) * 1000000n, true);
+  const ms = date.getTime();
+  // The wire field is unsigned nanoseconds since the epoch. An invalid Date
+  // (NaN) would throw a bare RangeError from BigInt(), and a date before 1970
+  // or after the field's range (~2554) would silently wrap to another date.
+  if (Number.isNaN(ms)) {
+    throw new ValidationError('date', date, 'must be a valid date');
+  }
+  const ns = BigInt(ms) * 1000000n;
+  if (ns < 0n || ns > MAX_UINT64) {
+    throw new ValidationError('date', date, 'must be between 1970-01-01 and 2554-07-21');
+  }
+  view.setBigUint64(offset, ns, true);
 }
 
 function readTimestamp(bytes: Uint8Array, offset: number): Date {
@@ -617,6 +653,7 @@ export function encodeSetColor(hue: number, saturation: number, brightness: numb
   view.setUint16(3, saturation, true);
   view.setUint16(5, brightness, true);
   view.setUint16(7, kelvin, true);
+  assertUint32('duration', duration);
   view.setUint32(9, duration, true);
   return payload;
 }
@@ -641,6 +678,12 @@ export function encodeSetLocation(location: Uint8Array | string, label: string, 
   if (typeof location === 'string') {
     encodeUuidTo(payload, 0, location);
   } else {
+    // A shorter id would be silently zero-padded, and a longer one would
+    // leave its extra bytes in the label field past the label's terminator
+    // (or throw a bare RangeError past 56 bytes).
+    if (location.length !== 16) {
+      throw new ValidationError('location', location.length, 'must be 16 bytes');
+    }
     payload.set(location, 0);
   }
 
@@ -657,6 +700,12 @@ export function encodeSetGroup(group: Uint8Array | string, label: string, update
   if (typeof group === 'string') {
     encodeUuidTo(payload, 0, group);
   } else {
+    // A shorter id would be silently zero-padded, and a longer one would
+    // leave its extra bytes in the label field past the label's terminator
+    // (or throw a bare RangeError past 56 bytes).
+    if (group.length !== 16) {
+      throw new ValidationError('group', group.length, 'must be 16 bytes');
+    }
     payload.set(group, 0);
   }
 
@@ -667,6 +716,9 @@ export function encodeSetGroup(group: Uint8Array | string, label: string, update
 }
 
 export function encodeEchoRequest(echoing: Uint8Array): Uint8Array {
+  if (echoing.length > 64) {
+    throw new ValidationError('echoing', echoing.length, 'must be at most 64 bytes');
+  }
   const payload = new Uint8Array(64);
   payload.set(echoing);
   return payload;
@@ -690,6 +742,7 @@ export function encodeSetWaveform(
   view.setUint16(4, saturation, true);
   view.setUint16(6, brightness, true);
   view.setUint16(8, kelvin, true);
+  assertUint32('period', period);
   view.setUint32(10, period, true);
   view.setFloat32(14, cycles, true);
   view.setInt16(18, skewRatio, true);
@@ -704,6 +757,7 @@ export function encodeSetLightPower(level: number | boolean, duration: number): 
     ? level
     : level ? 65535 : 0;
   view.setUint16(0, value, true);
+  assertUint32('duration', duration);
   view.setUint32(2, duration, true);
   return payload;
 }
@@ -730,6 +784,7 @@ export function encodeSetWaveformOptional(
   view.setUint16(4, saturation, true);
   view.setUint16(6, brightness, true);
   view.setUint16(8, kelvin, true);
+  assertUint32('period', period);
   view.setUint32(10, period, true);
   view.setFloat32(14, cycles, true);
   view.setInt16(18, skewRatio, true);
@@ -752,6 +807,7 @@ export function encodeSetHevCycle(enable: boolean, durationSeconds: number): Uin
   const payload = new Uint8Array(5);
   const view = new DataView(payload.buffer);
   view.setUint8(0, enable ? 1 : 0);
+  assertUint32('durationSeconds', durationSeconds);
   view.setUint32(1, durationSeconds, true);
   return payload;
 }
@@ -760,6 +816,7 @@ export function encodeSetHevCycleConfiguration(indication: boolean, durationSeco
   const payload = new Uint8Array(5);
   const view = new DataView(payload.buffer);
   view.setUint8(0, indication ? 1 : 0);
+  assertUint32('durationSeconds', durationSeconds);
   view.setUint32(1, durationSeconds, true);
   return payload;
 }
@@ -808,6 +865,7 @@ export function encodeSetColorZones(startIndex: number, endIndex: number, hue: n
   view.setUint16(4, saturation, true);
   view.setUint16(6, brightness, true);
   view.setUint16(8, kelvin, true);
+  assertUint32('duration', duration);
   view.setUint32(10, duration, true);
   view.setUint8(14, apply);
   return payload;
@@ -820,7 +878,9 @@ export function encodeSetMultiZoneEffect(instanceId: number, effectType: MultiZo
   view.setUint8(4, effectType);
   view.setUint8(5, 0); // reserved
   view.setUint8(6, 0); // reserved
+  assertUint32('speed', speed);
   view.setUint32(7, speed, true);
+  assertUint64('duration', duration);
   view.setBigUint64(11, duration, true);
   view.setUint32(19, 0); // reserved
   view.setUint32(23, 0); // reserved
@@ -831,6 +891,7 @@ export function encodeSetMultiZoneEffect(instanceId: number, effectType: MultiZo
 export function encodeSetExtendedColorZones(duration: number, apply: MultiZoneExtendedApplicationRequest, zoneIndex: number, colorsCount: number, colors: Color[]): Uint8Array {
   const payload = new Uint8Array(664);
   const view = new DataView(payload.buffer);
+  assertUint32('duration', duration);
   view.setUint32(0, duration, true);
   view.setUint8(4, apply);
   view.setUint16(5, zoneIndex, true);
@@ -869,6 +930,7 @@ export function encodeSet64(tileIndex: number, length: number, x: number, y: num
   view.setUint8(3, x);
   view.setUint8(4, y);
   view.setUint8(5, width);
+  assertUint32('duration', duration);
   view.setUint32(6, duration, true);
   
   for (let i = 0; i < 64; i++) {
@@ -898,7 +960,9 @@ export function encodeSetTileEffect(instanceId: number, effectType: TileEffectTy
   view.setUint8(1, 0); // reserved1
   view.setUint32(2, instanceId, true);
   view.setUint8(6, effectType);
+  assertUint32('speed', speed);
   view.setUint32(7, speed, true);
+  assertUint64('duration', duration);
   view.setBigUint64(11, duration, true);
   view.setUint32(19, 0); // reserved2
   view.setUint32(23, 0); // reserved3

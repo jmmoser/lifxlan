@@ -9,6 +9,8 @@
 
 import { Client } from './client.js';
 import { GetService } from './commands/device.js';
+import { ValidationError } from './errors.js';
+import { MAX_TIMER_DELAY_MS } from './utils/index.js';
 
 import type { ClientRouter } from './router.js';
 import type { Device, DevicesInstance } from './devices.js';
@@ -20,7 +22,8 @@ export interface DiscoveryOptions {
    * {@link DiscoveryOptions.maxIntervalMs}, so discovery bursts while UDP
    * loss matters most and then settles into a slow heartbeat — with the
    * defaults, broadcasts go out immediately, then after 1s, 4s, 16s, and
-   * every minute from there. Defaults to 1000ms.
+   * every minute from there. Defaults to 1000ms. Must be positive:
+   * there is no way to disable repeats other than ending the stream.
    */
   intervalMs?: number;
   /**
@@ -103,6 +106,37 @@ export function discover(
 ): DiscoveryInstance {
   const signal = options.signal;
 
+  // Validated before anything is subscribed or sent, and required to be
+  // numbers: an untyped '1s' becomes NaN in the delay math below, and a
+  // bigint makes Math.min/Math.max throw after setup began. A NaN interval
+  // survives Math.max/Math.min and setTimeout runs it as ~1ms, so it would
+  // rebroadcast GetService to the whole LAN at about 1kHz until disposed; a
+  // NaN or negative timeoutMs fails the `> 0` check like 0 and silently
+  // disables it.
+  const intervalMs = options.intervalMs ?? 1000;
+  const maxIntervalMs = options.maxIntervalMs ?? 60_000;
+  const timeoutMs = options.timeoutMs ?? 0;
+  if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
+    throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
+  }
+  // A zero or negative intervalMs is rejected too: it clamps to 1ms below,
+  // and unlike timeoutMs (where 0 disables) a 0 meant as "no repeat" would
+  // rebroadcast to the LAN at ~1kHz. A low maxIntervalMs is harmless — it is
+  // clamped up to intervalMs — so only a non-number or NaN is rejected.
+  if (!(typeof intervalMs === 'number' && intervalMs > 0)) {
+    throw new ValidationError('intervalMs', intervalMs, 'must be a positive number');
+  }
+  if (typeof maxIntervalMs !== 'number' || Number.isNaN(maxIntervalMs)) {
+    throw new ValidationError('maxIntervalMs', maxIntervalMs, 'must be a number');
+  }
+  // A non-signal (e.g. an AbortController passed in place of its .signal)
+  // would otherwise throw from addEventListener after the client and the
+  // registry subscription exist, leaking both.
+  // null means no signal, as in fetch()'s RequestInit.
+  if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
+    throw new ValidationError('signal', signal, 'must be an AbortSignal');
+  }
+
   const queue: Device[] = [];
   // Every waiter is woken on every event (new device, completion); next()
   // re-checks the queue in a loop, so a wakeup without an item for a given
@@ -149,6 +183,11 @@ export function discover(
     queue.push(...devices.registered.values());
     done = true;
   } else {
+    // Created first: register() can throw (source exhaustion, a custom
+    // router), and a throw after subscribing would leave an onAdded
+    // subscription growing a queue nothing can ever drain or dispose.
+    const client = Client({ router });
+
     // Snapshot-then-subscribe runs synchronously, so a device registered
     // between the two cannot be missed (and none can be yielded twice).
     queue.push(...devices.registered.values());
@@ -158,8 +197,6 @@ export function discover(
         wake();
       },
     });
-
-    const client = Client({ router });
 
     teardown = () => {
       // finish() can be invoked by the abort listener itself; removal is a
@@ -172,9 +209,8 @@ export function discover(
 
     signal?.addEventListener('abort', finish, { once: true });
 
-    const timeoutMs = options.timeoutMs ?? 0;
     if (timeoutMs > 0) {
-      deadline = setTimeout(finish, timeoutMs);
+      deadline = setTimeout(finish, Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
     }
 
     try {
@@ -190,8 +226,12 @@ export function discover(
     // settling at the cap so an open-ended stream left running (to track
     // DHCP changes) is a slow heartbeat, not once-a-second network chatter
     // for every device on the LAN.
-    let delayMs = Math.max(1, options.intervalMs ?? 1000);
-    const maxDelayMs = Math.max(delayMs, options.maxIntervalMs ?? 60_000);
+    // Both are clamped to the largest delay setTimeout honors: past it the
+    // timer fires after ~1ms, so a large maxIntervalMs (Infinity reads
+    // naturally as "keep backing off") would turn the heartbeat into a
+    // broadcast flood once the backoff grew past it.
+    let delayMs = Math.min(Math.max(1, intervalMs), MAX_TIMER_DELAY_MS);
+    const maxDelayMs = Math.min(Math.max(delayMs, maxIntervalMs), MAX_TIMER_DELAY_MS);
     const scheduleBroadcast = () => {
       timer = setTimeout(() => {
         try {
@@ -211,7 +251,10 @@ export function discover(
         scheduleBroadcast();
       }, delayMs);
     };
-    scheduleBroadcast();
+    // The same reentrancy applies to the initial broadcast: a timer armed
+    // after finish() would never be cleared and would hold the process open
+    // for up to a full interval.
+    if (!done) scheduleBroadcast();
   }
 
   function disposeNow() {

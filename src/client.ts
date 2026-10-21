@@ -12,6 +12,7 @@ import {
 
 import {
   PromiseWithResolvers,
+  MAX_TIMER_DELAY_MS,
 } from './utils/index.js';
 
 import {
@@ -32,6 +33,9 @@ export type { ResponseMode } from './commands/index.js';
 
 /** Sequence numbers are limited to 0-254. We use 255 for broadcast messages. */
 const SEQUENCE_SPACE = 0xFF;
+
+/** The serial an all-zero target derives to; no device reply ever carries it. */
+const ZERO_SERIAL = '000000000000';
 
 interface PendingHandler {
   handle(type: number, bytes: Uint8Array, offsetRef: { current: number }): void;
@@ -69,7 +73,10 @@ function registerHandler<T>(
     pendingBySequence.delete(sequence);
     // Drop the per-device map once it has no pending exchanges so devices
     // that disappear from the network do not leak empty maps.
-    if (pendingBySequence.size === 0) {
+    // Defensive: only if the registry still holds this exchange's map. send()
+    // reads caller fields before taking the map, so no caller code can swap
+    // it out meanwhile, but never delete another exchange's map.
+    if (pendingBySequence.size === 0 && responseHandlerMap.get(serialNumber) === pendingBySequence) {
       responseHandlerMap.delete(serialNumber);
     }
   }
@@ -85,19 +92,21 @@ function registerHandler<T>(
     settleReject(signal?.reason ?? new AbortError('device response'));
   }
 
-  // send() rejects pre-aborted signals before calling this function (so no
-  // packet is transmitted and no sequence number is consumed), which means
-  // the signal here can only abort *after* the listener below is attached.
+  // send() rejects already-aborted signals before calling this function —
+  // including ones aborted by caller code it ran first — so no packet is
+  // transmitted and no sequence number is consumed, and no caller code runs
+  // between that check and here: the signal can only abort *after* the
+  // listener below is attached.
   if (signal) {
     signal.addEventListener('abort', onAbort, { once: true });
   }
   // The timeout and the signal are independent: a lost UDP packet must not
   // hang the caller just because they passed a cancellation signal, so the
-  // timeout arms whether or not a signal is present. A timeoutMs <= 0
+  // timeout arms whether or not a signal is present. A timeoutMs of 0
   // disables it, leaving the signal (or a response) as the only way to settle.
   if (timeoutMs > 0) {
     const timeoutError = new TimeoutError(timeoutMs, 'device response');
-    timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
+    timeout = setTimeout(settleReject.bind(undefined, timeoutError), Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
   }
 
   function checkForCompletion() {
@@ -155,7 +164,11 @@ function registerHandler<T>(
         return;
       }
 
-      if (decode) {
+      // An 'ack-only' exchange resolves with no data, so a State packet the
+      // device sends anyway (Get messages are always answered) is not
+      // decoded: a failing decoder or a throwing onResponse callback must
+      // not reject a call that only asked for the acknowledgement.
+      if (decode && ackMode !== 'ack-only') {
         let result: T;
         try {
           continuation.expectMore = false;
@@ -291,7 +304,22 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    * in-flight exchanges, throwing SequenceExhaustionError if none is free.
    */
   sendUnacknowledged<T>(command: Command<T, ResponseMode>, device: Device): void;
-
+  /**
+   * Sends a command to a device and resolves with its reply, per the
+   * response mode (see {@link SendOptions.responseMode}).
+   *
+   * Never throws synchronously: every failure surfaces as a rejected promise,
+   * so fan-outs like `Promise.all(devices.map(...))` observe all failures
+   * uniformly — a disposed client, an aborted signal, exhausted sequence
+   * numbers, a throwing transport, a timeout or StateUnhandled reply, a reply
+   * the command's decoder cannot decode (e.g. a truncated packet, as a
+   * ValidationError), an error thrown by the command's own code
+   * (`createDecoder`, a `payload` getter), and ValidationError for invalid
+   * input: an unknown `responseMode`, a response mode the command has no
+   * decoder for, a `timeoutMs` that is not a non-negative number, or a device
+   * whose target is all zeros (its reply carries the device's real serial, so
+   * it could never correlate — use `sendUnacknowledged()` for it).
+   */
   send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
     command: Command<T, Default>,
     device: Device,
@@ -316,6 +344,13 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
  */
 export function Client<R extends ClientRouter>(options: ClientOptions<R>): ClientInstance<R> {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  // NaN and negative values fail the `> 0` arming check exactly like the
+  // documented 0, so a NaN (e.g. Number() of an unset environment variable)
+  // or a spent budget (`deadline - Date.now()`) would silently disable the
+  // timeout and leave every lost packet pending forever.
+  if (!(typeof defaultTimeoutMs === 'number' && defaultTimeoutMs >= 0)) {
+    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a non-negative number (0 disables the timeout)');
+  }
   const { router } = options;
 
   // Pending request handlers, keyed by device serial number, then by
@@ -477,14 +512,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
 
       router.send(bytes, device.port, device.address, device.serialNumber);
     },
-    /**
-     * Send a command to a device with configurable acknowledgment behavior.
-     *
-     * Never throws synchronously: every failure — disposed client, aborted
-     * signal, exhausted sequence numbers, a missing decoder, or a throwing
-     * transport — surfaces as a rejected promise, so fan-outs like
-     * `Promise.all(devices.map(...))` observe all failures uniformly.
-     */
+    // See ClientInstance.send for the contract (never throws synchronously).
     send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
       command: Command<T, Default>,
       device: Device,
@@ -499,6 +527,12 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       if (disposed) return rejected(new DisposedClientError(source));
 
       const signal = options?.signal;
+      // A non-signal (e.g. an AbortController passed in place of its
+      // .signal) is rejected before any per-device state is touched.
+      // null means no signal, as in fetch()'s RequestInit.
+      if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
+        return rejected(new ValidationError('signal', signal, 'must be an AbortSignal'));
+      }
       if (signal?.aborted) {
         // The caller already cancelled: reject before a sequence number is
         // consumed or a packet is transmitted on their behalf. This check
@@ -512,6 +546,9 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       // malformed device, or anything unforeseen — can escape send() as an
       // exception instead of a rejection.
       let pendingBySequence: Map<number, PendingHandler> | undefined;
+      // The serial the per-device map was taken under, for the catch path
+      // (re-reading device.serialNumber there would run caller code again).
+      let pendingSerial: string | undefined;
       try {
         // Determine response mode: an explicit override wins; otherwise fall
         // back to the command's default mode.
@@ -539,6 +576,11 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
             throw new ValidationError('responseMode', ackMode, "expected 'ack-only', 'response', or 'both'");
         }
 
+        const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+        if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
+          throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
+        }
+
         // A createDecoder command gets a fresh decoder per exchange so commands
         // that accumulate multi-packet state stay safe to reuse across
         // concurrent sends and devices.
@@ -551,34 +593,57 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
           throw new ValidationError('command', command.type, `response mode '${ackMode}' requires the command to provide decode or createDecoder`);
         }
 
-        pendingBySequence = responseHandlerMap.get(device.serialNumber);
-        if (!pendingBySequence) {
-          pendingBySequence = new Map();
-          responseHandlerMap.set(device.serialNumber, pendingBySequence);
+        // Every remaining read of caller-supplied objects happens here, once:
+        // command and device fields may be getters (user code), and one that
+        // re-enters send() on this device could settle a nested exchange
+        // whose cleanup drops the per-device map this call registers into
+        // below, stranding it where no reply can reach it. Nothing after this
+        // point runs caller code until the handler is registered.
+        const { type, responseType, payload } = command;
+        const { serialNumber, target, port, address } = device;
+
+        // An all-zero target reaches whatever device is at the address, but
+        // its reply carries that device's real serial, so it is filed under
+        // a serial nothing here waits on and the exchange could only time
+        // out. Fire-and-forget (sendUnacknowledged) still works for it.
+        if (serialNumber === ZERO_SERIAL) {
+          throw new ValidationError('device', serialNumber, 'send() needs the device\'s real serial number to correlate its reply; use sendUnacknowledged() for an all-zero target');
         }
 
-        const sequence = nextFreeSequence(device.serialNumber);
+        // The checks at the top ran before caller code (createDecoder, the
+        // getters above) could abort the signal; an abort from there fired
+        // before any listener existed, so re-check before transmitting.
+        if (signal?.aborted) {
+          throw signal.reason ?? new AbortError('device response');
+        }
+
+        pendingSerial = serialNumber;
+        pendingBySequence = responseHandlerMap.get(serialNumber);
+        if (!pendingBySequence) {
+          pendingBySequence = new Map();
+          responseHandlerMap.set(serialNumber, pendingBySequence);
+        }
+
+        const sequence = nextFreeSequence(serialNumber);
         if (sequence === undefined) {
-          throw new SequenceExhaustionError(device.serialNumber);
+          throw new SequenceExhaustionError(serialNumber);
         }
 
         const bytes = encode(
           false,
           source,
-          device.target,
+          target,
           resRequired,
           ackRequired,
           sequence,
-          command.type,
-          command.payload,
+          type,
+          payload,
         );
 
-        const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-
-        const promise = registerHandler(ackMode, device.serialNumber, sequence, command.type, decode, command.responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
+        const promise = registerHandler(ackMode, serialNumber, sequence, type, decode, responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
 
         try {
-          router.send(bytes, device.port, device.address, device.serialNumber);
+          router.send(bytes, port, address, serialNumber);
         } catch (err) {
           // The transport refused the packet synchronously. Cancel the pending
           // handler (which also clears its timeout and abort listener) so the
@@ -593,8 +658,10 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       } catch (err) {
         // A per-device map created for an exchange that never registered a
         // handler must not linger.
-        if (pendingBySequence && pendingBySequence.size === 0) {
-          responseHandlerMap.delete(device.serialNumber);
+        // Defensive: with the reads above taken up front no caller code can
+        // swap the registered map in between, but never delete another's.
+        if (pendingSerial !== undefined && pendingBySequence && pendingBySequence.size === 0 && responseHandlerMap.get(pendingSerial) === pendingBySequence) {
+          responseHandlerMap.delete(pendingSerial);
         }
         return rejected(err);
       }

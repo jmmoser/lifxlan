@@ -40,6 +40,28 @@ upgrading is a matter of reading this file.
   another serial, so every `send()` timed out.
 - `router.register(handler, source)` rejects a non-integer `source` with a
   `ValidationError`.
+- Input that used to be accepted, and silently misbehaved, now throws (or,
+  from `send()`/`devices.get()`, rejects) with `ValidationError`; see Fixed
+  below for each case. In short: a `NaN`, negative, or non-number timeout;
+  a non-positive or non-number discovery `intervalMs`, or a `NaN` or
+  non-number `maxIntervalMs`; a `signal` that is not an `AbortSignal`;
+  out-of-range uint32/uint64 time fields and dates (including `NaN` or
+  omitted durations and periods, and non-bigint effect durations, from
+  untyped callers); `GetColorZones`/`Get64`
+  indices past the uint8 wire range, a fractional `Get64` `tileCount`, and a
+  `Get64` range past tile 255; a location/group byte id that is not 16 bytes and an echo
+  payload over 64 bytes; a `devices.get()` serial that is not 12 hex digits
+  (or is all zeros); `send()` to an all-zero target; a `NaN` or fractional
+  `Device()` port. `devices.register()` also now ignores request-type
+  messages, invalid source ports, and message types missing from `Type`.
+- `'ack-only'` exchanges no longer decode the State packet a Get still gets
+  back, so a multi-packet command's `onResponse` (e.g. `GetColorZones`) is
+  not called in ack-only mode. See Fixed.
+- On `lifxlan/deno`, sending through the router throws synchronously (and
+  `send()` rejects at once) once `close()` begins or the read loop ends —
+  including after a receive error, which ends Deno's reception for good.
+  Before, those sends went out asynchronously and failures only reached
+  `onSocketError`. This matches `node:dgram` on a closed socket.
 
 ### Added
 
@@ -59,6 +81,125 @@ upgrading is a matter of reading this file.
 
 ### Fixed
 
+- An `'ack-only'` exchange no longer decodes the State packet a device sends
+  anyway (Get messages are always answered), so a failing decoder or a
+  throwing `onResponse` callback can no longer reject a call that only asked
+  for the acknowledgement.
+- `devices.register()` copies a new device's `target` out of the received
+  datagram instead of keeping a view into it, so a socket layer that reuses
+  its receive buffer can no longer silently re-address a registered device.
+- `GetColorZones` throws `ValidationError` for a `startIndex` or `endIndex`
+  outside the uint8 wire range. Before, `endIndex: 256` encoded as 0 while the
+  decoder waited on zones the device was never asked for, so the call timed
+  out.
+- `SetLocation()`/`SetGroup()` throw `ValidationError` for a byte id that is
+  not 16 bytes (a shorter one was zero-padded; a longer one left its extra
+  bytes in the label field past the terminator, or threw a bare `RangeError`
+  past 56 bytes), for an invalid `updatedAt` (previously a bare
+  `RangeError`), and for one outside the wire
+  field's 1970–2554 range, which silently wrapped to an unrelated timestamp.
+  `SetMultiZoneEffect()`/`SetTileEffect()` likewise reject a `duration`
+  outside the uint64 range instead of wrapping it (`-1n` encoded as an effect
+  that never ends). `EchoRequest()` throws `ValidationError` for more than 64
+  bytes instead of a `RangeError`.
+- The uint32 time fields — every `duration`, the waveform `period`, effect
+  `speed`, and the HEV `durationSeconds` — throw `ValidationError` for a
+  negative, out-of-range, or `NaN` value instead of wrapping it (`-1` encoded
+  as 0xFFFFFFFF: a ~49.7 day transition, or a ~136 year HEV cycle; `NaN`
+  silently encoded 0, an instant transition).
+- Timeouts and discovery intervals above 2^31 - 1 ms (about 24.8 days),
+  `Infinity` included, are clamped to that. Node and Bun run a larger
+  `setTimeout` delay after ~1ms instead, so `timeoutMs: Infinity` on `send()`
+  or `devices.get()` rejected with `TimeoutError` at once, a large discovery
+  `timeoutMs` ended discovery at once, and a large `intervalMs` (or a
+  `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
+  the whole LAN about once a millisecond until disposed. `discover()` now
+  throws `ValidationError` for an `intervalMs` that is not a positive number
+  — `NaN` or an untyped non-number such as `'1s'` (which became NaN in the
+  delay math), but also `0` or a negative value, which was clamped to 1ms —
+  since each flooded the same way (unlike `timeoutMs`, an interval of `0`
+  never meant "disabled"); and for a `maxIntervalMs` that is `NaN` or not a
+  number. A low `maxIntervalMs` is still clamped up to `intervalMs`.
+- `openLan()` (`lifxlan/node`) closes its socket when `bind()` throws
+  synchronously (e.g. a non-string `address` from an untyped caller), not
+  only when binding fails asynchronously. `discover()` leaves no registry
+  subscription behind when the router's `register()` throws; before, that
+  subscription queued every later registration with nothing to drain it.
+  `discover()` also arms no broadcast timer when its initial broadcast ends
+  discovery (e.g. `onSend` aborting the signal); that timer was never
+  cleared and held the process open for up to a full interval.
+- A `NaN` or negative timeout — `defaultTimeoutMs` on
+  `Client()`/`Devices()`/`openLan()`, or `timeoutMs` on `send()`,
+  `devices.get()`, or `discover()` — is rejected with `ValidationError` (a
+  rejected promise from `send()`/`get()`). Before, it failed the `> 0` arming
+  check exactly like the documented `0` and silently disabled the timeout, so
+  e.g. `Number()` of an unset environment variable, or a spent
+  `deadline - Date.now()` budget, left every lost packet pending forever. An
+  untyped non-number (e.g. a bigint, which passes a numeric comparison and
+  then throws in the timer math mid-setup) is rejected the same way.
+- `Get64` throws `ValidationError` for a `tileIndex` outside 0–255 or a
+  `tileCount` outside 1–255 or not an integer. These fields are uint8 on the
+  wire, and the decoder compared replies against the unwrapped values: a
+  wrapped value (`tileCount: 256` encodes as 0) asked for tiles the decoder
+  never accepted, and a fractional count (`1.5` sends 1) left it waiting for
+  a fraction of a tile, so the call always timed out. It also rejects a range
+  with `tileIndex + tileCount` past 256, which names tiles that cannot exist.
+- `devices.get()` rejects with `ValidationError` for a serial that is not 12
+  hex digits (e.g. the MAC-style `d0:73:d5:12:34:56`). Registry keys are
+  derived from the wire, so such a lookup could never match and waited out
+  its timeout, or forever with `timeoutMs: 0`. The all-zero serial (the
+  broadcast address, which `register()` never registers) is rejected the
+  same way, and `client.send()` rejects a device whose target is all zeros:
+  its reply carries the device's real serial, so it could only time out.
+  `sendUnacknowledged()` to such a device still works. A non-string serial
+  (e.g. an unset environment variable) also rejects with `ValidationError`;
+  before, `get()` threw a `TypeError` synchronously.
+- `send()`, `devices.get()` and `discover()` reject a `signal` that is not an
+  `AbortSignal` (e.g. an `AbortController` passed in place of its `.signal`)
+  with `ValidationError`. Before, `get()` threw a `TypeError` synchronously,
+  and `discover()` threw only after creating its client and subscribing to
+  the registry, leaking both. A `null` signal still means "no signal", as in
+  `fetch()`.
+- `client.send()` reads each command and device field once, before taking
+  its per-device state, and re-checks the signal after running caller code.
+  A getter (e.g. `payload`) that re-entered `send()` on the same device could
+  strand the outer exchange so its reply was dropped and it timed out, and an
+  abort raised from such code (or from `createDecoder()`) was ignored: the
+  packet went out and the call waited for its timeout, or forever with
+  `timeoutMs: 0`.
+- `Device()` rejects a `NaN` or fractional `port`, which slipped past the
+  range check. An untyped numeric string (e.g. `process.env.LIFX_PORT`),
+  which worked before, is accepted and stored as a number.
+- `devices.get()` validates its `timeoutMs` even when the device is already
+  registered, so a bad timeout surfaces at once rather than only once a
+  device goes missing.
+- On `lifxlan/deno`, the router's transport throws synchronously once
+  `close()` begins or the read loop ends (e.g. the caller closed
+  `lan.socket`), as `node:dgram` does on a closed socket. Deno's async
+  `send()` only rejected, so `discover()` never saw a throwing transport and
+  kept rebroadcasting (holding the process open), and `send()` waited for its
+  timeout. Any client's `broadcast()`/`sendUnacknowledged()` through that
+  router now throws at that point, and `send()` rejects at once.
+- `SetHevCycle()` defaults `durationSeconds` to 0 (the device's configured
+  default), so `SetHevCycle(false)` needs no meaningless duration; an omitted
+  one previously encoded 0 by accident. `SetHevCycleConfiguration()` keeps it
+  required, since its duration overwrites that stored default.
+- `devices.register()` registers only from message types devices send (State
+  replies, `Acknowledgement`, `EchoResponse`) and ignores everything else. A
+  socket bound to 56700 also receives other controllers' requests, including
+  targeted ones broadcast to reach a device by serial; their target names the
+  device but their sender is the controller, so registering from them
+  re-addressed the device to the other controller and every later `send()`
+  timed out. A message type missing from `Type` is ignored too, so a reply
+  of an unlisted type no longer registers or moves a device.
+  `RegistrationMessage.header` gains an optional `type` for this; a custom
+  pipeline that omits it keeps the previous behavior.
+- `devices.register()` ignores a datagram from an invalid source port (UDP
+  allows port 0, and anyone on the LAN can send one) instead of throwing.
+  The throw came out of the socket's receive path: an uncaught exception that
+  crashed a `lifxlan/node` process, and the end of all reception for
+  `lifxlan/deno`. Such a datagram from a known device also no longer
+  re-addresses it to an unusable port.
 - A truncated `StateUnhandled` packet, which anyone on the LAN can send, no
   longer throws out of `router.receive()` inside the socket's receive path; it
   rejects the exchange it targets instead.

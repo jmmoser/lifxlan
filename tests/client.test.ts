@@ -2,9 +2,10 @@ import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { Client } from '../src/client.js';
 import { Router, type ClientRouter, type MessageHandler } from '../src/router.js';
-import { Device } from '../src/devices.js';
+import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
-import { encode, decodeHeader } from '../src/encoding.js';
+import { encode, decodeHeader, type Header } from '../src/encoding.js';
+import type { Command } from '../src/commands/index.js';
 import { GetPower, GetService, GetColor, GetColorZones, SetPower } from '../src/commands/index.js';
 import { UnhandledCommandError, TimeoutError, ValidationError, SequenceExhaustionError } from '../src/errors.js';
 
@@ -141,6 +142,37 @@ describe('client', () => {
     await client.send(GetPower(), sharedDevice, { responseMode: 'ack-only' });
 
     await client.send(GetPower(), sharedDevice, { responseMode: 'ack-only', signal: new AbortController().signal });
+  });
+
+  test('ack-only does not decode a State reply, so a throwing onResponse cannot reject it', async () => {
+    // Get messages are answered whether or not res_required is set, so an
+    // ack-only Get still sees its State packet; that packet must not reach
+    // the decoder (or the user's onResponse) of a call that asked only for
+    // the ack.
+    let onResponseCalls = 0;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const zone = new Uint8Array(10);
+          zone[0] = 1; // zonesCount
+          client.router.receive(encode(false, header.source, header.target, false, false, header.sequence, Type.StateZone, zone));
+          client.router.receive(encode(false, header.source, header.target, false, false, header.sequence, Type.Acknowledgement));
+        },
+      }),
+    });
+
+    const command = GetColorZones({
+      startIndex: 0,
+      endIndex: 0,
+      onResponse() {
+        onResponseCalls++;
+        throw new Error('callback must not run');
+      },
+    });
+    assert.equal(await client.send(command, sharedDevice, { responseMode: 'ack-only' }), undefined);
+    assert.equal(onResponseCalls, 0);
   });
 
   test('Set command default (ack-only) resolves undefined', async () => {
@@ -446,6 +478,201 @@ describe('client', () => {
       () => client.send(GetPower(), sharedDevice, { timeoutMs: 1 }),
       (error) => error instanceof TimeoutError && error.timeoutMs === 1,
     );
+  });
+
+  test('a timeoutMs past the setTimeout range (Infinity) does not fire at once', async () => {
+    // setTimeout runs a delay above 2^31 - 1 ms after ~1ms; the client must
+    // clamp it rather than reject with a spurious TimeoutError.
+    const client = Client({ defaultTimeoutMs: Infinity, router: Router({ onSend() {} }) });
+    const controller = new AbortController();
+    const reason = new Error('done waiting');
+    // Observe both rejections up front, so a premature TimeoutError fails
+    // this test instead of surfacing as an unhandled rejection elsewhere.
+    const settled = Promise.all([
+      assert.rejects(client.send(GetPower(), sharedDevice, { signal: controller.signal }), (error) => error === reason),
+      assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 3e9, signal: controller.signal }), (error) => error === reason),
+    ]);
+
+    settled.catch(() => {});
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort(reason);
+    await settled;
+  });
+
+  test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
+    // NaN fails the `> 0` arming check like 0, so a lost packet would leave
+    // the call pending forever.
+    assert.throws(() => Client({ defaultTimeoutMs: Number.NaN, router: Router({ onSend() {} }) }), ValidationError);
+
+    let sends = 0;
+    const client = Client({ router: Router({ onSend() { sends++; } }) });
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: Number.NaN }), ValidationError);
+    // A negative value (a spent `deadline - Date.now()` budget) fails the
+    // same check.
+    assert.throws(() => Client({ defaultTimeoutMs: -1, router: Router({ onSend() {} }) }), ValidationError);
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: -5 }), ValidationError);
+    // An untyped bigint passes `>= 0` but throws in the timer math after the
+    // abort listener is attached; it must be rejected up front.
+    // @ts-expect-error -- an untyped caller passing a bigint
+    assert.throws(() => Client({ defaultTimeoutMs: 5000n, router: Router({ onSend() {} }) }), ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 5000n }), ValidationError);
+    // @ts-expect-error -- an untyped caller passing an AbortController for its .signal
+    await assert.rejects(client.send(GetPower(), sharedDevice, { signal: new AbortController() }), ValidationError);
+    assert.equal(sends, 0);
+    // null still means "no signal" (fetch()'s convention), not an error: the
+    // exchange goes out and times out normally.
+    // @ts-expect-error -- an untyped caller passing null
+    await assert.rejects(client.send(GetPower(), sharedDevice, { signal: null, timeoutMs: 1 }), TimeoutError);
+    assert.equal(sends, 1);
+    client.dispose();
+  });
+
+  test('send() rejects an all-zero-target device whose reply could never correlate', async () => {
+    // The device answers with its real serial, filed under nothing pending.
+    let sends = 0;
+    const client = Client({ defaultTimeoutMs: 0, router: Router({ onSend() { sends++; } }) });
+    const anyDevice = Device({ address: '10.0.0.5', target: new Uint8Array(6) });
+    await assert.rejects(client.send(GetPower(), anyDevice), ValidationError);
+    assert.equal(sends, 0);
+    // Fire-and-forget to whatever is at the address still works.
+    client.sendUnacknowledged(GetPower(), anyDevice);
+    assert.equal(sends, 1);
+    client.dispose();
+  });
+
+  test('a payload getter that re-enters send() does not strand the outer exchange', async () => {
+    // The nested send's transport throws synchronously, settling it inside
+    // the outer send(); its cleanup must not drop the per-device map the
+    // outer exchange registers into, or the outer reply could never land.
+    let failNext = false;
+    let outer: Header | undefined;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          if (failNext) {
+            failNext = false;
+            throw new Error('transport down');
+          }
+          outer = decodeHeader(message);
+        },
+      }),
+    });
+    const nested: Promise<unknown>[] = [];
+    const command: Command<number, 'response'> = {
+      type: Type.GetPower,
+      responseType: Type.StatePower,
+      decode: GetPower().decode,
+      defaultResponseMode: 'response',
+      get payload() {
+        failNext = true;
+        nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+        return new Uint8Array(0);
+      },
+    };
+    const promise = client.send(command, sharedDevice);
+    await Promise.all(nested);
+    assert.ok(outer !== undefined);
+    client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
+    assert.equal(await promise, 0xFFFF);
+    client.dispose();
+  });
+
+  test('type/responseType getters that re-enter send() on every read do not strand the outer exchange', async () => {
+    // Every caller-supplied field is read once, before the per-device map
+    // is taken — not only payload. The getters act on every read, so any
+    // later re-read would strand the outer exchange.
+    let inNested = false;
+    let outer: Header | undefined;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          if (inNested) throw new Error('transport down');
+          outer = decodeHeader(message);
+        },
+      }),
+    });
+    const nested: Promise<unknown>[] = [];
+    const reenter = () => {
+      if (inNested) return;
+      inNested = true;
+      nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+      inNested = false;
+    };
+    const command: Command<number, 'response'> = {
+      get type() { reenter(); return Type.GetPower; },
+      get responseType() { reenter(); return Type.StatePower; },
+      decode: GetPower().decode,
+      defaultResponseMode: 'response',
+    };
+    const promise = client.send(command, sharedDevice);
+    await Promise.all(nested);
+    assert.ok(outer !== undefined);
+    client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
+    assert.equal(await promise, 0xFFFF);
+    client.dispose();
+  });
+
+  test('device getters that re-enter send() on every read do not strand the outer exchange', async () => {
+    // A getter that acts on each read (not just the first) pins that every
+    // device field is read once, before the per-device map is taken.
+    let inNested = false;
+    let outer: Header | undefined;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          if (inNested) throw new Error('transport down');
+          outer = decodeHeader(message);
+        },
+      }),
+    });
+    const nested: Promise<unknown>[] = [];
+    const reenter = () => {
+      if (inNested) return;
+      inNested = true;
+      nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+      inNested = false;
+    };
+    const device: DeviceType = {
+      get target() { reenter(); return sharedDevice.target; },
+      get serialNumber() { reenter(); return sharedDevice.serialNumber; },
+      address: sharedDevice.address,
+      port: sharedDevice.port,
+    };
+    const promise = client.send(GetPower(), device);
+    await Promise.all(nested);
+    assert.ok(outer !== undefined);
+    client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
+    assert.equal(await promise, 0xFFFF);
+    client.dispose();
+  });
+
+  test('an abort raised by caller code inside send() is honored', async () => {
+    // A payload getter (or createDecoder) runs after the up-front aborted
+    // check and before any abort listener exists.
+    let sends = 0;
+    const client = Client({ defaultTimeoutMs: 0, router: Router({ onSend() { sends++; } }) });
+    const controller = new AbortController();
+    const reason = new Error('aborted from payload');
+    const command: Command<number, 'response'> = {
+      type: Type.GetPower,
+      responseType: Type.StatePower,
+      decode: GetPower().decode,
+      defaultResponseMode: 'response',
+      get payload() {
+        controller.abort(reason);
+        return new Uint8Array(0);
+      },
+    };
+    await assert.rejects(client.send(command, sharedDevice, { signal: controller.signal }), (error) => error === reason);
+    assert.equal(sends, 0);
+    // The client is still usable for the same device afterwards.
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 1 }), TimeoutError);
+    client.dispose();
   });
 
   test('timeoutMs: 0 disables the timeout for a call', async () => {

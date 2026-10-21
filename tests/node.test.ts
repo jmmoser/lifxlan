@@ -5,7 +5,7 @@
  * broadcasts are ever sent — every packet is unicast to a loopback port —
  * so nothing leaves the machine.
  */
-import { describe, test } from 'bun:test';
+import { describe, test, spyOn } from 'bun:test';
 import assert from 'node:assert';
 import dgram from 'node:dgram';
 import { openLan } from '../src/node.js';
@@ -13,7 +13,7 @@ import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader, type Header } from '../src/encoding.js';
 import { GetPower } from '../src/commands/index.js';
-import { DisposedClientError } from '../src/errors.js';
+import { DisposedClientError, ValidationError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 
 const SERIAL = 'd073d5123456';
@@ -179,6 +179,43 @@ describe('openLan', () => {
     } finally {
       await closeSocket(squatter);
     }
+  });
+
+  test('a NaN defaultTimeoutMs rejects and closes the socket', async () => {
+    const create = spyOn(dgram, 'createSocket');
+    try {
+      await assert.rejects(openLan({ defaultTimeoutMs: Number.NaN }), ValidationError);
+      const created = create.mock.results[0];
+      assert.ok(created !== undefined && created.type === 'return');
+      const socket: dgram.Socket = created.value;
+      // Closing an already-closed dgram socket throws.
+      assert.throws(() => socket.close());
+    } finally {
+      create.mockRestore();
+    }
+  });
+
+  test('a bind() that throws synchronously still closes the socket', async () => {
+    // bind() throws, rather than emitting 'error', on invalid arguments
+    // (a non-string address from an untyped caller); the socket must be
+    // released on that path too.
+    const realCreateSocket = dgram.createSocket;
+    const failure = new Error('bad bind arguments');
+    let socket: dgram.Socket | undefined;
+    const create = spyOn(dgram, 'createSocket').mockImplementation(() => {
+      const created = realCreateSocket('udp4');
+      created.bind = () => { throw failure; };
+      socket = created;
+      return created;
+    });
+    try {
+      await assert.rejects(openLan(), (error) => error === failure);
+    } finally {
+      create.mockRestore();
+    }
+    assert.ok(socket !== undefined);
+    // Closing an already-closed dgram socket throws.
+    assert.throws(() => socket?.close());
   });
 
   test('defaultTimeoutMs is forwarded to the client', async () => {

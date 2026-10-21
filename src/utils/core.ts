@@ -3,6 +3,13 @@ import { ValidationError } from '../errors.js';
 const HEX_CHARS = /^[0-9a-fA-F]+$/;
 
 
+/**
+ * The largest delay setTimeout honors (2^31 - 1 ms, about 24.8 days). Node,
+ * Bun, and browsers fire a larger delay — Infinity included — after ~1ms
+ * instead, so every timer the library arms is clamped to this.
+ */
+export const MAX_TIMER_DELAY_MS = 0x7FFFFFFF;
+
 export function PromiseWithResolvers<T>(): {
   resolve: (value: T) => void;
   reject: (reason?: unknown) => void;

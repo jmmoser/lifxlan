@@ -143,6 +143,19 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
     ...(options.onRemoved ? { onRemoved: options.onRemoved } : {}),
   });
 
+  // Created before the socket is bound, so a rejected option (a NaN
+  // defaultTimeoutMs) fails before the port is taken; the socket is closed
+  // on that path all the same.
+  let client: ClientInstance;
+  try {
+    client = options.defaultTimeoutMs === undefined
+      ? Client({ router })
+      : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
+  } catch (err) {
+    try { socket.close(); } catch { /* already closed */ }
+    throw err;
+  }
+
   socket.on('message', (message, remote) => {
     devices.register(remote.port, remote.address, router.receive(message));
   });
@@ -159,7 +172,14 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       socket.removeListener('error', onBindError);
       resolve();
     });
-    socket.bind(options.port ?? 0, options.address);
+    // bind() also throws synchronously on some invalid arguments (a
+    // non-string address from an untyped caller) instead of emitting
+    // 'error'; that path must release the socket too.
+    try {
+      socket.bind(options.port ?? 0, options.address);
+    } catch (err) {
+      onBindError(err instanceof Error ? err : new Error(String(err)));
+    }
   });
 
   // From here on the socket must not crash the process on a stray 'error'
@@ -172,10 +192,6 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
   // bound socket, which is exactly the ordering bug this helper exists to
   // absorb.
   socket.setBroadcast(true);
-
-  const client = options.defaultTimeoutMs === undefined
-    ? Client({ router })
-    : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
 
   let closed: Promise<void> | undefined;
   function close(): Promise<void> {

@@ -973,6 +973,65 @@ describe('encoding', () => {
     assert.deepEqual(payload.subarray(5), new Uint8Array(59)); // remaining bytes should be zero
   });
 
+  test('encodeEchoRequest rejects more than 64 bytes', () => {
+    assert.throws(() => Encoding.encodeEchoRequest(new Uint8Array(65)), /Invalid echoing: 65 \(must be at most 64 bytes\)/);
+    assert.equal(Encoding.encodeEchoRequest(new Uint8Array(64)).length, 64);
+  });
+
+  test('encodeSetLocation/encodeSetGroup reject a byte id that is not 16 bytes', () => {
+    const date = new Date('2023-01-01T00:00:00.000Z');
+    // A longer id left stray bytes in the label field; a shorter one was zero-padded.
+    assert.throws(() => Encoding.encodeSetLocation(new Uint8Array(17), 'x', date), /Invalid location: 17 \(must be 16 bytes\)/);
+    assert.throws(() => Encoding.encodeSetGroup(new Uint8Array(15), 'x', date), /Invalid group: 15 \(must be 16 bytes\)/);
+    // Both directions for each encoder.
+    assert.throws(() => Encoding.encodeSetLocation(new Uint8Array(15), 'x', date), /Invalid location: 15 \(must be 16 bytes\)/);
+    assert.throws(() => Encoding.encodeSetGroup(new Uint8Array(17), 'x', date), /Invalid group: 17 \(must be 16 bytes\)/);
+  });
+
+  test('encodeSetLocation/encodeSetGroup reject an invalid or pre-epoch date', () => {
+    const uuid = '550e8400e29b41d4a716446655440000';
+    assert.throws(() => Encoding.encodeSetLocation(uuid, 'x', new Date(Number.NaN)), /Invalid date/);
+    assert.throws(() => Encoding.encodeSetGroup(uuid, 'x', new Date(-1)), /Invalid date/);
+    // Past the uint64 nanosecond range (~2554) the value would wrap to an
+    // unrelated date.
+    assert.throws(() => Encoding.encodeSetGroup(uuid, 'x', new Date('2600-01-01T00:00:00Z')), /Invalid date/);
+    // Both ends of the representable range encode.
+    assert.equal(Encoding.encodeSetGroup(uuid, 'x', new Date(0)).length, 56);
+    const latest = Encoding.encodeSetGroup(uuid, 'x', new Date(18446744073709));
+    assert.equal(new DataView(latest.buffer).getBigUint64(48, true), 18446744073709000000n);
+  });
+
+  test('uint32 time fields reject values setUint32 would wrap', () => {
+    // -1 would encode as 0xFFFFFFFF: a ~49.7 day transition, a ~136 year HEV cycle.
+    assert.throws(() => Encoding.encodeSetColor(0, 0, 0, 3500, -1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetLightPower(true, -1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetHevCycle(true, -1), /Invalid durationSeconds: -1/);
+    assert.throws(() => Encoding.encodeSetHevCycleConfiguration(true, 2 ** 32), /Invalid durationSeconds/);
+    assert.throws(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, -1, 1, 0, 0), /Invalid period: -1/);
+    assert.throws(() => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, Number.NaN, 1, 0, 0, true, true, true, true), /Invalid period: NaN/);
+    assert.throws(() => Encoding.encodeSetColorZones(0, 7, 0, 0, 0, 3500, -1, 1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetExtendedColorZones(-1, 1, 0, 0, []), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSet64(0, 1, 0, 0, 8, -1, []), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, -1, 0n, new Uint8Array(0)), /Invalid speed: -1/);
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, -1, 0n, 0, 0, 0, 0, []), /Invalid speed: -1/);
+    // The ends of the range encode.
+    assert.equal(new DataView(Encoding.encodeSetColor(0, 0, 0, 3500, 0xFFFFFFFF).buffer).getUint32(9, true), 0xFFFFFFFF);
+    assert.equal(Encoding.encodeSetHevCycle(true, 0).length, 5);
+  });
+
+  test('effect encoders reject a duration outside the uint64 range', () => {
+    // setBigUint64 would wrap -1n to 2^64 - 1 (an effect that never ends).
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, -1n, new Uint8Array(0)), /Invalid duration/);
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n, 0, 0, 0, 0, []), /Invalid duration/);
+    // Both ends of the uint64 range encode (0n means "run until stopped").
+    assert.equal(new DataView(Encoding.encodeSetMultiZoneEffect(1, 1, 1000, 0n, new Uint8Array(0)).buffer).getBigUint64(11, true), 0n);
+    assert.equal(new DataView(Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n - 1n, 0, 0, 0, 0, []).buffer).getBigUint64(11, true), 2n ** 64n - 1n);
+    // An untyped omitted or number duration is a ValidationError too, not a
+    // bare TypeError from setBigUint64.
+    // @ts-expect-error -- an untyped caller omitting the bigint duration
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, undefined, new Uint8Array(0)), /Invalid duration/);
+  });
+
   test('encodeSetWaveform', () => {
     const payload = Encoding.encodeSetWaveform(
       true,  // transient

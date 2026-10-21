@@ -1,17 +1,36 @@
-import { PORT } from './constants/index.js';
-import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
+import { PORT, Type } from './constants/index.js';
+import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers, MAX_TIMER_DELAY_MS } from './utils/index.js';
 import { AbortError, DeviceRemovedError, TimeoutError, ValidationError } from './errors.js';
 
 /**
  * The minimal decoded-message shape `register()` reads. `ReceivedMessage`
  * (what `router.receive()` returns) satisfies it, so the stock wiring passes
  * straight through; a custom decode pipeline only has to produce these two
- * fields.
+ * fields (plus, optionally, the message `type`).
  */
 export interface RegistrationMessage {
   serialNumber: string;
-  header: { target: Uint8Array };
+  /**
+   * When `type` is present, only a message type devices send (a State
+   * reply, an Acknowledgement, an EchoResponse) registers; anything else —
+   * another controller's request addressing the device — is ignored.
+   */
+  header: { target: Uint8Array; type?: number };
 }
+
+/**
+ * The message types devices send. A socket bound to 56700 also sees other
+ * controllers' requests — including targeted ones broadcast to reach a
+ * device by serial — whose target names the device but whose sender is the
+ * controller, so registering from them would re-address the device to it.
+ * An allowlist rather than a list of requests: a request type missing from
+ * `Type` (CopyFrameBuffer, vendor messages) must not slip through.
+ */
+const DEVICE_MESSAGE_TYPES: ReadonlySet<number> = new Set(
+  Object.entries(Type)
+    .filter(([name]) => /^(Sensor)?State|^LightState$|^Acknowledgement$|^EchoResponse$/.test(name))
+    .map(([, type]) => type),
+);
 
 /**
  * A device's network identity. The fields are read-only for callers: the
@@ -49,11 +68,17 @@ interface DeviceConfigBase {
  * correlates a reply with its request. Provide the serial number (the
  * 12-hex-digit MAC printed on the device, in either case), the 6-byte wire
  * target, or both (which must then name the same device); an address alone
- * would send fine but could never match a reply.
+ * would send fine but could never match a reply. For the same reason an
+ * all-zero target (whatever device is at the address) works only with
+ * `sendUnacknowledged()`; `send()` rejects it.
  */
 export type DeviceConfig =
   | (DeviceConfigBase & { serialNumber: string; target?: Uint8Array })
   | (DeviceConfigBase & { target: Uint8Array; serialNumber?: string });
+
+function isValidPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+}
 
 function isZeroTarget(target: Uint8Array): boolean {
   for (let i = 0; i < target.length; i++) {
@@ -71,7 +96,10 @@ function createDevice(config: DeviceConfig): MutableDevice {
     throw new ValidationError('address', config.address, 'is required');
   }
 
-  if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
+  // Number(): an untyped numeric string (e.g. process.env.LIFX_PORT) is
+  // accepted as before and stored as the number the type promises.
+  const port = config.port === undefined ? PORT : Number(config.port);
+  if (!isValidPort(port)) {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
 
@@ -115,7 +143,7 @@ function createDevice(config: DeviceConfig): MutableDevice {
 
   return {
     address: config.address,
-    port: config.port ?? PORT,
+    port,
     target,
     serialNumber,
   };
@@ -166,7 +194,10 @@ export interface DevicesInstance {
    * is registered and `undefined` is returned. A message whose target is all
    * zeros is also ignored (returning `undefined`): that is the broadcast
    * address, used by other controllers' GetService broadcasts, not a device
-   * identity. Re-registering a known serial at a new port/address updates it
+   * identity. So is one whose `port` is not a valid UDP port (a datagram from
+   * source port 0), since nothing could be sent back to it, and so is any
+   * message type devices do not send (a Get/Set request is another
+   * controller addressing the device, not the device itself). Re-registering a known serial at a new port/address updates it
    * in place and emits `onChanged`.
    */
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
@@ -184,7 +215,9 @@ export interface DevicesInstance {
    * otherwise the promise settles on a future `register()`, the timeout, the
    * signal, or a `remove()` of the same serial (rejecting with
    * {@link DeviceRemovedError}). The serial number is matched
-   * case-insensitively. For a synchronous check, use
+   * case-insensitively; one that is not 12 hex digits, or is all zeros (the
+   * broadcast address), rejects with ValidationError, since it could never
+   * match. For a synchronous check, use
    * {@link DevicesInstance.registered}, which is keyed by lowercase serial.
    */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
@@ -208,6 +241,12 @@ interface ListenerRecord {
 
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  // NaN and negative values fail the `> 0` arming check exactly like the
+  // documented 0, so they would silently disable the timeout and leave
+  // lookups pending forever.
+  if (!(typeof defaultTimeoutMs === 'number' && defaultTimeoutMs >= 0)) {
+    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a non-negative number (0 disables the timeout)');
+  }
 
   const knownDevices = new Map<string, MutableDevice>();
 
@@ -257,8 +296,14 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
       return existingDevice;
     }
+    // An inbound target is a zero-copy view into the datagram, and the
+    // registry keeps the device for its lifetime: copy the 6 bytes rather
+    // than pin the whole buffer — or follow a socket layer that reuses it,
+    // silently re-addressing every later send to this device. The
+    // constructor copies; target.slice() would not, because node:dgram
+    // delivers a Buffer, whose slice() is a view.
     const device = createDevice(target ? {
-      serialNumber, port, address, target,
+      serialNumber, port, address, target: new Uint8Array(target),
     } : {
       serialNumber, port, address,
     });
@@ -277,6 +322,17 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     // bound to 56700 sees every other controller's tagged GetService, and
     // registering those would plant a phantom serial 000000000000.
     if (isZeroTarget(received.header.target)) {
+      return undefined;
+    }
+    // register() runs inside the socket's receive path, and anyone on the
+    // LAN can send from UDP source port 0: throwing there (createDevice
+    // rejects the port) is an uncaught exception on Node and ends the Deno
+    // read loop, and updating a known device to it would re-address every
+    // later send to an unusable port. Ignore the datagram instead.
+    if (!isValidPort(port)) {
+      return undefined;
+    }
+    if (received.header.type !== undefined && !DEVICE_MESSAGE_TYPES.has(received.header.type)) {
       return undefined;
     }
     const device = registerDevice(received.serialNumber, port, address, received.header.target);
@@ -336,8 +392,20 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       };
     },
     get(serialNumberInput: string, options?: GetDeviceOptions): Promise<Device> {
+      // get() rejects rather than throws on bad input; a non-string (e.g. an
+      // unset environment variable) would otherwise throw out of toLowerCase().
+      if (typeof serialNumberInput !== 'string') {
+        return Promise.reject(new ValidationError('serialNumber', serialNumberInput, 'must be a string'));
+      }
       const serialNumber = serialNumberInput.toLowerCase();
       const signal = options?.signal;
+      // A non-signal (e.g. an AbortController passed in place of its
+      // .signal) would throw out of addEventListener below instead of
+      // rejecting.
+      // null means no signal, as in fetch()'s RequestInit.
+      if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
+        return Promise.reject(new ValidationError('signal', signal, 'must be an AbortSignal'));
+      }
 
       if (signal?.aborted) {
         // The caller already cancelled. Reject even when the device is
@@ -348,12 +416,33 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         return Promise.reject(signal.reason ?? new AbortError('device lookup'));
       }
 
+      // The registry is keyed by the 12-hex-digit serial derived from the
+      // wire, so any other form (e.g. a MAC-style 'd0:73:d5:12:34:56') can
+      // never match: the lookup would wait out its timeout, or forever with
+      // timeoutMs: 0. convertSerialNumberToTarget throws ValidationError.
+      try {
+        convertSerialNumberToTarget(serialNumber);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      // register() never registers an all-zero target (the broadcast
+      // address), so that serial can never match either.
+      if (serialNumber === '000000000000') {
+        return Promise.reject(new ValidationError('serialNumber', serialNumber, 'the all-zero serial is the broadcast address, never a registered device'));
+      }
+
+      // Validated even when the device is already known, so a bad timeout
+      // surfaces at once rather than only once a device goes missing.
+      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+      if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
+        return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)'));
+      }
+
       const knownDevice = knownDevices.get(serialNumber);
       if (knownDevice) {
         return Promise.resolve(knownDevice);
       }
 
-      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 
@@ -401,13 +490,13 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       // The timeout and the signal are independent: a device that never
       // appears must not hang the caller just because they passed a
       // cancellation signal, so the timeout arms whether or not a signal is
-      // present. A timeoutMs <= 0 disables it.
+      // present. A timeoutMs of 0 disables it.
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
       }
       if (timeoutMs > 0) {
         const timeoutError = new TimeoutError(timeoutMs, 'device discovery');
-        timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
+        timeout = setTimeout(settleReject.bind(undefined, timeoutError), Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
       }
 
       const waiters = deviceResolvers.get(serialNumber);

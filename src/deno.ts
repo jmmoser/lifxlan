@@ -73,7 +73,9 @@ export interface OpenLanOptions extends DeviceEventHandlers {
   onError?: (error: unknown, message: Uint8Array) => void;
   /**
    * Observes asynchronous send failures and an unexpected end of the read
-   * loop. When omitted they are discarded, matching the library's
+   * loop. Once the read loop has ended — by close(), the caller closing the
+   * raw socket, or a receive error — no reply can arrive, so further sends
+   * through the router throw synchronously (send() rejects) instead. When omitted they are discarded, matching the library's
    * UDP-is-best-effort semantics — a lost packet already surfaces as
    * TimeoutError on acknowledged sends. The interruption `close()` inflicts
    * on the read loop is normal shutdown and is never reported here.
@@ -93,7 +95,11 @@ export interface LanInstance extends AsyncDisposable {
    * module declares) — the escape hatch for anything the options don't
    * cover, such as `socket.addr.port` for the bound port. The background
    * read loop already consumes the socket's async iterator; don't iterate it
-   * yourself.
+   * yourself. Closing it yourself ends the read loop, after which sends
+   * through the router throw; Deno reports the close asynchronously, so a
+   * send in the same tick still goes to the closed socket (its failure
+   * reaches `onSocketError` and a `send()` waits out its timeout). Prefer
+   * `close()`, which takes effect at once.
    */
   readonly socket: DenoDatagramConn;
   /**
@@ -148,10 +154,21 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
 
   const onSocketError = options.onSocketError;
 
+  let closing = false;
+  let readEnded = false;
+
   const router = Router({
     onSend(message, port, address) {
-      // send() is async in Deno; a rejection here would otherwise be an
-      // unhandled promise rejection per packet.
+      // Deno's send() is async, so a closed socket only rejects; throw
+      // synchronously instead, as node:dgram does, so senders that stop on a
+      // throwing transport (discover()) end — once close() has begun, or
+      // once the read loop has ended (the caller closed the raw socket, or
+      // reception failed), since no reply could arrive then anyway.
+      if (closing || readEnded) {
+        throw new Error('socket closed');
+      }
+      // A rejection here would otherwise be an unhandled promise rejection
+      // per packet.
       socket.send(message, { transport: 'udp', hostname: address, port }).catch((err) => {
         if (onSocketError) onSocketError(toError(err));
       });
@@ -166,7 +183,18 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
     ...(options.onRemoved ? { onRemoved: options.onRemoved } : {}),
   });
 
-  let closing = false;
+  // Created before the read loop starts, so a rejected option (a NaN
+  // defaultTimeoutMs) releases the socket instead of leaking it.
+  let client: ClientInstance;
+  try {
+    client = options.defaultTimeoutMs === undefined
+      ? Client({ router })
+      : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
+  } catch (err) {
+    try { socket.close(); } catch { /* already closed */ }
+    throw err;
+  }
+
   const reading = (async () => {
     try {
       for await (const [message, remote] of socket) {
@@ -174,15 +202,15 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
         devices.register(remote.port, remote.hostname, router.receive(message));
       }
     } catch (err) {
-      // socket.close() interrupts the iterator with BadResource — that's
-      // normal shutdown. Anything else ended reception unexpectedly.
+      // Deno's iterator ends cleanly on close(); should a version instead
+      // surface the BadResource, that's still normal shutdown. Anything
+      // else ended reception unexpectedly. Either way the loop has ended,
+      // which the finally records for onSend.
       if (!closing && onSocketError) onSocketError(toError(err));
+    } finally {
+      readEnded = true;
     }
   })();
-
-  const client = options.defaultTimeoutMs === undefined
-    ? Client({ router })
-    : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
 
   let closed: Promise<void> | undefined;
   function close(): Promise<void> {

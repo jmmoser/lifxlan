@@ -4,7 +4,7 @@ import { Devices, Device, type RegistrationMessage } from '../src/devices.js';
 import { Router } from '../src/router.js';
 import { encode } from '../src/encoding.js';
 import { Type } from '../src/constants/index.js';
-import { DeviceRemovedError, ValidationError } from '../src/errors.js';
+import { DeviceRemovedError, TimeoutError, ValidationError } from '../src/errors.js';
 import { received } from './helpers.js';
 
 describe('devices', () => {
@@ -196,7 +196,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 10 });
 
     // Get device without registering it, should timeout
-    const promise = devices.get('nonexistent');
+    const promise = devices.get('d073d5ffffff');
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
@@ -205,14 +205,14 @@ describe('devices', () => {
 
     // The signal never aborts; the timeout must still settle the promise
     // instead of hanging forever.
-    const promise = devices.get('nonexistent', { signal: new AbortController().signal });
+    const promise = devices.get('d073d5ffffff', { signal: new AbortController().signal });
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
   test('get device per-call timeoutMs overrides the default', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
-    const promise = devices.get('nonexistent', { timeoutMs: 10 });
+    const promise = devices.get('d073d5ffffff', { timeoutMs: 10 });
     await expect(promise).rejects.toThrow('device discovery timed out after 10ms');
   });
 
@@ -221,7 +221,7 @@ describe('devices', () => {
 
     const reason = new Error('already cancelled');
     await assert.rejects(
-      devices.get('nonexistent', { signal: AbortSignal.abort(reason) }),
+      devices.get('d073d5ffffff', { signal: AbortSignal.abort(reason) }),
       (error) => error === reason,
     );
 
@@ -245,7 +245,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
 
     const controller = new AbortController();
-    const promise = devices.get('nonexistent', { signal: controller.signal });
+    const promise = devices.get('d073d5ffffff', { signal: controller.signal });
 
     const reason = new Error('user cancelled');
     controller.abort(reason);
@@ -414,7 +414,7 @@ describe('devices', () => {
     const devices = Devices();
     const controller = new AbortController();
     
-    const promise = devices.get('test-device', { signal: controller.signal });
+    const promise = devices.get('d073d5fffffe', { signal: controller.signal });
     controller.abort();
     
     expect(promise).rejects.toThrow('aborted');
@@ -425,6 +425,22 @@ describe('devices', () => {
     expect(() => Device({ })).toThrow('Invalid address: undefined (is required)');
     // @ts-expect-error -- DeviceConfig requires a serialNumber or target
     expect(() => Device({ address: '' })).toThrow('Invalid address:  (is required)');
+  });
+
+  test('Device factory accepts a numeric-string port as a number', () => {
+    // An untyped numeric string (e.g. process.env.LIFX_PORT) worked before;
+    // it is now stored as the number the type promises.
+    // @ts-expect-error -- an untyped caller passing a string port
+    const device = Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: '56700' });
+    expect(device.port).toBe(56700);
+    // @ts-expect-error -- an untyped caller passing a non-numeric string
+    expect(() => Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: 'http' })).toThrow(ValidationError);
+  });
+
+  test('get() validates its timeout even for an already-registered device', async () => {
+    const devices = Devices();
+    devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+    await assert.rejects(devices.get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
   });
 
   test('Device factory validates port range', () => {
@@ -445,6 +461,12 @@ describe('devices', () => {
       serialNumber: 'abcdef123456',
       port: -1 
     })).toThrow('Invalid port: -1 (must be between 1 and 65535)');
+
+    // NaN and fractional ports compare false against both bounds.
+    expect(() => Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: Number.NaN }))
+      .toThrow('Invalid port: NaN (must be between 1 and 65535)');
+    expect(() => Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: 56700.5 }))
+      .toThrow('Invalid port: 56700.5 (must be between 1 and 65535)');
   });
 
   test('Device factory allows valid values', () => {
@@ -594,6 +616,59 @@ describe('devices', () => {
     expect(deviceArray).toHaveLength(2);
     expect(deviceArray.some(d => d.serialNumber === 'deadbeef1234')).toBe(true);
     expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
+  });
+
+  test('get() rejects a serial that could never match instead of waiting on it', async () => {
+    // Registry keys are 12 lowercase hex digits from the wire; a MAC-style
+    // serial would otherwise wait out its timeout (or forever with 0).
+    const devices = Devices({ defaultTimeoutMs: 0 });
+    await assert.rejects(devices.get('d0:73:d5:12:34:56'), ValidationError);
+    await assert.rejects(devices.get('nonexistent'), ValidationError);
+    // A non-string (e.g. an unset environment variable) rejects too, rather
+    // than throwing synchronously out of get().
+    // @ts-expect-error -- an untyped caller passing undefined
+    const fromUnsetEnv = devices.get(undefined);
+    await assert.rejects(fromUnsetEnv, ValidationError);
+    // @ts-expect-error -- an untyped caller passing a number
+    const numeric = devices.get(0xd073d5123456);
+    await assert.rejects(numeric, ValidationError);
+    // So does an AbortController passed in place of its .signal, which threw
+    // synchronously out of addEventListener.
+    // @ts-expect-error -- an untyped caller passing the controller itself
+    const withController = devices.get('d073d5ffffff', { signal: new AbortController() });
+    await assert.rejects(withController, ValidationError);
+    // null still means "no signal" (fetch()'s convention), not an error.
+    // @ts-expect-error -- an untyped caller passing null
+    await assert.rejects(devices.get('d073d5ffffff', { signal: null, timeoutMs: 1 }), TimeoutError);
+    // Nor the all-zero broadcast serial, which register() never registers.
+    await assert.rejects(devices.get('000000000000'), ValidationError);
+    // Uppercase hex is still accepted.
+    const device = devices.register(56700, '10.0.0.7', received('d073d5123456'));
+    assert.equal(await devices.get('D073D5123456'), device);
+  });
+
+  test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
+    expect(() => Devices({ defaultTimeoutMs: Number.NaN })).toThrow(ValidationError);
+    // assert.rejects, not expect().rejects: on a regression the lookup never
+    // settles, and Bun's expect().rejects then hangs the run instead of
+    // failing at the test timeout.
+    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
+    expect(() => Devices({ defaultTimeoutMs: -1 })).toThrow(ValidationError);
+    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: -5 }), ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => Devices({ defaultTimeoutMs: 5000n })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: 5000n }), ValidationError);
+  });
+
+  test('get() with a timeoutMs past the setTimeout range (Infinity) does not reject at once', async () => {
+    const devices = Devices({ defaultTimeoutMs: Infinity });
+    const controller = new AbortController();
+    const lookup = devices.get('d073d5aa0001', { signal: controller.signal });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const reason = new Error('done waiting');
+    controller.abort(reason);
+    await expect(lookup).rejects.toBe(reason);
   });
 });
 describe('devices subscribe', () => {
@@ -752,6 +827,26 @@ describe('devices subscribe', () => {
       expect(device?.target).toEqual(target);
     });
 
+    test('copies the target out of the received datagram', () => {
+      // header.target is a view into the datagram; a socket layer that
+      // reuses its receive buffer must not re-address the registered device.
+      const devices = Devices();
+      const message = received('d073d5aa0001');
+      const device = devices.register(56700, '10.0.0.7', message);
+      message.header.target.fill(0xff);
+      expect(device?.target).toEqual(target);
+    });
+
+    test('copies the target out of a Buffer datagram (node:dgram)', () => {
+      // Buffer#slice() is a view, not a copy, so the copy must not rely on it.
+      const devices = Devices();
+      const datagram = Buffer.from(encode(false, 2, target, false, false, 0, Type.StateService, new Uint8Array(5)));
+      const device = devices.register(56700, '10.0.0.7', Router({ onSend() {} }).receive(datagram));
+      datagram.fill(0xff);
+      expect(device?.target).toEqual(target);
+      expect(device?.target.buffer).not.toBe(datagram.buffer);
+    });
+
     test('a known device that moves address updates in place and emits onChanged', () => {
       const changed: string[] = [];
       const devices = Devices({ onChanged: (device) => changed.push(device.address) });
@@ -765,7 +860,7 @@ describe('devices subscribe', () => {
     });
 
     test('accepts a minimal RegistrationMessage from a custom decode pipeline', () => {
-      // register() reads only these two fields, so a custom decode pipeline
+      // register() reads only these fields (plus an optional header.type), so a custom decode pipeline
       // can drive the registry without fabricating a full ReceivedMessage.
       const devices = Devices();
       const message: RegistrationMessage = {
@@ -778,6 +873,73 @@ describe('devices subscribe', () => {
       expect(device?.serialNumber).toBe('d073d5aa0001');
       expect(device?.target).toEqual(target);
       expect(devices.registered.get('d073d5aa0001')).toBe(device);
+    });
+
+    test('a request another controller sent to a device does not register or re-address it', () => {
+      // A socket bound to 56700 also sees other controllers' targeted
+      // requests: their target names the device, but the sender is the
+      // controller.
+      const router = Router({ onSend() {} });
+      const request = (type: number) => router.receive(encode(false, 7, target, false, true, 0, type, new Uint8Array(13)));
+      const changed: string[] = [];
+      const devices = Devices({ onChanged: (device) => changed.push(device.address) });
+
+      expect(devices.register(56700, '10.0.0.20', request(Type.GetColor))).toBeUndefined();
+      expect(devices.registered.size).toBe(0);
+
+      const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      expect(devices.register(56700, '10.0.0.20', request(Type.SetColor))).toBeUndefined();
+      expect(device?.address).toBe('10.0.0.7');
+      expect(changed).toEqual([]);
+
+      // So is a request type missing from Type (CopyFrameBuffer, 716).
+      expect(devices.register(56700, '10.0.0.20', request(716))).toBeUndefined();
+      expect(device?.address).toBe('10.0.0.7');
+
+      // A device's own replies (State types, acks) still update it —
+      // including the common LightState and the non-State* reply types.
+      devices.register(56700, '10.0.0.8', request(Type.Acknowledgement));
+      expect(device?.address).toBe('10.0.0.8');
+      devices.register(56700, '10.0.0.9', request(Type.LightState));
+      expect(device?.address).toBe('10.0.0.9');
+      devices.register(56700, '10.0.0.10', request(Type.EchoResponse));
+      expect(device?.address).toBe('10.0.0.10');
+      devices.register(56700, '10.0.0.11', request(Type.SensorStateAmbientLight));
+      expect(device?.address).toBe('10.0.0.11');
+      devices.register(56700, '10.0.0.12', request(Type.StateUnhandled));
+      expect(device?.address).toBe('10.0.0.12');
+    });
+
+    test('every request type in Type is ignored and every reply type registers', () => {
+      // Exhaustive over Type, classified by name independently of the
+      // registry's own allowlist: any widening that admits a request (or
+      // narrowing that drops a reply) fails here.
+      const router = Router({ onSend() {} });
+      const isRequest = (name: string) => /^(Sensor)?(Get|Set)|^EchoRequest$/.test(name);
+      for (const [name, type] of Object.entries(Type)) {
+        const devices = Devices();
+        const message = router.receive(encode(false, 7, target, false, false, 0, type, new Uint8Array(0)));
+        const device = devices.register(56700, '10.0.0.20', message);
+        expect([name, device === undefined]).toEqual([name, isRequest(name)]);
+      }
+    });
+
+    test('a datagram from an invalid source port (0) is ignored, not thrown', () => {
+      // register() runs in the socket receive path; a throw there crashes
+      // Node and ends Deno's read loop, and anyone can send from port 0.
+      const changed: string[] = [];
+      const devices = Devices({ onChanged: (device) => changed.push(device.address) });
+
+      expect(devices.register(0, '10.0.0.7', received('d073d5aa0001'))).toBeUndefined();
+      expect(devices.registered.size).toBe(0);
+
+      // A known device is not re-addressed to an unusable port either.
+      const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      expect(devices.register(0, '10.0.0.9', received('d073d5aa0001'))).toBeUndefined();
+      expect(devices.register(Number.NaN, '10.0.0.9', received('d073d5aa0001'))).toBeUndefined();
+      expect(device?.port).toBe(56700);
+      expect(device?.address).toBe('10.0.0.7');
+      expect(changed).toEqual([]);
     });
 
     test('an undefined result (malformed packet) registers nothing', () => {

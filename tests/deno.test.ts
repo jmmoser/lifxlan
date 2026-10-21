@@ -10,11 +10,12 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { openLan, type DenoDatagramConn, type DenoNetAddr } from '../src/deno.js';
+import { discover } from '../src/discovery.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPower } from '../src/commands/index.js';
-import { DisposedClientError } from '../src/errors.js';
+import { DisposedClientError, ValidationError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 
 const SERIAL = 'd073d5123456';
@@ -25,6 +26,8 @@ interface FakeConn extends DenoDatagramConn {
   /** Delivers a datagram to the helper's read loop, as if it arrived. */
   push(data: Uint8Array, from: DenoNetAddr): void;
   failNextSend(err: Error): void;
+  /** Fails the pending receive, as a receive error ends Deno's read loop. */
+  failReceive(err: Error): void;
   /** Called synchronously for each send; lets a test act as the device. */
   onSend?: (data: Uint8Array, addr: DenoNetAddr) => void;
 }
@@ -53,6 +56,13 @@ function fakeConn(): FakeConn {
     failNextSend(err) {
       nextSendError = err;
     },
+    failReceive(err) {
+      if (waiter) {
+        const w = waiter;
+        waiter = undefined;
+        w.reject(err);
+      }
+    },
     send(data, addr) {
       conn.sent.push({ data, addr });
       if (conn.onSend) conn.onSend(data, addr);
@@ -68,9 +78,9 @@ function fakeConn(): FakeConn {
       if (waiter) {
         const w = waiter;
         waiter = undefined;
-        // Matches Deno, where close() interrupts a pending iteration with
-        // a BadResource error rather than ending it cleanly.
-        w.reject(new Error('BadResource: socket closed'));
+        // Matches Deno: DatagramConn's async iterator catches the
+        // BadResource/Interrupted error close() causes and ends cleanly.
+        w.resolve({ value: undefined, done: true });
       }
     },
     [Symbol.asyncIterator]() {
@@ -78,7 +88,7 @@ function fakeConn(): FakeConn {
         next(): Promise<IteratorResult<[Uint8Array, DenoNetAddr]>> {
           const item = queue.shift();
           if (item) return Promise.resolve({ value: item, done: false });
-          if (closed) return Promise.reject(new Error('BadResource: socket closed'));
+          if (closed) return Promise.resolve({ value: undefined, done: true });
           return new Promise((resolve, reject) => {
             waiter = { resolve, reject };
           });
@@ -124,6 +134,18 @@ function stateServiceFrom(serialNumber: string): Uint8Array {
 }
 
 describe('openLan (deno)', () => {
+  test('a NaN defaultTimeoutMs rejects and closes the socket', async () => {
+    conn = fakeConn();
+    let closeCalls = 0;
+    const close = conn.close;
+    conn.close = () => {
+      closeCalls++;
+      close();
+    };
+    await assert.rejects(openLan({ defaultTimeoutMs: Number.NaN }), ValidationError);
+    assert.equal(closeCalls, 1);
+  });
+
   test('binds with mapped options and completes a request/response round trip', async () => {
     conn = fakeConn();
     conn.onSend = (data, addr) => {
@@ -216,6 +238,59 @@ describe('openLan (deno)', () => {
     assert.equal(errors.length, 0); // close() interrupting the loop is not an error
     assert.equal(typeof lan[Symbol.asyncDispose], 'function');
     await lan[Symbol.asyncDispose]();
+  });
+
+  test('discovery ends once close() begins instead of rebroadcasting forever', async () => {
+    // Deno's send() is async, so a closed socket only rejects; onSend must
+    // throw synchronously (as node:dgram does) for discover() to notice.
+    conn = fakeConn();
+    const lan = await openLan({ onSocketError() {} });
+    const discovery = discover(lan.router, lan.devices, { intervalMs: 5, maxIntervalMs: 5 });
+    const next = discovery.next();
+    await lan.close();
+    const sentAtClose = conn.sent.length;
+    const outcome = await Promise.race([next, new Promise((resolve) => setTimeout(() => resolve('still running'), 100))]);
+    assert.deepEqual(outcome, { value: undefined, done: true });
+    assert.ok(conn.sent.length <= sentAtClose + 1);
+    discovery.dispose();
+  });
+
+  test('sending through the router throws as soon as close() begins', async () => {
+    // Synchronously, before the read loop has noticed the close.
+    conn = fakeConn();
+    const lan = await openLan({ onSocketError() {} });
+    const closed = lan.close();
+    assert.throws(() => lan.router.send(new Uint8Array(36), 56700, '10.0.0.9'), /socket closed/);
+    await closed;
+  });
+
+  test('a receive error ends reception and makes later sends fail fast', async () => {
+    // Deno's read loop cannot resume after a receive error, so no reply can
+    // arrive: sends must throw (send() rejects at once) rather than wait.
+    conn = fakeConn();
+    const errors: Error[] = [];
+    const lan = await openLan({ onSocketError(err) { errors.push(err); } });
+    await new Promise((resolve) => setTimeout(resolve, 0)); // read loop is waiting
+    conn.failReceive(new Error('ECONNRESET'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(errors.length, 1);
+    const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
+    await assert.rejects(lan.client.send(GetPower(), device, { timeoutMs: 0 }), /socket closed/);
+    await lan.close();
+  });
+
+  test('discovery also ends when the caller closes the raw socket', async () => {
+    // lan.socket is the documented escape hatch; closing it ends the read
+    // loop, after which no reply could arrive, so sends fail fast as on Node.
+    conn = fakeConn();
+    const lan = await openLan({ onSocketError() {} });
+    const discovery = discover(lan.router, lan.devices, { intervalMs: 5, maxIntervalMs: 5 });
+    const next = discovery.next();
+    lan.socket.close();
+    const outcome = await Promise.race([next, new Promise((resolve) => setTimeout(() => resolve('still running'), 100))]);
+    assert.deepEqual(outcome, { value: undefined, done: true });
+    discovery.dispose();
+    await lan.close();
   });
 
   test('async send failures route to onSocketError instead of rejecting anything', async () => {

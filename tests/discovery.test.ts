@@ -1,11 +1,13 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, jest } from 'bun:test';
 import { Router } from '../src/router.js';
 import type { RouterInstance, RouterOptions } from '../src/router.js';
-import { Devices } from '../src/devices.js';
+import { Devices, type DevicesInstance } from '../src/devices.js';
 import { discover } from '../src/discovery.js';
 import { Type } from '../src/constants/index.js';
 import { decodeHeader } from '../src/encoding.js';
 import { received } from './helpers.js';
+import { ValidationError } from '../src/errors.js';
+import { MAX_TIMER_DELAY_MS } from '../src/utils/index.js';
 
 const SERIAL_A = 'd073d5000001';
 const SERIAL_B = 'd073d5000002';
@@ -113,6 +115,143 @@ describe('discovery', () => {
     expect(sent.length).toBeGreaterThanOrEqual(8);
 
     discovery.dispose();
+  });
+
+  test('an interval past the setTimeout range does not flood the network', async () => {
+    // setTimeout runs a delay above 2^31 - 1 ms after ~1ms; unclamped, this
+    // rebroadcast GetService at ~1kHz.
+    const { router, sent } = recordingRouter();
+    const discovery = discover(router, Devices(), { intervalMs: 3e9, maxIntervalMs: Infinity });
+    await sleep(50);
+    expect(sent.length).toBe(1);
+    discovery.dispose();
+  });
+
+  test('the backoff never grows past the setTimeout range', () => {
+    // With an unbounded maxIntervalMs the quadrupling delay eventually
+    // passes 2^31 - 1 ms, which setTimeout runs after ~1ms: a broadcast
+    // flood. Clamped, the next broadcast lands exactly at the limit.
+    jest.useFakeTimers();
+    try {
+      const { router, sent } = recordingRouter();
+      const discovery = discover(router, Devices(), { intervalMs: 2e9, maxIntervalMs: Infinity });
+      expect(sent.length).toBe(1);
+      jest.advanceTimersByTime(2e9);
+      expect(sent.length).toBe(2);
+      // Step a little first: an overflowed delay fires after ~1ms, and this
+      // fails fast instead of looping through ~2^31 fake 1ms broadcasts.
+      jest.advanceTimersByTime(10);
+      expect(sent.length).toBe(2);
+      jest.advanceTimersByTime(MAX_TIMER_DELAY_MS - 11);
+      expect(sent.length).toBe(2);
+      jest.advanceTimersByTime(1);
+      expect(sent.length).toBe(3);
+      discovery.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('a low maxIntervalMs is clamped up to intervalMs, not down to a flood', () => {
+    // Accepting maxIntervalMs <= intervalMs is safe only because of this
+    // clamp; without it the backoff would fall to ~0ms.
+    jest.useFakeTimers();
+    try {
+      const { router, sent } = recordingRouter();
+      const discovery = discover(router, Devices(), { intervalMs: 100, maxIntervalMs: 0 });
+      expect(sent.length).toBe(1);
+      for (let n = 2; n <= 4; n++) {
+        jest.advanceTimersByTime(99);
+        expect(sent.length).toBe(n - 1);
+        jest.advanceTimersByTime(1);
+        expect(sent.length).toBe(n);
+      }
+      discovery.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('a timeoutMs past the setTimeout range does not end discovery at once', async () => {
+    const { router } = recordingRouter();
+    const discovery = discover(router, Devices(), { timeoutMs: 3e9 });
+    const next = discovery.next();
+    const outcome = await Promise.race([next.then(() => 'ended'), sleep(30).then(() => 'running')]);
+    expect(outcome).toBe('running');
+    discovery.dispose();
+    expect((await next).done).toBe(true);
+  });
+
+  test('a NaN interval or a NaN/negative timeout throws before any network work', () => {
+    const { router, sent } = recordingRouter();
+    expect(() => discover(router, Devices(), { intervalMs: Number.NaN })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { timeoutMs: Number.NaN })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { timeoutMs: -1 })).toThrow(ValidationError);
+    // Untyped non-numbers: a string becomes NaN in the delay math, and a
+    // bigint makes Math.min/Math.max throw after setup began.
+    // @ts-expect-error -- an untyped caller passing a string
+    expect(() => discover(router, Devices(), { intervalMs: '1s' })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a string
+    expect(() => discover(router, Devices(), { maxIntervalMs: 'forever' })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => discover(router, Devices(), { intervalMs: 1000n })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => discover(router, Devices(), { maxIntervalMs: 60000n })).toThrow(ValidationError);
+    // Zero or negative (e.g. a config 0 meant as "no repeat") would clamp to
+    // a 1ms rebroadcast loop.
+    expect(() => discover(router, Devices(), { intervalMs: 0, maxIntervalMs: 0 })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { intervalMs: -1000 })).toThrow(ValidationError);
+    // A low maxIntervalMs is harmless — clamped up to intervalMs — and was
+    // accepted before, so it still is (on its own router: it broadcasts).
+    discover(recordingRouter().router, Devices(), { maxIntervalMs: 0 }).dispose();
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => discover(router, Devices(), { timeoutMs: 5000n })).toThrow(ValidationError);
+    expect(sent.length).toBe(0);
+  });
+
+  test('a non-signal passed as signal throws before acquiring anything', () => {
+    // An AbortController in place of its .signal threw from addEventListener
+    // after the client and the registry subscription existed.
+    const { router, activeSources } = sourceCountingRouter();
+    const controller = new AbortController();
+    // @ts-expect-error -- an untyped caller passing the controller itself
+    expect(() => discover(router, Devices(), { signal: controller })).toThrow(ValidationError);
+    expect(activeSources()).toBe(0);
+    // null still means "no signal" (fetch()'s convention), not an error.
+    // @ts-expect-error -- an untyped caller passing null
+    const discovery = discover(router, Devices(), { signal: null });
+    expect(activeSources()).toBe(1);
+    discovery.dispose();
+  });
+
+  test('a router whose register() throws leaves no registry subscription behind', () => {
+    // Otherwise every later registration would grow a queue that nothing
+    // can drain or dispose, since discover() never returned the iterator.
+    const inner = Devices();
+    let subscriptions = 0;
+    const devices: DevicesInstance = {
+      get registered() { return inner.registered; },
+      register: inner.register,
+      remove: inner.remove,
+      get: inner.get,
+      subscribe(handlers) {
+        subscriptions++;
+        const unsubscribe = inner.subscribe(handlers);
+        return () => {
+          subscriptions--;
+          unsubscribe();
+        };
+      },
+      [Symbol.iterator]: () => inner[Symbol.iterator](),
+    };
+    const failure = new Error('no sources');
+    const router: RouterInstance = {
+      ...Router({ onSend() {} }),
+      register() { throw failure; },
+    };
+    expect(() => discover(router, devices)).toThrow(failure);
+    expect(subscriptions).toBe(0);
   });
 
   test('yields devices registered before the call first, then new registrations', async () => {
@@ -267,6 +406,21 @@ describe('discovery', () => {
     expect(activeSources()).toBe(1);
     discovery.dispose();
     expect(activeSources()).toBe(0);
+  });
+
+  test('a finish() triggered by the initial broadcast arms no timer', () => {
+    // onSend aborting the signal ends discovery inside the first
+    // broadcast; a timer armed after that would never be cleared.
+    jest.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const router = Router({ onSend() { controller.abort(); } });
+      const discovery = discover(router, Devices(), { signal: controller.signal, intervalMs: 3000 });
+      expect(jest.getTimerCount()).toBe(0);
+      discovery.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('Symbol.dispose stops discovery like dispose()', async () => {

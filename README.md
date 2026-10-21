@@ -95,7 +95,7 @@ The optional [`lifxlan/node`](#the-openlan-helper) (Node.js/Bun) and [`lifxlan/d
 
 ### Buffer Ownership
 
-For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram`, Bun's `udpSocket`, and Deno's `listenDatagram` all allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `message.slice()`), and copy any decoded bytes you intend to keep long-term.
+For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram`, Bun's `udpSocket`, and Deno's `listenDatagram` all allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `new Uint8Array(message)` — not `message.slice()`, which on a Node `Buffer` is a view), and copy any decoded bytes you intend to keep long-term.
 
 ### Response Mode Control
 
@@ -465,7 +465,7 @@ try {
 
 Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.get()` accepts the same options: `devices.get(serialNumber, { signal, timeoutMs })`.
 
-**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, or sequence exhaustion — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `sendUnacknowledged()` throw synchronously instead, since they have no promise to reject.)
+**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, sequence exhaustion, or a `ValidationError` for invalid input (a NaN or negative `timeoutMs`, or a device whose target is all zeros) — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `sendUnacknowledged()` throw synchronously instead, since they have no promise to reject.)
 
 Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
 
@@ -842,7 +842,7 @@ The device received the command but doesn't support it — multizone, tile, HEV,
 
 ### Decoded values turn into garbage later
 
-Decoded results are views into the datagram's receive buffer rather than copies (see [Buffer Ownership](#buffer-ownership)). The built-in sockets in Node.js, Bun, and Deno allocate a fresh buffer for every datagram, so they are unaffected. But if your socket layer reads each datagram into one reusable buffer, the next datagram overwrites the memory your earlier results still point to, and values you already decoded silently change. Either pass a copy to `router.receive()` (e.g. `router.receive(message.slice())`) or copy any decoded bytes you want to keep.
+Decoded results are views into the datagram's receive buffer rather than copies (see [Buffer Ownership](#buffer-ownership)). The built-in sockets in Node.js, Bun, and Deno allocate a fresh buffer for every datagram, so they are unaffected. But if your socket layer reads each datagram into one reusable buffer, the next datagram overwrites the memory your earlier results still point to, and values you already decoded silently change. Either pass a copy to `router.receive()` (e.g. `router.receive(new Uint8Array(message))`; on a Node `Buffer`, `slice()` returns a view, not a copy) or copy any decoded bytes you want to keep.
 
 ### `SourceExhaustionError` / `SequenceExhaustionError`
 

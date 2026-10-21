@@ -547,6 +547,42 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting responses
   });
 
+  test('Get64 rejects a tileIndex or tileCount the uint8 wire fields would wrap', () => {
+    // Each would ask the device for tiles the decoder never accepts.
+    assert.throws(() => Commands.Get64({ tileIndex: 0, tileCount: 256 }), /Invalid tileCount: 256/);
+    assert.throws(() => Commands.Get64({ tileIndex: 0, tileCount: 1.5 }), /Invalid tileCount: 1.5/);
+    assert.throws(() => Commands.Get64({ tileIndex: 0, tileCount: 0 }), /Invalid tileCount: 0/);
+    assert.throws(() => Commands.Get64({ tileIndex: 256 }), /Invalid tileIndex: 256/);
+    // -1 would go out as tile 255 while the decoder waited for tile -1.
+    assert.throws(() => Commands.Get64({ tileIndex: -1 }), /Invalid tileIndex: -1/);
+    assert.throws(() => Commands.Get64({ tileIndex: 0.5 }), /Invalid tileIndex: 0.5/);
+    // A range running past tile 255 names tiles that cannot exist.
+    assert.throws(() => Commands.Get64({ tileIndex: 200, tileCount: 100 }), /tileIndex \+ tileCount must not exceed 256/);
+    assert.throws(() => Commands.Get64({ tileIndex: 255, tileCount: 2 }), /tileIndex \+ tileCount must not exceed 256/);
+    assert.equal(Commands.Get64({ tileIndex: 255, tileCount: 1 }).type, Type.Get64);
+    assert.equal(Commands.Get64({ tileIndex: 0, tileCount: 255 }).type, Type.Get64);
+  });
+
+  test('SetHevCycle defaults durationSeconds to 0 (the configured default)', () => {
+    // Turning HEV off needs no duration. SetHevCycleConfiguration keeps it
+    // required: its duration *is* the stored default, so a default of 0
+    // would silently erase it.
+    assert.deepEqual(Commands.SetHevCycle(false).payload, new Uint8Array([0, 0, 0, 0, 0]));
+    // Guard the required parameter (tsc checks tests): if a default crept
+    // back in, this directive would be unused and fail the typecheck. At
+    // runtime the omitted duration is rejected, not encoded as 0.
+    // @ts-expect-error -- durationSeconds is required on SetHevCycleConfiguration
+    assert.throws(() => Commands.SetHevCycleConfiguration(true), /Invalid durationSeconds/);
+  });
+
+  test('GetColorZones rejects indices outside the uint8 wire range', () => {
+    // 256 would encode as 0 while the decoder waited on zones 1..255.
+    assert.throws(() => Commands.GetColorZones({ startIndex: 0, endIndex: 256 }), /Invalid endIndex: 256/);
+    assert.throws(() => Commands.GetColorZones({ startIndex: -1, endIndex: 7 }), /Invalid startIndex: -1/);
+    assert.throws(() => Commands.GetColorZones({ startIndex: 0.5, endIndex: 7 }), /Invalid startIndex: 0.5/);
+    assert.equal(Commands.GetColorZones({ startIndex: 0, endIndex: 255 }).type, Type.GetColorZones);
+  });
+
   test('GetColorZones basic usage without callback', () => {
     const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 15 });
     assert.equal(cmd.type, Type.GetColorZones);
