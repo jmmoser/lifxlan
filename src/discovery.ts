@@ -168,6 +168,11 @@ export function discover(
     queue.push(...devices.registered.values());
     done = true;
   } else {
+    // Created first: register() can throw (source exhaustion, a custom
+    // router), and a throw after subscribing would leave an onAdded
+    // subscription growing a queue nothing can ever drain or dispose.
+    const client = Client({ router });
+
     // Snapshot-then-subscribe runs synchronously, so a device registered
     // between the two cannot be missed (and none can be yielded twice).
     queue.push(...devices.registered.values());
@@ -177,8 +182,6 @@ export function discover(
         wake();
       },
     });
-
-    const client = Client({ router });
 
     teardown = () => {
       // finish() can be invoked by the abort listener itself; removal is a

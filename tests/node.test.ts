@@ -5,7 +5,7 @@
  * broadcasts are ever sent — every packet is unicast to a loopback port —
  * so nothing leaves the machine.
  */
-import { describe, test } from 'bun:test';
+import { describe, test, spyOn } from 'bun:test';
 import assert from 'node:assert';
 import dgram from 'node:dgram';
 import { openLan } from '../src/node.js';
@@ -190,6 +190,29 @@ describe('openLan', () => {
     // The rejected call released its socket: the same port binds again.
     const lan = await openLan({ port, address: '127.0.0.1' });
     await lan.close();
+  });
+
+  test('a bind() that throws synchronously still closes the socket', async () => {
+    // bind() throws, rather than emitting 'error', on invalid arguments
+    // (a non-string address from an untyped caller); the socket must be
+    // released on that path too.
+    const realCreateSocket = dgram.createSocket;
+    const failure = new Error('bad bind arguments');
+    let socket: dgram.Socket | undefined;
+    const create = spyOn(dgram, 'createSocket').mockImplementation(() => {
+      const created = realCreateSocket('udp4');
+      created.bind = () => { throw failure; };
+      socket = created;
+      return created;
+    });
+    try {
+      await assert.rejects(openLan(), (error) => error === failure);
+    } finally {
+      create.mockRestore();
+    }
+    assert.ok(socket !== undefined);
+    // Closing an already-closed dgram socket throws.
+    assert.throws(() => socket?.close());
   });
 
   test('defaultTimeoutMs is forwarded to the client', async () => {

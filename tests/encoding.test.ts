@@ -980,7 +980,7 @@ describe('encoding', () => {
 
   test('encodeSetLocation/encodeSetGroup reject a byte id that is not 16 bytes', () => {
     const date = new Date('2023-01-01T00:00:00.000Z');
-    // 17 bytes would be silently truncated; 15 would be silently zero-padded.
+    // A longer id left stray bytes in the label field; a shorter one was zero-padded.
     assert.throws(() => Encoding.encodeSetLocation(new Uint8Array(17), 'x', date), /Invalid location: 17 \(must be 16 bytes\)/);
     assert.throws(() => Encoding.encodeSetGroup(new Uint8Array(15), 'x', date), /Invalid group: 15 \(must be 16 bytes\)/);
   });

@@ -1,7 +1,7 @@
 import { describe, test, expect, jest } from 'bun:test';
 import { Router } from '../src/router.js';
 import type { RouterInstance, RouterOptions } from '../src/router.js';
-import { Devices } from '../src/devices.js';
+import { Devices, type DevicesInstance } from '../src/devices.js';
 import { discover } from '../src/discovery.js';
 import { Type } from '../src/constants/index.js';
 import { decodeHeader } from '../src/encoding.js';
@@ -168,6 +168,35 @@ describe('discovery', () => {
     expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { timeoutMs: Number.NaN })).toThrow(ValidationError);
     expect(sent.length).toBe(0);
+  });
+
+  test('a router whose register() throws leaves no registry subscription behind', () => {
+    // Otherwise every later registration would grow a queue that nothing
+    // can drain or dispose, since discover() never returned the iterator.
+    const inner = Devices();
+    let subscriptions = 0;
+    const devices: DevicesInstance = {
+      get registered() { return inner.registered; },
+      register: inner.register,
+      remove: inner.remove,
+      get: inner.get,
+      subscribe(handlers) {
+        subscriptions++;
+        const unsubscribe = inner.subscribe(handlers);
+        return () => {
+          subscriptions--;
+          unsubscribe();
+        };
+      },
+      [Symbol.iterator]: () => inner[Symbol.iterator](),
+    };
+    const failure = new Error('no sources');
+    const router: RouterInstance = {
+      ...Router({ onSend() {} }),
+      register() { throw failure; },
+    };
+    expect(() => discover(router, devices)).toThrow(failure);
+    expect(subscriptions).toBe(0);
   });
 
   test('yields devices registered before the call first, then new registrations', async () => {

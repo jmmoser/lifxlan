@@ -678,8 +678,9 @@ export function encodeSetLocation(location: Uint8Array | string, label: string, 
   if (typeof location === 'string') {
     encodeUuidTo(payload, 0, location);
   } else {
-    // A shorter id would be silently zero-padded and a longer one silently
-    // truncated to 16 bytes (or a RangeError past 56 bytes).
+    // A shorter id would be silently zero-padded, and a longer one would
+    // leave its extra bytes in the label field past the label's terminator
+    // (or throw a bare RangeError past 56 bytes).
     if (location.length !== 16) {
       throw new ValidationError('location', location.length, 'must be 16 bytes');
     }
@@ -699,8 +700,9 @@ export function encodeSetGroup(group: Uint8Array | string, label: string, update
   if (typeof group === 'string') {
     encodeUuidTo(payload, 0, group);
   } else {
-    // A shorter id would be silently zero-padded and a longer one silently
-    // truncated to 16 bytes (or a RangeError past 56 bytes).
+    // A shorter id would be silently zero-padded, and a longer one would
+    // leave its extra bytes in the label field past the label's terminator
+    // (or throw a bare RangeError past 56 bytes).
     if (group.length !== 16) {
       throw new ValidationError('group', group.length, 'must be 16 bytes');
     }

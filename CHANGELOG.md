@@ -71,8 +71,10 @@ upgrading is a matter of reading this file.
   decoder waited on zones the device was never asked for, so the call timed
   out.
 - `SetLocation()`/`SetGroup()` throw `ValidationError` for a byte id that is
-  not 16 bytes (a shorter one was zero-padded, a longer one silently truncated), for an invalid
-  `updatedAt` (previously a bare `RangeError`), and for one outside the wire
+  not 16 bytes (a shorter one was zero-padded; a longer one left its extra
+  bytes in the label field past the terminator, or threw a bare `RangeError`
+  past 56 bytes), for an invalid `updatedAt` (previously a bare
+  `RangeError`), and for one outside the wire
   field's 1970–2554 range, which silently wrapped to an unrelated timestamp.
   `SetMultiZoneEffect()`/`SetTileEffect()` likewise reject a `duration`
   outside the uint64 range instead of wrapping it (`-1n` encoded as an effect
@@ -91,6 +93,11 @@ upgrading is a matter of reading this file.
   the whole LAN about once a millisecond until disposed. `discover()` now
   throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs`, which
   flooded the same way.
+- `openLan()` (`lifxlan/node`) closes its socket when `bind()` throws
+  synchronously (e.g. a non-string `address` from an untyped caller), not
+  only when binding fails asynchronously. `discover()` leaves no registry
+  subscription behind when the router's `register()` throws; before, that
+  subscription queued every later registration with nothing to drain it.
 - A `NaN` timeout — `defaultTimeoutMs` on `Client()`/`Devices()`/`openLan()`,
   or `timeoutMs` on `send()`, `devices.get()`, or `discover()` — is rejected
   with `ValidationError` (a rejected promise from `send()`/`get()`). Before,

@@ -171,7 +171,13 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       socket.removeListener('error', onBindError);
       resolve();
     });
-    socket.bind(options.port ?? 0, options.address);
+    // bind() also throws synchronously on invalid arguments (e.g. an
+    // out-of-range port on Bun); that path must release the socket too.
+    try {
+      socket.bind(options.port ?? 0, options.address);
+    } catch (err) {
+      onBindError(err instanceof Error ? err : new Error(String(err)));
+    }
   });
 
   // From here on the socket must not crash the process on a stray 'error'
