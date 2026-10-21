@@ -166,6 +166,18 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
     ...(options.onRemoved ? { onRemoved: options.onRemoved } : {}),
   });
 
+  // Created before the read loop starts, so a rejected option (a NaN
+  // defaultTimeoutMs) releases the socket instead of leaking it.
+  let client: ClientInstance;
+  try {
+    client = options.defaultTimeoutMs === undefined
+      ? Client({ router })
+      : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
+  } catch (err) {
+    try { socket.close(); } catch { /* already closed */ }
+    throw err;
+  }
+
   let closing = false;
   const reading = (async () => {
     try {
@@ -179,10 +191,6 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       if (!closing && onSocketError) onSocketError(toError(err));
     }
   })();
-
-  const client = options.defaultTimeoutMs === undefined
-    ? Client({ router })
-    : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
 
   let closed: Promise<void> | undefined;
   function close(): Promise<void> {

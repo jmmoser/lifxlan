@@ -360,11 +360,6 @@ function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number
 const MAX_UINT64 = 0xFFFFFFFFFFFFFFFFn;
 
 /**
- * DataView.setBigUint64 wraps out-of-range values modulo 2**64 instead of
- * throwing, so a negative or oversized value would silently encode as an
- * unrelated one.
- */
-/**
  * DataView.setUint32 wraps a negative value modulo 2**32, so a duration of
  * -1 would encode as 0xFFFFFFFF — a ~49.7 day transition, or a ~136 year
  * HEV cycle — rather than fail. Used for the time fields (durations,
@@ -376,6 +371,11 @@ function assertUint32(parameter: string, value: number): void {
   }
 }
 
+/**
+ * DataView.setBigUint64 wraps out-of-range values modulo 2**64 instead of
+ * throwing, so a negative or oversized value would silently encode as an
+ * unrelated one.
+ */
 function assertUint64(parameter: string, value: bigint): void {
   if (value < 0n || value > MAX_UINT64) {
     throw new ValidationError(parameter, value, 'must be between 0 and 2^64 - 1');

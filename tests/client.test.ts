@@ -492,9 +492,23 @@ describe('client', () => {
       assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 3e9, signal: controller.signal }), (error) => error === reason),
     ]);
 
+    settled.catch(() => {});
+
     await new Promise((resolve) => setTimeout(resolve, 20));
     controller.abort(reason);
     await settled;
+  });
+
+  test('a NaN timeout is rejected instead of silently disabling the timeout', async () => {
+    // NaN fails the `> 0` arming check like 0, so a lost packet would leave
+    // the call pending forever.
+    assert.throws(() => Client({ defaultTimeoutMs: Number.NaN, router: Router({ onSend() {} }) }), ValidationError);
+
+    let sends = 0;
+    const client = Client({ router: Router({ onSend() { sends++; } }) });
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: Number.NaN }), ValidationError);
+    assert.equal(sends, 0);
+    client.dispose();
   });
 
   test('timeoutMs: 0 disables the timeout for a call', async () => {

@@ -14,7 +14,7 @@ import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
 import { GetPower } from '../src/commands/index.js';
-import { DisposedClientError } from '../src/errors.js';
+import { DisposedClientError, ValidationError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 
 const SERIAL = 'd073d5123456';
@@ -124,6 +124,18 @@ function stateServiceFrom(serialNumber: string): Uint8Array {
 }
 
 describe('openLan (deno)', () => {
+  test('a NaN defaultTimeoutMs rejects and closes the socket', async () => {
+    conn = fakeConn();
+    let closeCalls = 0;
+    const close = conn.close;
+    conn.close = () => {
+      closeCalls++;
+      close();
+    };
+    await assert.rejects(openLan({ defaultTimeoutMs: Number.NaN }), ValidationError);
+    assert.equal(closeCalls, 1);
+  });
+
   test('binds with mapped options and completes a request/response round trip', async () => {
     conn = fakeConn();
     conn.onSend = (data, addr) => {

@@ -91,6 +91,12 @@ upgrading is a matter of reading this file.
   the whole LAN about once a millisecond until disposed. `discover()` now
   throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs`, which
   flooded the same way.
+- A `NaN` timeout — `defaultTimeoutMs` on `Client()`/`Devices()`/`openLan()`,
+  or `timeoutMs` on `send()`, `devices.get()`, or `discover()` — is rejected
+  with `ValidationError` (a rejected promise from `send()`/`get()`). Before,
+  it failed the `> 0` arming check exactly like the documented `0` and
+  silently disabled the timeout, so e.g. `Number()` of an unset environment
+  variable left every lost packet pending forever.
 - `Get64` throws `ValidationError` for a `tileIndex` outside 0–255 or a
   `tileCount` outside 1–255 or not an integer. These fields are uint8 on the
   wire, and a wrapped value (`tileCount: 256` encodes as 0) or a truncated one

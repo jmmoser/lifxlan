@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, jest } from 'bun:test';
 import { Router } from '../src/router.js';
 import type { RouterInstance, RouterOptions } from '../src/router.js';
 import { Devices } from '../src/devices.js';
@@ -7,6 +7,7 @@ import { Type } from '../src/constants/index.js';
 import { decodeHeader } from '../src/encoding.js';
 import { received } from './helpers.js';
 import { ValidationError } from '../src/errors.js';
+import { MAX_TIMER_DELAY_MS } from '../src/utils/index.js';
 
 const SERIAL_A = 'd073d5000001';
 const SERIAL_B = 'd073d5000002';
@@ -126,6 +127,31 @@ describe('discovery', () => {
     discovery.dispose();
   });
 
+  test('the backoff never grows past the setTimeout range', () => {
+    // With an unbounded maxIntervalMs the quadrupling delay eventually
+    // passes 2^31 - 1 ms, which setTimeout runs after ~1ms: a broadcast
+    // flood. Clamped, the next broadcast lands exactly at the limit.
+    jest.useFakeTimers();
+    try {
+      const { router, sent } = recordingRouter();
+      const discovery = discover(router, Devices(), { intervalMs: 2e9, maxIntervalMs: Infinity });
+      expect(sent.length).toBe(1);
+      jest.advanceTimersByTime(2e9);
+      expect(sent.length).toBe(2);
+      // Step a little first: an overflowed delay fires after ~1ms, and this
+      // fails fast instead of looping through ~2^31 fake 1ms broadcasts.
+      jest.advanceTimersByTime(10);
+      expect(sent.length).toBe(2);
+      jest.advanceTimersByTime(MAX_TIMER_DELAY_MS - 11);
+      expect(sent.length).toBe(2);
+      jest.advanceTimersByTime(1);
+      expect(sent.length).toBe(3);
+      discovery.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('a timeoutMs past the setTimeout range does not end discovery at once', async () => {
     const { router } = recordingRouter();
     const discovery = discover(router, Devices(), { timeoutMs: 3e9 });
@@ -136,10 +162,11 @@ describe('discovery', () => {
     expect((await next).done).toBe(true);
   });
 
-  test('a NaN interval throws before any network work', () => {
+  test('a NaN interval or timeout throws before any network work', () => {
     const { router, sent } = recordingRouter();
     expect(() => discover(router, Devices(), { intervalMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { timeoutMs: Number.NaN })).toThrow(ValidationError);
     expect(sent.length).toBe(0);
   });
 

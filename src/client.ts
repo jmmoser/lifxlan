@@ -321,6 +321,12 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
  */
 export function Client<R extends ClientRouter>(options: ClientOptions<R>): ClientInstance<R> {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  // NaN fails the `> 0` arming check exactly like the documented 0, so a
+  // NaN (e.g. Number() of an unset environment variable) would silently
+  // disable the timeout and leave every lost packet pending forever.
+  if (Number.isNaN(defaultTimeoutMs)) {
+    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a number (0 disables the timeout)');
+  }
   const { router } = options;
 
   // Pending request handlers, keyed by device serial number, then by
@@ -544,6 +550,11 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
             throw new ValidationError('responseMode', ackMode, "expected 'ack-only', 'response', or 'both'");
         }
 
+        const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+        if (Number.isNaN(timeoutMs)) {
+          throw new ValidationError('timeoutMs', timeoutMs, 'must be a number (0 disables the timeout)');
+        }
+
         // A createDecoder command gets a fresh decoder per exchange so commands
         // that accumulate multi-packet state stay safe to reuse across
         // concurrent sends and devices.
@@ -578,7 +589,6 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
           command.payload,
         );
 
-        const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
 
         const promise = registerHandler(ackMode, device.serialNumber, sequence, command.type, decode, command.responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
 

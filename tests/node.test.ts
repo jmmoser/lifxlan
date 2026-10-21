@@ -13,7 +13,7 @@ import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader, type Header } from '../src/encoding.js';
 import { GetPower } from '../src/commands/index.js';
-import { DisposedClientError } from '../src/errors.js';
+import { DisposedClientError, ValidationError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 
 const SERIAL = 'd073d5123456';
@@ -179,6 +179,17 @@ describe('openLan', () => {
     } finally {
       await closeSocket(squatter);
     }
+  });
+
+  test('a NaN defaultTimeoutMs rejects without holding the port', async () => {
+    const probe = dgram.createSocket('udp4');
+    const port = await bind(probe);
+    await closeSocket(probe);
+
+    await assert.rejects(openLan({ port, address: '127.0.0.1', defaultTimeoutMs: Number.NaN }), ValidationError);
+    // The rejected call released its socket: the same port binds again.
+    const lan = await openLan({ port, address: '127.0.0.1' });
+    await lan.close();
   });
 
   test('defaultTimeoutMs is forwarded to the client', async () => {

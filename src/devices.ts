@@ -208,6 +208,11 @@ interface ListenerRecord {
 
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
+  // NaN fails the `> 0` arming check exactly like the documented 0, so it
+  // would silently disable the timeout and leave lookups pending forever.
+  if (Number.isNaN(defaultTimeoutMs)) {
+    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a number (0 disables the timeout)');
+  }
 
   const knownDevices = new Map<string, MutableDevice>();
 
@@ -360,6 +365,9 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
 
       const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+      if (Number.isNaN(timeoutMs)) {
+        return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a number (0 disables the timeout)'));
+      }
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 
