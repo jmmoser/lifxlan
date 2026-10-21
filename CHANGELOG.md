@@ -125,7 +125,16 @@ upgrading is a matter of reading this file.
   broadcast address, which `register()` never registers) is rejected the
   same way, and `client.send()` rejects a device whose target is all zeros:
   its reply carries the device's real serial, so it could only time out.
-  `sendUnacknowledged()` to such a device still works.
+  `sendUnacknowledged()` to such a device still works. A non-string serial
+  (e.g. an unset environment variable) also rejects with `ValidationError`;
+  before, `get()` threw a `TypeError` synchronously.
+- `client.send()` reads each command and device field once, before taking
+  its per-device state, and re-checks the signal after running caller code.
+  A getter (e.g. `payload`) that re-entered `send()` on the same device could
+  strand the outer exchange so its reply was dropped and it timed out, and an
+  abort raised from such code (or from `createDecoder()`) was ignored: the
+  packet went out and the call waited for its timeout, or forever with
+  `timeoutMs: 0`.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check.
 - `devices.register()` registers only from message types devices send (State

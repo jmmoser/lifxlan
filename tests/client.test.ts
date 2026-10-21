@@ -573,6 +573,70 @@ describe('client', () => {
     client.dispose();
   });
 
+  test('a type getter that re-enters send() does not strand the outer exchange either', async () => {
+    // Every caller-supplied field is read before the per-device map is
+    // taken, not only payload.
+    let failNext = false;
+    let reentered = false;
+    let outer: Header | undefined;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          if (failNext) {
+            failNext = false;
+            throw new Error('transport down');
+          }
+          outer = decodeHeader(message);
+        },
+      }),
+    });
+    const nested: Promise<unknown>[] = [];
+    const command: Command<number, 'response'> = {
+      get type() {
+        if (!reentered) {
+          reentered = true;
+          failNext = true;
+          nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+        }
+        return Type.GetPower;
+      },
+      responseType: Type.StatePower,
+      decode: GetPower().decode,
+      defaultResponseMode: 'response',
+    };
+    const promise = client.send(command, sharedDevice);
+    await Promise.all(nested);
+    assert.ok(outer !== undefined);
+    client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
+    assert.equal(await promise, 0xFFFF);
+    client.dispose();
+  });
+
+  test('an abort raised by caller code inside send() is honored', async () => {
+    // A payload getter (or createDecoder) runs after the up-front aborted
+    // check and before any abort listener exists.
+    let sends = 0;
+    const client = Client({ defaultTimeoutMs: 0, router: Router({ onSend() { sends++; } }) });
+    const controller = new AbortController();
+    const reason = new Error('aborted from payload');
+    const command: Command<number, 'response'> = {
+      type: Type.GetPower,
+      responseType: Type.StatePower,
+      decode: GetPower().decode,
+      defaultResponseMode: 'response',
+      get payload() {
+        controller.abort(reason);
+        return new Uint8Array(0);
+      },
+    };
+    await assert.rejects(client.send(command, sharedDevice, { signal: controller.signal }), (error) => error === reason);
+    assert.equal(sends, 0);
+    // The client is still usable for the same device afterwards.
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 1 }), TimeoutError);
+    client.dispose();
+  });
+
   test('timeoutMs: 0 disables the timeout for a call', async () => {
     const client = Client({
       defaultTimeoutMs: 1,
