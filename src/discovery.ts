@@ -236,7 +236,10 @@ export function discover(
         scheduleBroadcast();
       }, delayMs);
     };
-    scheduleBroadcast();
+    // The same reentrancy applies to the initial broadcast: a timer armed
+    // after finish() would never be cleared and would hold the process open
+    // for up to a full interval.
+    if (!done) scheduleBroadcast();
   }
 
   function disposeNow() {

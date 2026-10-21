@@ -353,6 +353,21 @@ describe('discovery', () => {
     expect(activeSources()).toBe(0);
   });
 
+  test('a finish() triggered by the initial broadcast arms no timer', () => {
+    // onSend aborting the signal ends discovery inside the first
+    // broadcast; a timer armed after that would never be cleared.
+    jest.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const router = Router({ onSend() { controller.abort(); } });
+      const discovery = discover(router, Devices(), { signal: controller.signal, intervalMs: 3000 });
+      expect(jest.getTimerCount()).toBe(0);
+      discovery.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('Symbol.dispose stops discovery like dispose()', async () => {
     const { router, activeSources } = sourceCountingRouter();
     const devices = Devices();

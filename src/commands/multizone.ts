@@ -34,8 +34,9 @@ export function GetColorZones(options: GetColorZonesOptions) {
   const { startIndex, endIndex, onResponse } = options;
 
   // The wire fields are uint8: an out-of-range index would wrap on encode
-  // (256 becomes 0) while the decoder below waits on the zones the caller
-  // named, so the exchange could only time out.
+  // (256 becomes 0), asking the device for zones other than the ones the
+  // decoder below waits on — so the exchange timed out, or resolved with
+  // another zone's data.
   assertZoneIndex('startIndex', startIndex);
   assertZoneIndex('endIndex', endIndex);
 

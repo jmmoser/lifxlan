@@ -43,9 +43,11 @@ export function Get64(options: Get64Options) {
   const tileCount = options.tileCount ?? 1;
   const firstTile = options.tileIndex;
   // Both are uint8 on the wire, but the decoder below compares replies
-  // against these raw numbers: a wrapped or truncated value (256 encodes as
-  // 0, 1.5 as 1) asks the device for tiles the decoder never accepts, so the
-  // exchange could only time out. A count of 0 requests no tiles at all.
+  // against these raw numbers, so the exchange could only time out: a
+  // wrapped tileIndex (256 encodes as 0) or tileCount (256 as 0) asks for
+  // tiles the decoder never accepts, and a fractional tileCount (1.5 sends
+  // 1) leaves it waiting for a fraction of a tile. A count of 0 requests no
+  // tiles at all.
   if (!Number.isInteger(firstTile) || firstTile < 0 || firstTile > 255) {
     throw new ValidationError('tileIndex', firstTile, 'must be an integer between 0 and 255');
   }

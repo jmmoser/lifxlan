@@ -98,6 +98,9 @@ upgrading is a matter of reading this file.
   only when binding fails asynchronously. `discover()` leaves no registry
   subscription behind when the router's `register()` throws; before, that
   subscription queued every later registration with nothing to drain it.
+  `discover()` also arms no broadcast timer when its initial broadcast ends
+  discovery (e.g. `onSend` aborting the signal); that timer was never
+  cleared and held the process open for up to a full interval.
 - A `NaN` timeout — `defaultTimeoutMs` on `Client()`/`Devices()`/`openLan()`,
   or `timeoutMs` on `send()`, `devices.get()`, or `discover()` — is rejected
   with `ValidationError` (a rejected promise from `send()`/`get()`). Before,
@@ -106,9 +109,10 @@ upgrading is a matter of reading this file.
   variable left every lost packet pending forever.
 - `Get64` throws `ValidationError` for a `tileIndex` outside 0–255 or a
   `tileCount` outside 1–255 or not an integer. These fields are uint8 on the
-  wire, and a wrapped value (`tileCount: 256` encodes as 0) or a truncated one
-  (`1.5` as 1) asked the device for tiles the decoder never accepted, so the
-  call always timed out.
+  wire, and the decoder compared replies against the unwrapped values: a
+  wrapped value (`tileCount: 256` encodes as 0) asked for tiles the decoder
+  never accepted, and a fractional count (`1.5` sends 1) left it waiting for
+  a fraction of a tile, so the call always timed out.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check.
 - A truncated `StateUnhandled` packet, which anyone on the LAN can send, no
