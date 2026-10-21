@@ -389,6 +389,11 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       };
     },
     get(serialNumberInput: string, options?: GetDeviceOptions): Promise<Device> {
+      // get() rejects rather than throws on bad input; a non-string (e.g. an
+      // unset environment variable) would otherwise throw out of toLowerCase().
+      if (typeof serialNumberInput !== 'string') {
+        return Promise.reject(new ValidationError('serialNumber', serialNumberInput, 'must be a string'));
+      }
       const serialNumber = serialNumberInput.toLowerCase();
       const signal = options?.signal;
 

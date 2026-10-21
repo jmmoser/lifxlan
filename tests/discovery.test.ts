@@ -177,6 +177,8 @@ describe('discovery', () => {
     // @ts-expect-error -- an untyped caller passing a bigint
     expect(() => discover(router, Devices(), { intervalMs: 1000n })).toThrow(ValidationError);
     // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => discover(router, Devices(), { maxIntervalMs: 60000n })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
     expect(() => discover(router, Devices(), { timeoutMs: 5000n })).toThrow(ValidationError);
     expect(sent.length).toBe(0);
   });

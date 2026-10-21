@@ -590,6 +590,12 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
           throw new ValidationError('device', device.serialNumber, 'send() needs the device\'s real serial number to correlate its reply; use sendUnacknowledged() for an all-zero target');
         }
 
+        // Read before the per-device map is taken: a payload getter is user
+        // code, and one that re-enters send() on this device could settle a
+        // nested exchange whose cleanup drops the map this call then
+        // registers into, stranding it where no reply can reach it.
+        const payload = command.payload;
+
         pendingBySequence = responseHandlerMap.get(device.serialNumber);
         if (!pendingBySequence) {
           pendingBySequence = new Map();
@@ -609,9 +615,8 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
           ackRequired,
           sequence,
           command.type,
-          command.payload,
+          payload,
         );
-
 
         const promise = registerHandler(ackMode, device.serialNumber, sequence, command.type, decode, command.responseType, timeoutMs, responseHandlerMap, pendingBySequence, signal);
 
@@ -631,7 +636,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       } catch (err) {
         // A per-device map created for an exchange that never registered a
         // handler must not linger.
-        if (pendingBySequence && pendingBySequence.size === 0) {
+        if (pendingBySequence && pendingBySequence.size === 0 && responseHandlerMap.get(device.serialNumber) === pendingBySequence) {
           responseHandlerMap.delete(device.serialNumber);
         }
         return rejected(err);

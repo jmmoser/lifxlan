@@ -4,7 +4,8 @@ import { Client } from '../src/client.js';
 import { Router, type ClientRouter, type MessageHandler } from '../src/router.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
-import { encode, decodeHeader } from '../src/encoding.js';
+import { encode, decodeHeader, type Header } from '../src/encoding.js';
+import type { Command } from '../src/commands/index.js';
 import { GetPower, GetService, GetColor, GetColorZones, SetPower } from '../src/commands/index.js';
 import { UnhandledCommandError, TimeoutError, ValidationError, SequenceExhaustionError } from '../src/errors.js';
 
@@ -531,6 +532,44 @@ describe('client', () => {
     // Fire-and-forget to whatever is at the address still works.
     client.sendUnacknowledged(GetPower(), anyDevice);
     assert.equal(sends, 1);
+    client.dispose();
+  });
+
+  test('a payload getter that re-enters send() does not strand the outer exchange', async () => {
+    // The nested send's transport throws synchronously, settling it inside
+    // the outer send(); its cleanup must not drop the per-device map the
+    // outer exchange registers into, or the outer reply could never land.
+    let failNext = false;
+    let outer: Header | undefined;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          if (failNext) {
+            failNext = false;
+            throw new Error('transport down');
+          }
+          outer = decodeHeader(message);
+        },
+      }),
+    });
+    const nested: Promise<unknown>[] = [];
+    const command: Command<number, 'response'> = {
+      type: Type.GetPower,
+      responseType: Type.StatePower,
+      decode: GetPower().decode,
+      defaultResponseMode: 'response',
+      get payload() {
+        failNext = true;
+        nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+        return new Uint8Array(0);
+      },
+    };
+    const promise = client.send(command, sharedDevice);
+    await Promise.all(nested);
+    assert.ok(outer !== undefined);
+    client.router.receive(encode(false, outer.source, outer.target, false, false, outer.sequence, Type.StatePower, new Uint8Array([0xFF, 0xFF])));
+    assert.equal(await promise, 0xFFFF);
     client.dispose();
   });
 

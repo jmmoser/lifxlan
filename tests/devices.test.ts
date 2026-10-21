@@ -608,6 +608,11 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
     await assert.rejects(devices.get('d0:73:d5:12:34:56'), ValidationError);
     await assert.rejects(devices.get('nonexistent'), ValidationError);
+    // A non-string (e.g. an unset environment variable) rejects too, rather
+    // than throwing synchronously out of get().
+    // @ts-expect-error -- an untyped caller passing undefined
+    const fromUnsetEnv = devices.get(undefined);
+    await assert.rejects(fromUnsetEnv, ValidationError);
     // Nor the all-zero broadcast serial, which register() never registers.
     await assert.rejects(devices.get('000000000000'), ValidationError);
     // Uppercase hex is still accepted.
