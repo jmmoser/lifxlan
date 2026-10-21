@@ -115,6 +115,10 @@ upgrading is a matter of reading this file.
   never accepted, and a fractional count (`1.5` sends 1) left it waiting for
   a fraction of a tile, so the call always timed out. It also rejects a range
   with `tileIndex + tileCount` past 256, which names tiles that cannot exist.
+- `devices.get()` rejects with `ValidationError` for a serial that is not 12
+  hex digits (e.g. the MAC-style `d0:73:d5:12:34:56`). Registry keys are
+  derived from the wire, so such a lookup could never match and waited out
+  its timeout, or forever with `timeoutMs: 0`.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check.
 - `devices.register()` registers only from message types devices send (State

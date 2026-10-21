@@ -210,7 +210,8 @@ export interface DevicesInstance {
    * otherwise the promise settles on a future `register()`, the timeout, the
    * signal, or a `remove()` of the same serial (rejecting with
    * {@link DeviceRemovedError}). The serial number is matched
-   * case-insensitively. For a synchronous check, use
+   * case-insensitively; one that is not 12 hex digits rejects with
+   * ValidationError, since it could never match. For a synchronous check, use
    * {@link DevicesInstance.registered}, which is keyed by lowercase serial.
    */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
@@ -395,6 +396,16 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         // already-aborted signal also never fires another 'abort' event, so
         // the listener below would never run.)
         return Promise.reject(signal.reason ?? new AbortError('device lookup'));
+      }
+
+      // The registry is keyed by the 12-hex-digit serial derived from the
+      // wire, so any other form (e.g. a MAC-style 'd0:73:d5:12:34:56') can
+      // never match: the lookup would wait out its timeout, or forever with
+      // timeoutMs: 0. convertSerialNumberToTarget throws ValidationError.
+      try {
+        convertSerialNumberToTarget(serialNumber);
+      } catch (err) {
+        return Promise.reject(err);
       }
 
       const knownDevice = knownDevices.get(serialNumber);

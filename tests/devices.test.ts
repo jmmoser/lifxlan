@@ -196,7 +196,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 10 });
 
     // Get device without registering it, should timeout
-    const promise = devices.get('nonexistent');
+    const promise = devices.get('d073d5ffffff');
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
@@ -205,14 +205,14 @@ describe('devices', () => {
 
     // The signal never aborts; the timeout must still settle the promise
     // instead of hanging forever.
-    const promise = devices.get('nonexistent', { signal: new AbortController().signal });
+    const promise = devices.get('d073d5ffffff', { signal: new AbortController().signal });
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
   test('get device per-call timeoutMs overrides the default', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
-    const promise = devices.get('nonexistent', { timeoutMs: 10 });
+    const promise = devices.get('d073d5ffffff', { timeoutMs: 10 });
     await expect(promise).rejects.toThrow('device discovery timed out after 10ms');
   });
 
@@ -221,7 +221,7 @@ describe('devices', () => {
 
     const reason = new Error('already cancelled');
     await assert.rejects(
-      devices.get('nonexistent', { signal: AbortSignal.abort(reason) }),
+      devices.get('d073d5ffffff', { signal: AbortSignal.abort(reason) }),
       (error) => error === reason,
     );
 
@@ -245,7 +245,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
 
     const controller = new AbortController();
-    const promise = devices.get('nonexistent', { signal: controller.signal });
+    const promise = devices.get('d073d5ffffff', { signal: controller.signal });
 
     const reason = new Error('user cancelled');
     controller.abort(reason);
@@ -414,7 +414,7 @@ describe('devices', () => {
     const devices = Devices();
     const controller = new AbortController();
     
-    const promise = devices.get('test-device', { signal: controller.signal });
+    const promise = devices.get('d073d5fffffe', { signal: controller.signal });
     controller.abort();
     
     expect(promise).rejects.toThrow('aborted');
@@ -600,6 +600,17 @@ describe('devices', () => {
     expect(deviceArray).toHaveLength(2);
     expect(deviceArray.some(d => d.serialNumber === 'deadbeef1234')).toBe(true);
     expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
+  });
+
+  test('get() rejects a serial that could never match instead of waiting on it', async () => {
+    // Registry keys are 12 lowercase hex digits from the wire; a MAC-style
+    // serial would otherwise wait out its timeout (or forever with 0).
+    const devices = Devices({ defaultTimeoutMs: 0 });
+    await assert.rejects(devices.get('d0:73:d5:12:34:56'), ValidationError);
+    await assert.rejects(devices.get('nonexistent'), ValidationError);
+    // Uppercase hex is still accepted.
+    const device = devices.register(56700, '10.0.0.7', received('d073d5123456'));
+    assert.equal(await devices.get('D073D5123456'), device);
   });
 
   test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
