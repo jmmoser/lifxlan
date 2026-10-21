@@ -989,8 +989,19 @@ describe('encoding', () => {
     const uuid = '550e8400e29b41d4a716446655440000';
     assert.throws(() => Encoding.encodeSetLocation(uuid, 'x', new Date(Number.NaN)), /Invalid date/);
     assert.throws(() => Encoding.encodeSetGroup(uuid, 'x', new Date(-1)), /Invalid date/);
-    // The epoch itself is representable.
+    // Past the uint64 nanosecond range (~2554) the value would wrap to an
+    // unrelated date.
+    assert.throws(() => Encoding.encodeSetGroup(uuid, 'x', new Date('2600-01-01T00:00:00Z')), /Invalid date/);
+    // Both ends of the representable range encode.
     assert.equal(Encoding.encodeSetGroup(uuid, 'x', new Date(0)).length, 56);
+    const latest = Encoding.encodeSetGroup(uuid, 'x', new Date(18446744073709));
+    assert.equal(new DataView(latest.buffer).getBigUint64(48, true), 18446744073709000000n);
+  });
+
+  test('effect encoders reject a duration outside the uint64 range', () => {
+    // setBigUint64 would wrap -1n to 2^64 - 1 (an effect that never ends).
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, -1n, new Uint8Array(0)), /Invalid duration/);
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n, 0, 0, 0, 0, []), /Invalid duration/);
   });
 
   test('encodeSetWaveform', () => {

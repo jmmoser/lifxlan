@@ -768,6 +768,16 @@ describe('devices subscribe', () => {
       expect(device?.target).toEqual(target);
     });
 
+    test('copies the target out of a Buffer datagram (node:dgram)', () => {
+      // Buffer#slice() is a view, not a copy, so the copy must not rely on it.
+      const devices = Devices();
+      const datagram = Buffer.from(encode(false, 2, target, false, false, 0, Type.StateService, new Uint8Array(5)));
+      const device = devices.register(56700, '10.0.0.7', Router({ onSend() {} }).receive(datagram));
+      datagram.fill(0xff);
+      expect(device?.target).toEqual(target);
+      expect(device?.target.buffer).not.toBe(datagram.buffer);
+    });
+
     test('a known device that moves address updates in place and emits onChanged', () => {
       const changed: string[] = [];
       const devices = Devices({ onChanged: (device) => changed.push(device.address) });

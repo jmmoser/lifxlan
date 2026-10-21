@@ -547,6 +547,15 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting responses
   });
 
+  test('Get64 rejects a tileIndex or tileCount the uint8 wire fields would wrap', () => {
+    // Each would ask the device for tiles the decoder never accepts.
+    assert.throws(() => Commands.Get64({ tileIndex: 0, tileCount: 256 }), /Invalid tileCount: 256/);
+    assert.throws(() => Commands.Get64({ tileIndex: 0, tileCount: 1.5 }), /Invalid tileCount: 1.5/);
+    assert.throws(() => Commands.Get64({ tileIndex: 0, tileCount: 0 }), /Invalid tileCount: 0/);
+    assert.throws(() => Commands.Get64({ tileIndex: 256 }), /Invalid tileIndex: 256/);
+    assert.equal(Commands.Get64({ tileIndex: 255, tileCount: 255 }).type, Type.Get64);
+  });
+
   test('GetColorZones rejects indices outside the uint8 wire range', () => {
     // 256 would encode as 0 while the decoder waited on zones 1..255.
     assert.throws(() => Commands.GetColorZones({ startIndex: 0, endIndex: 256 }), /Invalid endIndex: 256/);

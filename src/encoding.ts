@@ -357,15 +357,32 @@ function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number
   return value;
 }
 
+const MAX_UINT64 = 0xFFFFFFFFFFFFFFFFn;
+
+/**
+ * DataView.setBigUint64 wraps out-of-range values modulo 2**64 instead of
+ * throwing, so a negative or oversized value would silently encode as an
+ * unrelated one.
+ */
+function assertUint64(parameter: string, value: bigint): void {
+  if (value < 0n || value > MAX_UINT64) {
+    throw new ValidationError(parameter, value, 'must be between 0 and 2^64 - 1');
+  }
+}
+
 export function encodeTimestampTo(view: DataView, offset: number, date: Date): void {
   const ms = date.getTime();
-  // The wire field is unsigned nanoseconds since the epoch: an invalid Date
-  // (NaN) or one before 1970 would otherwise surface as a bare RangeError
-  // from BigInt()/setBigUint64.
-  if (!(ms >= 0)) {
-    throw new ValidationError('date', date, 'must be a valid date at or after 1970-01-01');
+  // The wire field is unsigned nanoseconds since the epoch. An invalid Date
+  // (NaN) would throw a bare RangeError from BigInt(), and a date before 1970
+  // or after the field's range (~2554) would silently wrap to another date.
+  if (Number.isNaN(ms)) {
+    throw new ValidationError('date', date, 'must be a valid date');
   }
-  view.setBigUint64(offset, BigInt(ms) * 1000000n, true);
+  const ns = BigInt(ms) * 1000000n;
+  if (ns < 0n || ns > MAX_UINT64) {
+    throw new ValidationError('date', date, 'must be between 1970-01-01 and 2554-07-21');
+  }
+  view.setBigUint64(offset, ns, true);
 }
 
 function readTimestamp(bytes: Uint8Array, offset: number): Date {
@@ -841,6 +858,7 @@ export function encodeSetMultiZoneEffect(instanceId: number, effectType: MultiZo
   view.setUint8(5, 0); // reserved
   view.setUint8(6, 0); // reserved
   view.setUint32(7, speed, true);
+  assertUint64('duration', duration);
   view.setBigUint64(11, duration, true);
   view.setUint32(19, 0); // reserved
   view.setUint32(23, 0); // reserved
@@ -919,6 +937,7 @@ export function encodeSetTileEffect(instanceId: number, effectType: TileEffectTy
   view.setUint32(2, instanceId, true);
   view.setUint8(6, effectType);
   view.setUint32(7, speed, true);
+  assertUint64('duration', duration);
   view.setBigUint64(11, duration, true);
   view.setUint32(19, 0); // reserved2
   view.setUint32(23, 0); // reserved3

@@ -260,9 +260,11 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     // An inbound target is a zero-copy view into the datagram, and the
     // registry keeps the device for its lifetime: copy the 6 bytes rather
     // than pin the whole buffer — or follow a socket layer that reuses it,
-    // silently re-addressing every later send to this device.
+    // silently re-addressing every later send to this device. The
+    // constructor copies; target.slice() would not, because node:dgram
+    // delivers a Buffer, whose slice() is a view.
     const device = createDevice(target ? {
-      serialNumber, port, address, target: target.slice(),
+      serialNumber, port, address, target: new Uint8Array(target),
     } : {
       serialNumber, port, address,
     });
