@@ -143,6 +143,37 @@ describe('client', () => {
     await client.send(GetPower(), sharedDevice, { responseMode: 'ack-only', signal: new AbortController().signal });
   });
 
+  test('ack-only does not decode a State reply, so a throwing onResponse cannot reject it', async () => {
+    // Get messages are answered whether or not res_required is set, so an
+    // ack-only Get still sees its State packet; that packet must not reach
+    // the decoder (or the user's onResponse) of a call that asked only for
+    // the ack.
+    let onResponseCalls = 0;
+    const client = Client({
+      defaultTimeoutMs: 200,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const zone = new Uint8Array(10);
+          zone[0] = 1; // zonesCount
+          client.router.receive(encode(false, header.source, header.target, false, false, header.sequence, Type.StateZone, zone));
+          client.router.receive(encode(false, header.source, header.target, false, false, header.sequence, Type.Acknowledgement));
+        },
+      }),
+    });
+
+    const command = GetColorZones({
+      startIndex: 0,
+      endIndex: 0,
+      onResponse() {
+        onResponseCalls++;
+        throw new Error('callback must not run');
+      },
+    });
+    assert.equal(await client.send(command, sharedDevice, { responseMode: 'ack-only' }), undefined);
+    assert.equal(onResponseCalls, 0);
+  });
+
   test('Set command default (ack-only) resolves undefined', async () => {
     const client = Client({
       defaultTimeoutMs: 0,

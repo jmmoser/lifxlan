@@ -71,7 +71,7 @@ function createDevice(config: DeviceConfig): MutableDevice {
     throw new ValidationError('address', config.address, 'is required');
   }
 
-  if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
+  if (config.port !== undefined && (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535)) {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
 
@@ -257,8 +257,12 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
       return existingDevice;
     }
+    // An inbound target is a zero-copy view into the datagram, and the
+    // registry keeps the device for its lifetime: copy the 6 bytes rather
+    // than pin the whole buffer — or follow a socket layer that reuses it,
+    // silently re-addressing every later send to this device.
     const device = createDevice(target ? {
-      serialNumber, port, address, target,
+      serialNumber, port, address, target: target.slice(),
     } : {
       serialNumber, port, address,
     });

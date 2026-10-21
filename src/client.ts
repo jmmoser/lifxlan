@@ -155,7 +155,11 @@ function registerHandler<T>(
         return;
       }
 
-      if (decode) {
+      // An 'ack-only' exchange resolves with no data, so a State packet the
+      // device sends anyway (Get messages are always answered) is not
+      // decoded: a failing decoder or a throwing onResponse callback must
+      // not reject a call that only asked for the acknowledgement.
+      if (decode && ackMode !== 'ack-only') {
         let result: T;
         try {
           continuation.expectMore = false;

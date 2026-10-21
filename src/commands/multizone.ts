@@ -24,8 +24,20 @@ export interface GetColorZonesOptions {
   onResponse?: (response: ColorZoneResponse) => boolean | void;
 }
 
+function assertZoneIndex(name: string, value: number) {
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new ValidationError(name, value, 'must be an integer between 0 and 255');
+  }
+}
+
 export function GetColorZones(options: GetColorZonesOptions) {
   const { startIndex, endIndex, onResponse } = options;
+
+  // The wire fields are uint8: an out-of-range index would wrap on encode
+  // (256 becomes 0) while the decoder below waits on the zones the caller
+  // named, so the exchange could only time out.
+  assertZoneIndex('startIndex', startIndex);
+  assertZoneIndex('endIndex', endIndex);
 
   // Accumulation state lives inside createDecoder so each send() gets a
   // fresh decoder, making this command safe to reuse across concurrent

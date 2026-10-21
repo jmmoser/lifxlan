@@ -973,6 +973,26 @@ describe('encoding', () => {
     assert.deepEqual(payload.subarray(5), new Uint8Array(59)); // remaining bytes should be zero
   });
 
+  test('encodeEchoRequest rejects more than 64 bytes', () => {
+    assert.throws(() => Encoding.encodeEchoRequest(new Uint8Array(65)), /Invalid echoing: 65 \(must be at most 64 bytes\)/);
+    assert.equal(Encoding.encodeEchoRequest(new Uint8Array(64)).length, 64);
+  });
+
+  test('encodeSetLocation/encodeSetGroup reject a byte id that is not 16 bytes', () => {
+    const date = new Date('2023-01-01T00:00:00.000Z');
+    // 17 bytes would spill into the label; 15 would be silently zero-padded.
+    assert.throws(() => Encoding.encodeSetLocation(new Uint8Array(17), 'x', date), /Invalid location: 17 \(must be 16 bytes\)/);
+    assert.throws(() => Encoding.encodeSetGroup(new Uint8Array(15), 'x', date), /Invalid group: 15 \(must be 16 bytes\)/);
+  });
+
+  test('encodeSetLocation/encodeSetGroup reject an invalid or pre-epoch date', () => {
+    const uuid = '550e8400e29b41d4a716446655440000';
+    assert.throws(() => Encoding.encodeSetLocation(uuid, 'x', new Date(Number.NaN)), /Invalid date/);
+    assert.throws(() => Encoding.encodeSetGroup(uuid, 'x', new Date(-1)), /Invalid date/);
+    // The epoch itself is representable.
+    assert.equal(Encoding.encodeSetGroup(uuid, 'x', new Date(0)).length, 56);
+  });
+
   test('encodeSetWaveform', () => {
     const payload = Encoding.encodeSetWaveform(
       true,  // transient

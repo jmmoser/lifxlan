@@ -547,6 +547,14 @@ describe('commands', () => {
     assert.equal(continuation.expectMore, true); // Still expecting responses
   });
 
+  test('GetColorZones rejects indices outside the uint8 wire range', () => {
+    // 256 would encode as 0 while the decoder waited on zones 1..255.
+    assert.throws(() => Commands.GetColorZones({ startIndex: 0, endIndex: 256 }), /Invalid endIndex: 256/);
+    assert.throws(() => Commands.GetColorZones({ startIndex: -1, endIndex: 7 }), /Invalid startIndex: -1/);
+    assert.throws(() => Commands.GetColorZones({ startIndex: 0.5, endIndex: 7 }), /Invalid startIndex: 0.5/);
+    assert.equal(Commands.GetColorZones({ startIndex: 0, endIndex: 255 }).type, Type.GetColorZones);
+  });
+
   test('GetColorZones basic usage without callback', () => {
     const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 15 });
     assert.equal(cmd.type, Type.GetColorZones);

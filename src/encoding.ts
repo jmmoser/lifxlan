@@ -358,7 +358,14 @@ function decodeString(bytes: Uint8Array, offsetRef: OffsetRef, maxLength: number
 }
 
 export function encodeTimestampTo(view: DataView, offset: number, date: Date): void {
-  view.setBigUint64(offset, BigInt(date.getTime()) * 1000000n, true);
+  const ms = date.getTime();
+  // The wire field is unsigned nanoseconds since the epoch: an invalid Date
+  // (NaN) or one before 1970 would otherwise surface as a bare RangeError
+  // from BigInt()/setBigUint64.
+  if (!(ms >= 0)) {
+    throw new ValidationError('date', date, 'must be a valid date at or after 1970-01-01');
+  }
+  view.setBigUint64(offset, BigInt(ms) * 1000000n, true);
 }
 
 function readTimestamp(bytes: Uint8Array, offset: number): Date {
@@ -641,6 +648,11 @@ export function encodeSetLocation(location: Uint8Array | string, label: string, 
   if (typeof location === 'string') {
     encodeUuidTo(payload, 0, location);
   } else {
+    // A shorter id would be silently zero-padded and a longer one would
+    // spill into the label field (or throw a RangeError past 56 bytes).
+    if (location.length !== 16) {
+      throw new ValidationError('location', location.length, 'must be 16 bytes');
+    }
     payload.set(location, 0);
   }
 
@@ -657,6 +669,11 @@ export function encodeSetGroup(group: Uint8Array | string, label: string, update
   if (typeof group === 'string') {
     encodeUuidTo(payload, 0, group);
   } else {
+    // A shorter id would be silently zero-padded and a longer one would
+    // spill into the label field (or throw a RangeError past 56 bytes).
+    if (group.length !== 16) {
+      throw new ValidationError('group', group.length, 'must be 16 bytes');
+    }
     payload.set(group, 0);
   }
 
@@ -667,6 +684,9 @@ export function encodeSetGroup(group: Uint8Array | string, label: string, update
 }
 
 export function encodeEchoRequest(echoing: Uint8Array): Uint8Array {
+  if (echoing.length > 64) {
+    throw new ValidationError('echoing', echoing.length, 'must be at most 64 bytes');
+  }
   const payload = new Uint8Array(64);
   payload.set(echoing);
   return payload;

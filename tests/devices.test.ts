@@ -445,6 +445,12 @@ describe('devices', () => {
       serialNumber: 'abcdef123456',
       port: -1 
     })).toThrow('Invalid port: -1 (must be between 1 and 65535)');
+
+    // NaN and fractional ports compare false against both bounds.
+    expect(() => Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: Number.NaN }))
+      .toThrow('Invalid port: NaN (must be between 1 and 65535)');
+    expect(() => Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: 56700.5 }))
+      .toThrow('Invalid port: 56700.5 (must be between 1 and 65535)');
   });
 
   test('Device factory allows valid values', () => {
@@ -749,6 +755,16 @@ describe('devices subscribe', () => {
     test('derives the target from the received header', () => {
       const devices = Devices();
       const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      expect(device?.target).toEqual(target);
+    });
+
+    test('copies the target out of the received datagram', () => {
+      // header.target is a view into the datagram; a socket layer that
+      // reuses its receive buffer must not re-address the registered device.
+      const devices = Devices();
+      const message = received('d073d5aa0001');
+      const device = devices.register(56700, '10.0.0.7', message);
+      message.header.target.fill(0xff);
       expect(device?.target).toEqual(target);
     });
 

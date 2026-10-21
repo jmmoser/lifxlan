@@ -59,6 +59,23 @@ upgrading is a matter of reading this file.
 
 ### Fixed
 
+- An `'ack-only'` exchange no longer decodes the State packet a device sends
+  anyway (Get messages are always answered), so a failing decoder or a
+  throwing `onResponse` callback can no longer reject a call that only asked
+  for the acknowledgement.
+- `devices.register()` copies a new device's `target` out of the received
+  datagram instead of keeping a view into it, so a socket layer that reuses
+  its receive buffer can no longer silently re-address a registered device.
+- `GetColorZones` throws `ValidationError` for a `startIndex` or `endIndex`
+  outside the uint8 wire range. Before, `endIndex: 256` encoded as 0 while the
+  decoder waited on zones the device was never asked for, so the call timed
+  out.
+- `SetLocation()`/`SetGroup()` throw `ValidationError` for a byte id that is
+  not 16 bytes (a longer one spilled into the label field) and for an invalid
+  or pre-1970 `updatedAt` (previously a bare `RangeError`). `EchoRequest()`
+  throws `ValidationError` for more than 64 bytes instead of a `RangeError`.
+- `Device()` rejects a `NaN` or fractional `port`, which slipped past the
+  range check.
 - A truncated `StateUnhandled` packet, which anyone on the LAN can send, no
   longer throws out of `router.receive()` inside the socket's receive path; it
   rejects the exchange it targets instead.
