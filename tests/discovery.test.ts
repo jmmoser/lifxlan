@@ -152,6 +152,26 @@ describe('discovery', () => {
     }
   });
 
+  test('a low maxIntervalMs is clamped up to intervalMs, not down to a flood', () => {
+    // Accepting maxIntervalMs <= intervalMs is safe only because of this
+    // clamp; without it the backoff would fall to ~0ms.
+    jest.useFakeTimers();
+    try {
+      const { router, sent } = recordingRouter();
+      const discovery = discover(router, Devices(), { intervalMs: 100, maxIntervalMs: 0 });
+      expect(sent.length).toBe(1);
+      for (let n = 2; n <= 4; n++) {
+        jest.advanceTimersByTime(99);
+        expect(sent.length).toBe(n - 1);
+        jest.advanceTimersByTime(1);
+        expect(sent.length).toBe(n);
+      }
+      discovery.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('a timeoutMs past the setTimeout range does not end discovery at once', async () => {
     const { router } = recordingRouter();
     const discovery = discover(router, Devices(), { timeoutMs: 3e9 });
