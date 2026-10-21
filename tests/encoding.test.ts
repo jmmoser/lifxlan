@@ -983,6 +983,9 @@ describe('encoding', () => {
     // A longer id left stray bytes in the label field; a shorter one was zero-padded.
     assert.throws(() => Encoding.encodeSetLocation(new Uint8Array(17), 'x', date), /Invalid location: 17 \(must be 16 bytes\)/);
     assert.throws(() => Encoding.encodeSetGroup(new Uint8Array(15), 'x', date), /Invalid group: 15 \(must be 16 bytes\)/);
+    // Both directions for each encoder.
+    assert.throws(() => Encoding.encodeSetLocation(new Uint8Array(15), 'x', date), /Invalid location: 15 \(must be 16 bytes\)/);
+    assert.throws(() => Encoding.encodeSetGroup(new Uint8Array(17), 'x', date), /Invalid group: 17 \(must be 16 bytes\)/);
   });
 
   test('encodeSetLocation/encodeSetGroup reject an invalid or pre-epoch date', () => {
