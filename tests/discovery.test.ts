@@ -178,9 +178,24 @@ describe('discovery', () => {
     expect(() => discover(router, Devices(), { intervalMs: 1000n })).toThrow(ValidationError);
     // @ts-expect-error -- an untyped caller passing a bigint
     expect(() => discover(router, Devices(), { maxIntervalMs: 60000n })).toThrow(ValidationError);
+    // Zero or negative (e.g. a config 0 meant as "no repeat") would clamp to
+    // a 1ms rebroadcast loop.
+    expect(() => discover(router, Devices(), { intervalMs: 0, maxIntervalMs: 0 })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { intervalMs: -1000 })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { maxIntervalMs: 0 })).toThrow(ValidationError);
     // @ts-expect-error -- an untyped caller passing a bigint
     expect(() => discover(router, Devices(), { timeoutMs: 5000n })).toThrow(ValidationError);
     expect(sent.length).toBe(0);
+  });
+
+  test('a non-signal passed as signal throws before acquiring anything', () => {
+    // An AbortController in place of its .signal threw from addEventListener
+    // after the client and the registry subscription existed.
+    const { router, activeSources } = sourceCountingRouter();
+    const controller = new AbortController();
+    // @ts-expect-error -- an untyped caller passing the controller itself
+    expect(() => discover(router, Devices(), { signal: controller })).toThrow(ValidationError);
+    expect(activeSources()).toBe(0);
   });
 
   test('a router whose register() throws leaves no registry subscription behind', () => {

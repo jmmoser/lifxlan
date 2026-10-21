@@ -613,6 +613,11 @@ describe('devices', () => {
     // @ts-expect-error -- an untyped caller passing undefined
     const fromUnsetEnv = devices.get(undefined);
     await assert.rejects(fromUnsetEnv, ValidationError);
+    // So does an AbortController passed in place of its .signal, which threw
+    // synchronously out of addEventListener.
+    // @ts-expect-error -- an untyped caller passing the controller itself
+    const withController = devices.get('d073d5ffffff', { signal: new AbortController() });
+    await assert.rejects(withController, ValidationError);
     // Nor the all-zero broadcast serial, which register() never registers.
     await assert.rejects(devices.get('000000000000'), ValidationError);
     // Uppercase hex is still accepted.

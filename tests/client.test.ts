@@ -518,6 +518,8 @@ describe('client', () => {
     assert.throws(() => Client({ defaultTimeoutMs: 5000n, router: Router({ onSend() {} }) }), ValidationError);
     // @ts-expect-error -- an untyped caller passing a bigint
     await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 5000n }), ValidationError);
+    // @ts-expect-error -- an untyped caller passing an AbortController for its .signal
+    await assert.rejects(client.send(GetPower(), sharedDevice, { signal: new AbortController() }), ValidationError);
     assert.equal(sends, 0);
     client.dispose();
   });

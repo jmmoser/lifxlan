@@ -91,9 +91,11 @@ upgrading is a matter of reading this file.
   `timeoutMs` ended discovery at once, and a large `intervalMs` (or a
   `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
   the whole LAN about once a millisecond until disposed. `discover()` now
-  throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs` (or an
-  untyped non-number such as `'1s'`, which became NaN in the delay math),
-  which flooded the same way.
+  throws `ValidationError` for an `intervalMs` or `maxIntervalMs` that is not
+  a positive number — `NaN` or an untyped non-number such as `'1s'` (which
+  became NaN in the delay math), but also `0` or a negative value, which was
+  clamped to 1ms — since each flooded the same way. Unlike `timeoutMs`, an
+  interval of `0` never meant "disabled".
 - `openLan()` (`lifxlan/node`) closes its socket when `bind()` throws
   synchronously (e.g. a non-string `address` from an untyped caller), not
   only when binding fails asynchronously. `discover()` leaves no registry
@@ -128,6 +130,11 @@ upgrading is a matter of reading this file.
   `sendUnacknowledged()` to such a device still works. A non-string serial
   (e.g. an unset environment variable) also rejects with `ValidationError`;
   before, `get()` threw a `TypeError` synchronously.
+- `send()`, `devices.get()` and `discover()` reject a `signal` that is not an
+  `AbortSignal` (e.g. an `AbortController` passed in place of its `.signal`)
+  with `ValidationError`. Before, `get()` threw a `TypeError` synchronously,
+  and `discover()` threw only after creating its client and subscribing to
+  the registry, leaking both.
 - `client.send()` reads each command and device field once, before taking
   its per-device state, and re-checks the signal after running caller code.
   A getter (e.g. `payload`) that re-entered `send()` on the same device could

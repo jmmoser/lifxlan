@@ -396,6 +396,12 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
       const serialNumber = serialNumberInput.toLowerCase();
       const signal = options?.signal;
+      // A non-signal (e.g. an AbortController passed in place of its
+      // .signal) would throw out of addEventListener below instead of
+      // rejecting.
+      if (signal !== undefined && typeof signal.addEventListener !== 'function') {
+        return Promise.reject(new ValidationError('signal', signal, 'must be an AbortSignal'));
+      }
 
       if (signal?.aborted) {
         // The caller already cancelled. Reject even when the device is

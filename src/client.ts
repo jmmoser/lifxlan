@@ -527,6 +527,11 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       if (disposed) return rejected(new DisposedClientError(source));
 
       const signal = options?.signal;
+      // A non-signal (e.g. an AbortController passed in place of its
+      // .signal) is rejected before any per-device state is touched.
+      if (signal !== undefined && typeof signal.addEventListener !== 'function') {
+        return rejected(new ValidationError('signal', signal, 'must be an AbortSignal'));
+      }
       if (signal?.aborted) {
         // The caller already cancelled: reject before a sequence number is
         // consumed or a packet is transmitted on their behalf. This check
@@ -540,6 +545,9 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
       // malformed device, or anything unforeseen — can escape send() as an
       // exception instead of a rejection.
       let pendingBySequence: Map<number, PendingHandler> | undefined;
+      // The serial the per-device map was taken under, for the catch path
+      // (re-reading device.serialNumber there would run caller code again).
+      let pendingSerial: string | undefined;
       try {
         // Determine response mode: an explicit override wins; otherwise fall
         // back to the command's default mode.
@@ -608,6 +616,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
           throw signal.reason ?? new AbortError('device response');
         }
 
+        pendingSerial = serialNumber;
         pendingBySequence = responseHandlerMap.get(serialNumber);
         if (!pendingBySequence) {
           pendingBySequence = new Map();
@@ -650,8 +659,8 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
         // handler must not linger.
         // Defensive: with the reads above taken up front no caller code can
         // swap the registered map in between, but never delete another's.
-        if (pendingBySequence && pendingBySequence.size === 0 && responseHandlerMap.get(device.serialNumber) === pendingBySequence) {
-          responseHandlerMap.delete(device.serialNumber);
+        if (pendingSerial !== undefined && pendingBySequence && pendingBySequence.size === 0 && responseHandlerMap.get(pendingSerial) === pendingBySequence) {
+          responseHandlerMap.delete(pendingSerial);
         }
         return rejected(err);
       }
