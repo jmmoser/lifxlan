@@ -515,6 +515,19 @@ describe('client', () => {
     client.dispose();
   });
 
+  test('send() rejects an all-zero-target device whose reply could never correlate', async () => {
+    // The device answers with its real serial, filed under nothing pending.
+    let sends = 0;
+    const client = Client({ defaultTimeoutMs: 0, router: Router({ onSend() { sends++; } }) });
+    const anyDevice = Device({ address: '10.0.0.5', target: new Uint8Array(6) });
+    await assert.rejects(client.send(GetPower(), anyDevice), ValidationError);
+    assert.equal(sends, 0);
+    // Fire-and-forget to whatever is at the address still works.
+    client.sendUnacknowledged(GetPower(), anyDevice);
+    assert.equal(sends, 1);
+    client.dispose();
+  });
+
   test('timeoutMs: 0 disables the timeout for a call', async () => {
     const client = Client({
       defaultTimeoutMs: 1,

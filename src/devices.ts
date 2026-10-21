@@ -210,8 +210,9 @@ export interface DevicesInstance {
    * otherwise the promise settles on a future `register()`, the timeout, the
    * signal, or a `remove()` of the same serial (rejecting with
    * {@link DeviceRemovedError}). The serial number is matched
-   * case-insensitively; one that is not 12 hex digits rejects with
-   * ValidationError, since it could never match. For a synchronous check, use
+   * case-insensitively; one that is not 12 hex digits, or is all zeros (the
+   * broadcast address), rejects with ValidationError, since it could never
+   * match. For a synchronous check, use
    * {@link DevicesInstance.registered}, which is keyed by lowercase serial.
    */
   get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
@@ -406,6 +407,11 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         convertSerialNumberToTarget(serialNumber);
       } catch (err) {
         return Promise.reject(err);
+      }
+      // register() never registers an all-zero target (the broadcast
+      // address), so that serial can never match either.
+      if (serialNumber === '000000000000') {
+        return Promise.reject(new ValidationError('serialNumber', serialNumber, 'the all-zero serial is the broadcast address, never a registered device'));
       }
 
       const knownDevice = knownDevices.get(serialNumber);

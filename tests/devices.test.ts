@@ -608,6 +608,8 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
     await assert.rejects(devices.get('d0:73:d5:12:34:56'), ValidationError);
     await assert.rejects(devices.get('nonexistent'), ValidationError);
+    // Nor the all-zero broadcast serial, which register() never registers.
+    await assert.rejects(devices.get('000000000000'), ValidationError);
     // Uppercase hex is still accepted.
     const device = devices.register(56700, '10.0.0.7', received('d073d5123456'));
     assert.equal(await devices.get('D073D5123456'), device);

@@ -34,6 +34,9 @@ export type { ResponseMode } from './commands/index.js';
 /** Sequence numbers are limited to 0-254. We use 255 for broadcast messages. */
 const SEQUENCE_SPACE = 0xFF;
 
+/** The serial an all-zero target derives to; no device reply ever carries it. */
+const ZERO_SERIAL = '000000000000';
+
 interface PendingHandler {
   handle(type: number, bytes: Uint8Array, offsetRef: { current: number }): void;
   cancel(reason: Error): void;
@@ -566,6 +569,14 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
         // confusing timeout.
         if (ackMode !== 'ack-only' && decode === undefined) {
           throw new ValidationError('command', command.type, `response mode '${ackMode}' requires the command to provide decode or createDecoder`);
+        }
+
+        // An all-zero target reaches whatever device is at the address, but
+        // its reply carries that device's real serial, so it is filed under
+        // a serial nothing here waits on and the exchange could only time
+        // out. Fire-and-forget (sendUnacknowledged) still works for it.
+        if (device.serialNumber === ZERO_SERIAL) {
+          throw new ValidationError('device', device.serialNumber, 'send() needs the device\'s real serial number to correlate its reply; use sendUnacknowledged() for an all-zero target');
         }
 
         pendingBySequence = responseHandlerMap.get(device.serialNumber);
