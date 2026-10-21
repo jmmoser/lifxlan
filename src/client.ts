@@ -73,9 +73,9 @@ function registerHandler<T>(
     pendingBySequence.delete(sequence);
     // Drop the per-device map once it has no pending exchanges so devices
     // that disappear from the network do not leak empty maps.
-    // Only if the registry still holds this exchange's map: a newer send()
-    // may have replaced an emptied one, and deleting that would strand its
-    // pending exchanges.
+    // Defensive: only if the registry still holds this exchange's map. send()
+    // reads caller fields before taking the map, so no caller code can swap
+    // it out meanwhile, but never delete another exchange's map.
     if (pendingBySequence.size === 0 && responseHandlerMap.get(serialNumber) === pendingBySequence) {
       responseHandlerMap.delete(serialNumber);
     }

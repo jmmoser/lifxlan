@@ -893,9 +893,16 @@ describe('devices subscribe', () => {
       expect(devices.register(56700, '10.0.0.20', request(716))).toBeUndefined();
       expect(device?.address).toBe('10.0.0.7');
 
-      // A device's own replies (State types, acks) still update it.
+      // A device's own replies (State types, acks) still update it —
+      // including the common LightState and the non-State* reply types.
       devices.register(56700, '10.0.0.8', request(Type.Acknowledgement));
       expect(device?.address).toBe('10.0.0.8');
+      devices.register(56700, '10.0.0.9', request(Type.LightState));
+      expect(device?.address).toBe('10.0.0.9');
+      devices.register(56700, '10.0.0.10', request(Type.EchoResponse));
+      expect(device?.address).toBe('10.0.0.10');
+      devices.register(56700, '10.0.0.11', request(Type.SensorStateAmbientLight));
+      expect(device?.address).toBe('10.0.0.11');
     });
 
     test('a datagram from an invalid source port (0) is ignored, not thrown', () => {

@@ -246,6 +246,15 @@ describe('openLan (deno)', () => {
     discovery.dispose();
   });
 
+  test('sending through the router throws as soon as close() begins', async () => {
+    // Synchronously, before the read loop has noticed the close.
+    conn = fakeConn();
+    const lan = await openLan({ onSocketError() {} });
+    const closed = lan.close();
+    assert.throws(() => lan.router.send(new Uint8Array(36), 56700, '10.0.0.9'), /socket closed/);
+    await closed;
+  });
+
   test('discovery also ends when the caller closes the raw socket', async () => {
     // lan.socket is the documented escape hatch; closing it ends the read
     // loop, after which no reply could arrive, so sends fail fast as on Node.

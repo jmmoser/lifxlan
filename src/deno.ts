@@ -95,7 +95,11 @@ export interface LanInstance extends AsyncDisposable {
    * module declares) — the escape hatch for anything the options don't
    * cover, such as `socket.addr.port` for the bound port. The background
    * read loop already consumes the socket's async iterator; don't iterate it
-   * yourself.
+   * yourself. Closing it yourself ends the read loop, after which sends
+   * through the router throw; Deno reports the close asynchronously, so a
+   * send in the same tick still goes to the closed socket (its failure
+   * reaches `onSocketError` and a `send()` waits out its timeout). Prefer
+   * `close()`, which takes effect at once.
    */
   readonly socket: DenoDatagramConn;
   /**
