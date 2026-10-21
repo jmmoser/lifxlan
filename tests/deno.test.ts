@@ -26,6 +26,8 @@ interface FakeConn extends DenoDatagramConn {
   /** Delivers a datagram to the helper's read loop, as if it arrived. */
   push(data: Uint8Array, from: DenoNetAddr): void;
   failNextSend(err: Error): void;
+  /** Fails the pending receive, as a receive error ends Deno's read loop. */
+  failReceive(err: Error): void;
   /** Called synchronously for each send; lets a test act as the device. */
   onSend?: (data: Uint8Array, addr: DenoNetAddr) => void;
 }
@@ -53,6 +55,13 @@ function fakeConn(): FakeConn {
     },
     failNextSend(err) {
       nextSendError = err;
+    },
+    failReceive(err) {
+      if (waiter) {
+        const w = waiter;
+        waiter = undefined;
+        w.reject(err);
+      }
     },
     send(data, addr) {
       conn.sent.push({ data, addr });
@@ -253,6 +262,21 @@ describe('openLan (deno)', () => {
     const closed = lan.close();
     assert.throws(() => lan.router.send(new Uint8Array(36), 56700, '10.0.0.9'), /socket closed/);
     await closed;
+  });
+
+  test('a receive error ends reception and makes later sends fail fast', async () => {
+    // Deno's read loop cannot resume after a receive error, so no reply can
+    // arrive: sends must throw (send() rejects at once) rather than wait.
+    conn = fakeConn();
+    const errors: Error[] = [];
+    const lan = await openLan({ onSocketError(err) { errors.push(err); } });
+    await new Promise((resolve) => setTimeout(resolve, 0)); // read loop is waiting
+    conn.failReceive(new Error('ECONNRESET'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(errors.length, 1);
+    const device = Device({ serialNumber: SERIAL, address: DEVICE_ADDR.hostname, port: DEVICE_ADDR.port });
+    await assert.rejects(lan.client.send(GetPower(), device, { timeoutMs: 0 }), /socket closed/);
+    await lan.close();
   });
 
   test('discovery also ends when the caller closes the raw socket', async () => {

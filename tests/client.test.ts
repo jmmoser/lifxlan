@@ -580,35 +580,31 @@ describe('client', () => {
     client.dispose();
   });
 
-  test('a type getter that re-enters send() does not strand the outer exchange either', async () => {
-    // Every caller-supplied field is read before the per-device map is
-    // taken, not only payload.
-    let failNext = false;
-    let reentered = false;
+  test('type/responseType getters that re-enter send() on every read do not strand the outer exchange', async () => {
+    // Every caller-supplied field is read once, before the per-device map
+    // is taken — not only payload. The getters act on every read, so any
+    // later re-read would strand the outer exchange.
+    let inNested = false;
     let outer: Header | undefined;
     const client = Client({
       defaultTimeoutMs: 200,
       router: Router({
         onSend(message) {
-          if (failNext) {
-            failNext = false;
-            throw new Error('transport down');
-          }
+          if (inNested) throw new Error('transport down');
           outer = decodeHeader(message);
         },
       }),
     });
     const nested: Promise<unknown>[] = [];
+    const reenter = () => {
+      if (inNested) return;
+      inNested = true;
+      nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
+      inNested = false;
+    };
     const command: Command<number, 'response'> = {
-      get type() {
-        if (!reentered) {
-          reentered = true;
-          failNext = true;
-          nested.push(client.send(GetPower(), sharedDevice).catch(() => {}));
-        }
-        return Type.GetPower;
-      },
-      responseType: Type.StatePower,
+      get type() { reenter(); return Type.GetPower; },
+      get responseType() { reenter(); return Type.StatePower; },
       decode: GetPower().decode,
       defaultResponseMode: 'response',
     };
