@@ -6,6 +6,7 @@ import { discover } from '../src/discovery.js';
 import { Type } from '../src/constants/index.js';
 import { decodeHeader } from '../src/encoding.js';
 import { received } from './helpers.js';
+import { ValidationError } from '../src/errors.js';
 
 const SERIAL_A = 'd073d5000001';
 const SERIAL_B = 'd073d5000002';
@@ -113,6 +114,33 @@ describe('discovery', () => {
     expect(sent.length).toBeGreaterThanOrEqual(8);
 
     discovery.dispose();
+  });
+
+  test('an interval past the setTimeout range does not flood the network', async () => {
+    // setTimeout runs a delay above 2^31 - 1 ms after ~1ms; unclamped, this
+    // rebroadcast GetService at ~1kHz.
+    const { router, sent } = recordingRouter();
+    const discovery = discover(router, Devices(), { intervalMs: 3e9, maxIntervalMs: Infinity });
+    await sleep(50);
+    expect(sent.length).toBe(1);
+    discovery.dispose();
+  });
+
+  test('a timeoutMs past the setTimeout range does not end discovery at once', async () => {
+    const { router } = recordingRouter();
+    const discovery = discover(router, Devices(), { timeoutMs: 3e9 });
+    const next = discovery.next();
+    const outcome = await Promise.race([next.then(() => 'ended'), sleep(30).then(() => 'running')]);
+    expect(outcome).toBe('running');
+    discovery.dispose();
+    expect((await next).done).toBe(true);
+  });
+
+  test('a NaN interval throws before any network work', () => {
+    const { router, sent } = recordingRouter();
+    expect(() => discover(router, Devices(), { intervalMs: Number.NaN })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
+    expect(sent.length).toBe(0);
   });
 
   test('yields devices registered before the call first, then new registrations', async () => {

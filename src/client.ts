@@ -12,6 +12,7 @@ import {
 
 import {
   PromiseWithResolvers,
+  MAX_TIMER_DELAY_MS,
 } from './utils/index.js';
 
 import {
@@ -97,7 +98,7 @@ function registerHandler<T>(
   // disables it, leaving the signal (or a response) as the only way to settle.
   if (timeoutMs > 0) {
     const timeoutError = new TimeoutError(timeoutMs, 'device response');
-    timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
+    timeout = setTimeout(settleReject.bind(undefined, timeoutError), Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
   }
 
   function checkForCompletion() {

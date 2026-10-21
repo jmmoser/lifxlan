@@ -998,6 +998,24 @@ describe('encoding', () => {
     assert.equal(new DataView(latest.buffer).getBigUint64(48, true), 18446744073709000000n);
   });
 
+  test('uint32 time fields reject values setUint32 would wrap', () => {
+    // -1 would encode as 0xFFFFFFFF: a ~49.7 day transition, a ~136 year HEV cycle.
+    assert.throws(() => Encoding.encodeSetColor(0, 0, 0, 3500, -1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetLightPower(true, -1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetHevCycle(true, -1), /Invalid durationSeconds: -1/);
+    assert.throws(() => Encoding.encodeSetHevCycleConfiguration(true, 2 ** 32), /Invalid durationSeconds/);
+    assert.throws(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, -1, 1, 0, 0), /Invalid period: -1/);
+    assert.throws(() => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, Number.NaN, 1, 0, 0, true, true, true, true), /Invalid period: NaN/);
+    assert.throws(() => Encoding.encodeSetColorZones(0, 7, 0, 0, 0, 3500, -1, 1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetExtendedColorZones(-1, 1, 0, 0, []), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSet64(0, 1, 0, 0, 8, -1, []), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, -1, 0n, new Uint8Array(0)), /Invalid speed: -1/);
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, -1, 0n, 0, 0, 0, 0, []), /Invalid speed: -1/);
+    // The ends of the range encode.
+    assert.equal(new DataView(Encoding.encodeSetColor(0, 0, 0, 3500, 0xFFFFFFFF).buffer).getUint32(9, true), 0xFFFFFFFF);
+    assert.equal(Encoding.encodeSetHevCycle(true, 0).length, 5);
+  });
+
   test('effect encoders reject a duration outside the uint64 range', () => {
     // setBigUint64 would wrap -1n to 2^64 - 1 (an effect that never ends).
     assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, -1n, new Uint8Array(0)), /Invalid duration/);

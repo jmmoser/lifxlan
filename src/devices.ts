@@ -1,5 +1,5 @@
 import { PORT } from './constants/index.js';
-import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers } from './utils/index.js';
+import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers, MAX_TIMER_DELAY_MS } from './utils/index.js';
 import { AbortError, DeviceRemovedError, TimeoutError, ValidationError } from './errors.js';
 
 /**
@@ -413,7 +413,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
       if (timeoutMs > 0) {
         const timeoutError = new TimeoutError(timeoutMs, 'device discovery');
-        timeout = setTimeout(settleReject.bind(undefined, timeoutError), timeoutMs);
+        timeout = setTimeout(settleReject.bind(undefined, timeoutError), Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
       }
 
       const waiters = deviceResolvers.get(serialNumber);

@@ -601,6 +601,16 @@ describe('devices', () => {
     expect(deviceArray.some(d => d.serialNumber === 'deadbeef1234')).toBe(true);
     expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
+
+  test('get() with a timeoutMs past the setTimeout range (Infinity) does not reject at once', async () => {
+    const devices = Devices({ defaultTimeoutMs: Infinity });
+    const controller = new AbortController();
+    const lookup = devices.get('d073d5aa0001', { signal: controller.signal });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const reason = new Error('done waiting');
+    controller.abort(reason);
+    await expect(lookup).rejects.toBe(reason);
+  });
 });
 describe('devices subscribe', () => {
   test('subscriber callbacks fire alongside constructor callbacks', () => {

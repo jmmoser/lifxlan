@@ -479,6 +479,24 @@ describe('client', () => {
     );
   });
 
+  test('a timeoutMs past the setTimeout range (Infinity) does not fire at once', async () => {
+    // setTimeout runs a delay above 2^31 - 1 ms after ~1ms; the client must
+    // clamp it rather than reject with a spurious TimeoutError.
+    const client = Client({ defaultTimeoutMs: Infinity, router: Router({ onSend() {} }) });
+    const controller = new AbortController();
+    const reason = new Error('done waiting');
+    // Observe both rejections up front, so a premature TimeoutError fails
+    // this test instead of surfacing as an unhandled rejection elsewhere.
+    const settled = Promise.all([
+      assert.rejects(client.send(GetPower(), sharedDevice, { signal: controller.signal }), (error) => error === reason),
+      assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 3e9, signal: controller.signal }), (error) => error === reason),
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort(reason);
+    await settled;
+  });
+
   test('timeoutMs: 0 disables the timeout for a call', async () => {
     const client = Client({
       defaultTimeoutMs: 1,

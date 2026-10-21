@@ -9,6 +9,8 @@
 
 import { Client } from './client.js';
 import { GetService } from './commands/device.js';
+import { ValidationError } from './errors.js';
+import { MAX_TIMER_DELAY_MS } from './utils/index.js';
 
 import type { ClientRouter } from './router.js';
 import type { Device, DevicesInstance } from './devices.js';
@@ -103,6 +105,18 @@ export function discover(
 ): DiscoveryInstance {
   const signal = options.signal;
 
+  // Validated before anything is subscribed or sent. NaN survives
+  // Math.max/Math.min and setTimeout runs it as ~1ms, so it would rebroadcast
+  // GetService to the whole LAN at about 1kHz until disposed.
+  const intervalMs = options.intervalMs ?? 1000;
+  const maxIntervalMs = options.maxIntervalMs ?? 60_000;
+  if (Number.isNaN(intervalMs)) {
+    throw new ValidationError('intervalMs', intervalMs, 'must be a number');
+  }
+  if (Number.isNaN(maxIntervalMs)) {
+    throw new ValidationError('maxIntervalMs', maxIntervalMs, 'must be a number');
+  }
+
   const queue: Device[] = [];
   // Every waiter is woken on every event (new device, completion); next()
   // re-checks the queue in a loop, so a wakeup without an item for a given
@@ -174,7 +188,7 @@ export function discover(
 
     const timeoutMs = options.timeoutMs ?? 0;
     if (timeoutMs > 0) {
-      deadline = setTimeout(finish, timeoutMs);
+      deadline = setTimeout(finish, Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
     }
 
     try {
@@ -190,8 +204,12 @@ export function discover(
     // settling at the cap so an open-ended stream left running (to track
     // DHCP changes) is a slow heartbeat, not once-a-second network chatter
     // for every device on the LAN.
-    let delayMs = Math.max(1, options.intervalMs ?? 1000);
-    const maxDelayMs = Math.max(delayMs, options.maxIntervalMs ?? 60_000);
+    // Both are clamped to the largest delay setTimeout honors: past it the
+    // timer fires after ~1ms, so a large maxIntervalMs (Infinity reads
+    // naturally as "keep backing off") would turn the heartbeat into a
+    // broadcast flood once the backoff grew past it.
+    let delayMs = Math.min(Math.max(1, intervalMs), MAX_TIMER_DELAY_MS);
+    const maxDelayMs = Math.min(Math.max(delayMs, maxIntervalMs), MAX_TIMER_DELAY_MS);
     const scheduleBroadcast = () => {
       timer = setTimeout(() => {
         try {

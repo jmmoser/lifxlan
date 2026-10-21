@@ -71,13 +71,26 @@ upgrading is a matter of reading this file.
   decoder waited on zones the device was never asked for, so the call timed
   out.
 - `SetLocation()`/`SetGroup()` throw `ValidationError` for a byte id that is
-  not 16 bytes (a longer one spilled into the label field), for an invalid
+  not 16 bytes (a shorter one was zero-padded, a longer one silently truncated), for an invalid
   `updatedAt` (previously a bare `RangeError`), and for one outside the wire
   field's 1970–2554 range, which silently wrapped to an unrelated timestamp.
   `SetMultiZoneEffect()`/`SetTileEffect()` likewise reject a `duration`
   outside the uint64 range instead of wrapping it (`-1n` encoded as an effect
   that never ends). `EchoRequest()` throws `ValidationError` for more than 64
   bytes instead of a `RangeError`.
+- The uint32 time fields — every `duration`, the waveform `period`, effect
+  `speed`, and the HEV `durationSeconds` — throw `ValidationError` for a
+  negative or out-of-range value instead of wrapping it (`-1` encoded as
+  0xFFFFFFFF: a ~49.7 day transition, or a ~136 year HEV cycle).
+- Timeouts and discovery intervals above 2^31 - 1 ms (about 24.8 days),
+  `Infinity` included, are clamped to that. Node and Bun run a larger
+  `setTimeout` delay after ~1ms instead, so `timeoutMs: Infinity` on `send()`
+  or `devices.get()` rejected with `TimeoutError` at once, a large discovery
+  `timeoutMs` ended discovery at once, and a large `intervalMs` (or a
+  `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
+  the whole LAN about once a millisecond until disposed. `discover()` now
+  throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs`, which
+  flooded the same way.
 - `Get64` throws `ValidationError` for a `tileIndex` outside 0–255 or a
   `tileCount` outside 1–255 or not an integer. These fields are uint8 on the
   wire, and a wrapped value (`tileCount: 256` encodes as 0) or a truncated one
