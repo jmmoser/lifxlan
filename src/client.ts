@@ -299,7 +299,19 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    * in-flight exchanges, throwing SequenceExhaustionError if none is free.
    */
   sendUnacknowledged<T>(command: Command<T, ResponseMode>, device: Device): void;
-
+  /**
+   * Sends a command to a device and resolves with its reply, per the
+   * response mode (see {@link SendOptions.responseMode}).
+   *
+   * Never throws synchronously: every failure surfaces as a rejected promise,
+   * so fan-outs like `Promise.all(devices.map(...))` observe all failures
+   * uniformly — a disposed client, an aborted signal, exhausted sequence
+   * numbers, a throwing transport, a timeout or StateUnhandled reply, and
+   * ValidationError for invalid input: an unknown `responseMode`, a response
+   * mode the command has no decoder for, a NaN or negative `timeoutMs`, or a
+   * device whose target is all zeros (its reply carries the device's real
+   * serial, so it could never correlate — use `sendUnacknowledged()` for it).
+   */
   send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
     command: Command<T, Default>,
     device: Device,
@@ -492,14 +504,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
 
       router.send(bytes, device.port, device.address, device.serialNumber);
     },
-    /**
-     * Send a command to a device with configurable acknowledgment behavior.
-     *
-     * Never throws synchronously: every failure — disposed client, aborted
-     * signal, exhausted sequence numbers, a missing decoder, or a throwing
-     * transport — surfaces as a rejected promise, so fan-outs like
-     * `Promise.all(devices.map(...))` observe all failures uniformly.
-     */
+    // See ClientInstance.send for the contract (never throws synchronously).
     send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
       command: Command<T, Default>,
       device: Device,

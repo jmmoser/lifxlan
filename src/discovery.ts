@@ -105,7 +105,8 @@ export function discover(
 ): DiscoveryInstance {
   const signal = options.signal;
 
-  // Validated before anything is subscribed or sent. A NaN interval
+  // Validated before anything is subscribed or sent, as coerced (the delay
+  // math below coerces, so an untyped '1s' becomes NaN there). A NaN interval
   // survives Math.max/Math.min and setTimeout runs it as ~1ms, so it would
   // rebroadcast GetService to the whole LAN at about 1kHz until disposed; a
   // NaN or negative timeoutMs fails the `> 0` check like 0 and silently
@@ -116,10 +117,10 @@ export function discover(
   if (!(timeoutMs >= 0)) {
     throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
-  if (Number.isNaN(intervalMs)) {
+  if (Number.isNaN(Number(intervalMs))) {
     throw new ValidationError('intervalMs', intervalMs, 'must be a number');
   }
-  if (Number.isNaN(maxIntervalMs)) {
+  if (Number.isNaN(Number(maxIntervalMs))) {
     throw new ValidationError('maxIntervalMs', maxIntervalMs, 'must be a number');
   }
 

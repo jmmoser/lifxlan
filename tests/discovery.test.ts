@@ -168,6 +168,11 @@ describe('discovery', () => {
     expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { timeoutMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { timeoutMs: -1 })).toThrow(ValidationError);
+    // An untyped string coerces to NaN in the delay math just the same.
+    const untyped: { intervalMs?: number } = JSON.parse('{"intervalMs":"1s"}');
+    expect(() => discover(router, Devices(), untyped)).toThrow(ValidationError);
+    const untypedMax: { maxIntervalMs?: number } = JSON.parse('{"maxIntervalMs":"forever"}');
+    expect(() => discover(router, Devices(), untypedMax)).toThrow(ValidationError);
     expect(sent.length).toBe(0);
   });
 

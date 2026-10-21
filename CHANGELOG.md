@@ -91,8 +91,9 @@ upgrading is a matter of reading this file.
   `timeoutMs` ended discovery at once, and a large `intervalMs` (or a
   `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
   the whole LAN about once a millisecond until disposed. `discover()` now
-  throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs`, which
-  flooded the same way.
+  throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs` (or an
+  untyped value such as `'1s'` that coerces to one), which flooded the same
+  way.
 - `openLan()` (`lifxlan/node`) closes its socket when `bind()` throws
   synchronously (e.g. a non-string `address` from an untyped caller), not
   only when binding fails asynchronously. `discover()` leaves no registry

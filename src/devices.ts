@@ -68,7 +68,9 @@ interface DeviceConfigBase {
  * correlates a reply with its request. Provide the serial number (the
  * 12-hex-digit MAC printed on the device, in either case), the 6-byte wire
  * target, or both (which must then name the same device); an address alone
- * would send fine but could never match a reply.
+ * would send fine but could never match a reply. For the same reason an
+ * all-zero target (whatever device is at the address) works only with
+ * `sendUnacknowledged()`; `send()` rejects it.
  */
 export type DeviceConfig =
   | (DeviceConfigBase & { serialNumber: string; target?: Uint8Array })
