@@ -55,6 +55,10 @@ export type DeviceConfig =
   | (DeviceConfigBase & { serialNumber: string; target?: Uint8Array })
   | (DeviceConfigBase & { target: Uint8Array; serialNumber?: string });
 
+function isValidPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
 function isZeroTarget(target: Uint8Array): boolean {
   for (let i = 0; i < target.length; i++) {
     if (target[i] !== 0) return false;
@@ -71,7 +75,7 @@ function createDevice(config: DeviceConfig): MutableDevice {
     throw new ValidationError('address', config.address, 'is required');
   }
 
-  if (config.port !== undefined && (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535)) {
+  if (config.port !== undefined && !isValidPort(config.port)) {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
 
@@ -166,7 +170,8 @@ export interface DevicesInstance {
    * is registered and `undefined` is returned. A message whose target is all
    * zeros is also ignored (returning `undefined`): that is the broadcast
    * address, used by other controllers' GetService broadcasts, not a device
-   * identity. Re-registering a known serial at a new port/address updates it
+   * identity. So is one whose `port` is not a valid UDP port (a datagram from
+   * source port 0), since nothing could be sent back to it. Re-registering a known serial at a new port/address updates it
    * in place and emits `onChanged`.
    */
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
@@ -289,6 +294,14 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
     // bound to 56700 sees every other controller's tagged GetService, and
     // registering those would plant a phantom serial 000000000000.
     if (isZeroTarget(received.header.target)) {
+      return undefined;
+    }
+    // register() runs inside the socket's receive path, and anyone on the
+    // LAN can send from UDP source port 0: throwing there (createDevice
+    // rejects the port) is an uncaught exception on Node and ends the Deno
+    // read loop, and updating a known device to it would re-address every
+    // later send to an unusable port. Ignore the datagram instead.
+    if (!isValidPort(port)) {
       return undefined;
     }
     const device = registerDevice(received.serialNumber, port, address, received.header.target);

@@ -116,6 +116,12 @@ upgrading is a matter of reading this file.
   a fraction of a tile, so the call always timed out.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check.
+- `devices.register()` ignores a datagram from an invalid source port (UDP
+  allows port 0, and anyone on the LAN can send one) instead of throwing.
+  The throw came out of the socket's receive path: an uncaught exception that
+  crashed a `lifxlan/node` process, and the end of all reception for
+  `lifxlan/deno`. Such a datagram from a known device also no longer
+  re-addresses it to an unusable port.
 - A truncated `StateUnhandled` packet, which anyone on the LAN can send, no
   longer throws out of `router.receive()` inside the socket's receive path; it
   rejects the exchange it targets instead.

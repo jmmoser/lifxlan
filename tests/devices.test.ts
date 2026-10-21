@@ -604,9 +604,12 @@ describe('devices', () => {
 
   test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
     expect(() => Devices({ defaultTimeoutMs: Number.NaN })).toThrow(ValidationError);
-    await expect(Devices().get('d073d5aa0001', { timeoutMs: Number.NaN })).rejects.toThrow(ValidationError);
+    // assert.rejects, not expect().rejects: on a regression the lookup never
+    // settles, and Bun's expect().rejects then hangs the run instead of
+    // failing at the test timeout.
+    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
     expect(() => Devices({ defaultTimeoutMs: -1 })).toThrow(ValidationError);
-    await expect(Devices().get('d073d5aa0001', { timeoutMs: -5 })).rejects.toThrow(ValidationError);
+    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: -5 }), ValidationError);
   });
 
   test('get() with a timeoutMs past the setTimeout range (Infinity) does not reject at once', async () => {
@@ -821,6 +824,24 @@ describe('devices subscribe', () => {
       expect(device?.serialNumber).toBe('d073d5aa0001');
       expect(device?.target).toEqual(target);
       expect(devices.registered.get('d073d5aa0001')).toBe(device);
+    });
+
+    test('a datagram from an invalid source port (0) is ignored, not thrown', () => {
+      // register() runs in the socket receive path; a throw there crashes
+      // Node and ends Deno's read loop, and anyone can send from port 0.
+      const changed: string[] = [];
+      const devices = Devices({ onChanged: (device) => changed.push(device.address) });
+
+      expect(devices.register(0, '10.0.0.7', received('d073d5aa0001'))).toBeUndefined();
+      expect(devices.registered.size).toBe(0);
+
+      // A known device is not re-addressed to an unusable port either.
+      const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      expect(devices.register(0, '10.0.0.9', received('d073d5aa0001'))).toBeUndefined();
+      expect(devices.register(Number.NaN, '10.0.0.9', received('d073d5aa0001'))).toBeUndefined();
+      expect(device?.port).toBe(56700);
+      expect(device?.address).toBe('10.0.0.7');
+      expect(changed).toEqual([]);
     });
 
     test('an undefined result (malformed packet) registers nothing', () => {
