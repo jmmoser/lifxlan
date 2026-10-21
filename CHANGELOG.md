@@ -43,10 +43,12 @@ upgrading is a matter of reading this file.
 - Input that used to be accepted, and silently misbehaved, now throws (or,
   from `send()`/`devices.get()`, rejects) with `ValidationError`; see Fixed
   below for each case. In short: a `NaN`, negative, or non-number timeout;
-  a non-positive or non-number discovery `intervalMs`; a `signal` that is
-  not an `AbortSignal`; out-of-range uint32/uint64 time fields and dates
-  (including `NaN` durations); `GetColorZones`/`Get64` indices past the uint8
-  wire range; a location/group byte id that is not 16 bytes and an echo
+  a non-positive or non-number discovery `intervalMs`, or a `NaN` or
+  non-number `maxIntervalMs`; a `signal` that is not an `AbortSignal`;
+  out-of-range uint32/uint64 time fields and dates (including `NaN` or
+  omitted durations and periods from untyped callers); `GetColorZones`/`Get64`
+  indices past the uint8 wire range, a fractional `Get64` `tileCount`, and a
+  `Get64` range past tile 255; a location/group byte id that is not 16 bytes and an echo
   payload over 64 bytes; a `devices.get()` serial that is not 12 hex digits
   (or is all zeros); `send()` to an all-zero target; a `NaN` or fractional
   `Device()` port. `devices.register()` also now ignores request-type
@@ -162,10 +164,16 @@ upgrading is a matter of reading this file.
 - `devices.get()` validates its `timeoutMs` even when the device is already
   registered, so a bad timeout surfaces at once rather than only once a
   device goes missing.
-- On `lifxlan/deno`, `discover()` ends once `close()` begins, as on Node.
-  Deno's async `send()` only rejected on a closed socket, so discovery never
-  saw a throwing transport and kept rebroadcasting (and the process stayed
-  alive) after `close()`.
+- On `lifxlan/deno`, the router's transport throws synchronously once
+  `close()` begins or the read loop ends (e.g. the caller closed
+  `lan.socket`), as `node:dgram` does on a closed socket. Deno's async
+  `send()` only rejected, so `discover()` never saw a throwing transport and
+  kept rebroadcasting (holding the process open), and `send()` waited for its
+  timeout. Any client's `broadcast()`/`sendUnacknowledged()` through that
+  router now throws at that point, and `send()` rejects at once.
+- `SetHevCycle()` and `SetHevCycleConfiguration()` default `durationSeconds`
+  to 0 (the device's configured default), so `SetHevCycle(false)` needs no
+  meaningless duration; an omitted one previously encoded 0 by accident.
 - `devices.register()` registers only from message types devices send (State
   replies, `Acknowledgement`, `EchoResponse`) and ignores everything else. A
   socket bound to 56700 also receives other controllers' requests, including

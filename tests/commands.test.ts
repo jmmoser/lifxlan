@@ -559,6 +559,12 @@ describe('commands', () => {
     assert.equal(Commands.Get64({ tileIndex: 0, tileCount: 255 }).type, Type.Get64);
   });
 
+  test('SetHevCycle and SetHevCycleConfiguration default durationSeconds to 0', () => {
+    // Turning HEV off needs no duration; 0 means the configured default.
+    assert.deepEqual(Commands.SetHevCycle(false).payload, new Uint8Array([0, 0, 0, 0, 0]));
+    assert.deepEqual(Commands.SetHevCycleConfiguration(true).payload, new Uint8Array([1, 0, 0, 0, 0]));
+  });
+
   test('GetColorZones rejects indices outside the uint8 wire range', () => {
     // 256 would encode as 0 while the decoder waited on zones 1..255.
     assert.throws(() => Commands.GetColorZones({ startIndex: 0, endIndex: 256 }), /Invalid endIndex: 256/);

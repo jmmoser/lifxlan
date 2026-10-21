@@ -149,13 +149,16 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
   const onSocketError = options.onSocketError;
 
   let closing = false;
+  let readEnded = false;
 
   const router = Router({
     onSend(message, port, address) {
       // Deno's send() is async, so a closed socket only rejects; throw
       // synchronously instead, as node:dgram does, so senders that stop on a
-      // throwing transport (discover()) end once close() has begun.
-      if (closing) {
+      // throwing transport (discover()) end — once close() has begun, or
+      // once the read loop has ended (the caller closed the raw socket, or
+      // reception failed), since no reply could arrive then anyway.
+      if (closing || readEnded) {
         throw new Error('socket closed');
       }
       // A rejection here would otherwise be an unhandled promise rejection
@@ -196,6 +199,8 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       // socket.close() interrupts the iterator with BadResource — that's
       // normal shutdown. Anything else ended reception unexpectedly.
       if (!closing && onSocketError) onSocketError(toError(err));
+    } finally {
+      readEnded = true;
     }
   })();
 

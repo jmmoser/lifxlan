@@ -246,6 +246,20 @@ describe('openLan (deno)', () => {
     discovery.dispose();
   });
 
+  test('discovery also ends when the caller closes the raw socket', async () => {
+    // lan.socket is the documented escape hatch; closing it ends the read
+    // loop, after which no reply could arrive, so sends fail fast as on Node.
+    conn = fakeConn();
+    const lan = await openLan({ onSocketError() {} });
+    const discovery = discover(lan.router, lan.devices, { intervalMs: 5, maxIntervalMs: 5 });
+    const next = discovery.next();
+    lan.socket.close();
+    const outcome = await Promise.race([next, new Promise((resolve) => setTimeout(() => resolve('still running'), 100))]);
+    assert.deepEqual(outcome, { value: undefined, done: true });
+    discovery.dispose();
+    await lan.close();
+  });
+
   test('async send failures route to onSocketError instead of rejecting anything', async () => {
     conn = fakeConn();
     const errors: Error[] = [];
