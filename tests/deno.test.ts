@@ -69,9 +69,9 @@ function fakeConn(): FakeConn {
       if (waiter) {
         const w = waiter;
         waiter = undefined;
-        // Matches Deno, where close() interrupts a pending iteration with
-        // a BadResource error rather than ending it cleanly.
-        w.reject(new Error('BadResource: socket closed'));
+        // Matches Deno: DatagramConn's async iterator catches the
+        // BadResource/Interrupted error close() causes and ends cleanly.
+        w.resolve({ value: undefined, done: true });
       }
     },
     [Symbol.asyncIterator]() {
@@ -79,7 +79,7 @@ function fakeConn(): FakeConn {
         next(): Promise<IteratorResult<[Uint8Array, DenoNetAddr]>> {
           const item = queue.shift();
           if (item) return Promise.resolve({ value: item, done: false });
-          if (closed) return Promise.reject(new Error('BadResource: socket closed'));
+          if (closed) return Promise.resolve({ value: undefined, done: true });
           return new Promise((resolve, reject) => {
             waiter = { resolve, reject };
           });

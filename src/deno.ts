@@ -202,8 +202,10 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
         devices.register(remote.port, remote.hostname, router.receive(message));
       }
     } catch (err) {
-      // socket.close() interrupts the iterator with BadResource — that's
-      // normal shutdown. Anything else ended reception unexpectedly.
+      // Deno's iterator ends cleanly on close(); should a version instead
+      // surface the BadResource, that's still normal shutdown. Anything
+      // else ended reception unexpectedly. Either way the loop has ended,
+      // which the finally records for onSend.
       if (!closing && onSocketError) onSocketError(toError(err));
     } finally {
       readEnded = true;

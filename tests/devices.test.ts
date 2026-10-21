@@ -903,6 +903,8 @@ describe('devices subscribe', () => {
       expect(device?.address).toBe('10.0.0.10');
       devices.register(56700, '10.0.0.11', request(Type.SensorStateAmbientLight));
       expect(device?.address).toBe('10.0.0.11');
+      devices.register(56700, '10.0.0.12', request(Type.StateUnhandled));
+      expect(device?.address).toBe('10.0.0.12');
     });
 
     test('a datagram from an invalid source port (0) is ignored, not thrown', () => {

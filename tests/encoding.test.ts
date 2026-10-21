@@ -1023,6 +1023,9 @@ describe('encoding', () => {
     // setBigUint64 would wrap -1n to 2^64 - 1 (an effect that never ends).
     assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, -1n, new Uint8Array(0)), /Invalid duration/);
     assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n, 0, 0, 0, 0, []), /Invalid duration/);
+    // Both ends of the uint64 range encode (0n means "run until stopped").
+    assert.equal(new DataView(Encoding.encodeSetMultiZoneEffect(1, 1, 1000, 0n, new Uint8Array(0)).buffer).getBigUint64(11, true), 0n);
+    assert.equal(new DataView(Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n - 1n, 0, 0, 0, 0, []).buffer).getBigUint64(11, true), 2n ** 64n - 1n);
     // An untyped omitted or number duration is a ValidationError too, not a
     // bare TypeError from setBigUint64.
     // @ts-expect-error -- an untyped caller omitting the bigint duration
