@@ -116,6 +116,13 @@ upgrading is a matter of reading this file.
   a fraction of a tile, so the call always timed out.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check.
+- `devices.register()` ignores requests (Get/Set message types). A socket bound
+  to 56700 also receives other controllers' requests, including targeted ones
+  broadcast to reach a device by serial; their target names the device but
+  their sender is the controller, so registering from them re-addressed the
+  device to the other controller and every later `send()` timed out.
+  `RegistrationMessage.header` gains an optional `type` for this; a custom
+  pipeline that omits it keeps the previous behavior.
 - `devices.register()` ignores a datagram from an invalid source port (UDP
   allows port 0, and anyone on the LAN can send one) instead of throwing.
   The throw came out of the socket's receive path: an uncaught exception that

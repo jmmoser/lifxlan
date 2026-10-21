@@ -826,6 +826,28 @@ describe('devices subscribe', () => {
       expect(devices.registered.get('d073d5aa0001')).toBe(device);
     });
 
+    test('a request another controller sent to a device does not register or re-address it', () => {
+      // A socket bound to 56700 also sees other controllers' targeted
+      // requests: their target names the device, but the sender is the
+      // controller.
+      const router = Router({ onSend() {} });
+      const request = (type: number) => router.receive(encode(false, 7, target, false, true, 0, type, new Uint8Array(13)));
+      const changed: string[] = [];
+      const devices = Devices({ onChanged: (device) => changed.push(device.address) });
+
+      expect(devices.register(56700, '10.0.0.20', request(Type.GetColor))).toBeUndefined();
+      expect(devices.registered.size).toBe(0);
+
+      const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+      expect(devices.register(56700, '10.0.0.20', request(Type.SetColor))).toBeUndefined();
+      expect(device?.address).toBe('10.0.0.7');
+      expect(changed).toEqual([]);
+
+      // A device's own replies (State types, acks) still update it.
+      devices.register(56700, '10.0.0.8', request(Type.Acknowledgement));
+      expect(device?.address).toBe('10.0.0.8');
+    });
+
     test('a datagram from an invalid source port (0) is ignored, not thrown', () => {
       // register() runs in the socket receive path; a throw there crashes
       // Node and ends Deno's read loop, and anyone can send from port 0.
