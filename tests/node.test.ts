@@ -181,15 +181,18 @@ describe('openLan', () => {
     }
   });
 
-  test('a NaN defaultTimeoutMs rejects without holding the port', async () => {
-    const probe = dgram.createSocket('udp4');
-    const port = await bind(probe);
-    await closeSocket(probe);
-
-    await assert.rejects(openLan({ port, address: '127.0.0.1', defaultTimeoutMs: Number.NaN }), ValidationError);
-    // The rejected call released its socket: the same port binds again.
-    const lan = await openLan({ port, address: '127.0.0.1' });
-    await lan.close();
+  test('a NaN defaultTimeoutMs rejects and closes the socket', async () => {
+    const create = spyOn(dgram, 'createSocket');
+    try {
+      await assert.rejects(openLan({ defaultTimeoutMs: Number.NaN }), ValidationError);
+      const created = create.mock.results[0];
+      assert.ok(created !== undefined && created.type === 'return');
+      const socket: dgram.Socket = created.value;
+      // Closing an already-closed dgram socket throws.
+      assert.throws(() => socket.close());
+    } finally {
+      create.mockRestore();
+    }
   });
 
   test('a bind() that throws synchronously still closes the socket', async () => {

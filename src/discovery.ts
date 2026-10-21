@@ -108,12 +108,13 @@ export function discover(
   // Validated before anything is subscribed or sent. A NaN interval
   // survives Math.max/Math.min and setTimeout runs it as ~1ms, so it would
   // rebroadcast GetService to the whole LAN at about 1kHz until disposed; a
-  // NaN timeoutMs fails the `> 0` check like 0 and silently disables it.
+  // NaN or negative timeoutMs fails the `> 0` check like 0 and silently
+  // disables it.
   const intervalMs = options.intervalMs ?? 1000;
   const maxIntervalMs = options.maxIntervalMs ?? 60_000;
   const timeoutMs = options.timeoutMs ?? 0;
-  if (Number.isNaN(timeoutMs)) {
-    throw new ValidationError('timeoutMs', timeoutMs, 'must be a number (0 disables the timeout)');
+  if (!(timeoutMs >= 0)) {
+    throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
   if (Number.isNaN(intervalMs)) {
     throw new ValidationError('intervalMs', intervalMs, 'must be a number');

@@ -101,12 +101,13 @@ upgrading is a matter of reading this file.
   `discover()` also arms no broadcast timer when its initial broadcast ends
   discovery (e.g. `onSend` aborting the signal); that timer was never
   cleared and held the process open for up to a full interval.
-- A `NaN` timeout — `defaultTimeoutMs` on `Client()`/`Devices()`/`openLan()`,
-  or `timeoutMs` on `send()`, `devices.get()`, or `discover()` — is rejected
-  with `ValidationError` (a rejected promise from `send()`/`get()`). Before,
-  it failed the `> 0` arming check exactly like the documented `0` and
-  silently disabled the timeout, so e.g. `Number()` of an unset environment
-  variable left every lost packet pending forever.
+- A `NaN` or negative timeout — `defaultTimeoutMs` on
+  `Client()`/`Devices()`/`openLan()`, or `timeoutMs` on `send()`,
+  `devices.get()`, or `discover()` — is rejected with `ValidationError` (a
+  rejected promise from `send()`/`get()`). Before, it failed the `> 0` arming
+  check exactly like the documented `0` and silently disabled the timeout, so
+  e.g. `Number()` of an unset environment variable, or a spent
+  `deadline - Date.now()` budget, left every lost packet pending forever.
 - `Get64` throws `ValidationError` for a `tileIndex` outside 0–255 or a
   `tileCount` outside 1–255 or not an integer. These fields are uint8 on the
   wire, and the decoder compared replies against the unwrapped values: a

@@ -162,11 +162,12 @@ describe('discovery', () => {
     expect((await next).done).toBe(true);
   });
 
-  test('a NaN interval or timeout throws before any network work', () => {
+  test('a NaN interval or a NaN/negative timeout throws before any network work', () => {
     const { router, sent } = recordingRouter();
     expect(() => discover(router, Devices(), { intervalMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { timeoutMs: Number.NaN })).toThrow(ValidationError);
+    expect(() => discover(router, Devices(), { timeoutMs: -1 })).toThrow(ValidationError);
     expect(sent.length).toBe(0);
   });
 

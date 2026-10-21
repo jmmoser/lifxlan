@@ -602,9 +602,11 @@ describe('devices', () => {
     expect(deviceArray.some(d => d.serialNumber === 'cafebabe5678')).toBe(true);
   });
 
-  test('a NaN timeout is rejected instead of silently disabling the timeout', async () => {
+  test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
     expect(() => Devices({ defaultTimeoutMs: Number.NaN })).toThrow(ValidationError);
     await expect(Devices().get('d073d5aa0001', { timeoutMs: Number.NaN })).rejects.toThrow(ValidationError);
+    expect(() => Devices({ defaultTimeoutMs: -1 })).toThrow(ValidationError);
+    await expect(Devices().get('d073d5aa0001', { timeoutMs: -5 })).rejects.toThrow(ValidationError);
   });
 
   test('get() with a timeoutMs past the setTimeout range (Infinity) does not reject at once', async () => {

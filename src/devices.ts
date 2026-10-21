@@ -208,10 +208,11 @@ interface ListenerRecord {
 
 export function Devices(options: DevicesOptions = {}): DevicesInstance {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
-  // NaN fails the `> 0` arming check exactly like the documented 0, so it
-  // would silently disable the timeout and leave lookups pending forever.
-  if (Number.isNaN(defaultTimeoutMs)) {
-    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a number (0 disables the timeout)');
+  // NaN and negative values fail the `> 0` arming check exactly like the
+  // documented 0, so they would silently disable the timeout and leave
+  // lookups pending forever.
+  if (!(defaultTimeoutMs >= 0)) {
+    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
 
   const knownDevices = new Map<string, MutableDevice>();
@@ -365,8 +366,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
 
       const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-      if (Number.isNaN(timeoutMs)) {
-        return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a number (0 disables the timeout)'));
+      if (!(timeoutMs >= 0)) {
+        return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)'));
       }
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
@@ -415,7 +416,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       // The timeout and the signal are independent: a device that never
       // appears must not hang the caller just because they passed a
       // cancellation signal, so the timeout arms whether or not a signal is
-      // present. A timeoutMs <= 0 disables it.
+      // present. A timeoutMs of 0 disables it.
       if (signal) {
         signal.addEventListener('abort', onAbort, { once: true });
       }

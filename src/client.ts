@@ -94,7 +94,7 @@ function registerHandler<T>(
   }
   // The timeout and the signal are independent: a lost UDP packet must not
   // hang the caller just because they passed a cancellation signal, so the
-  // timeout arms whether or not a signal is present. A timeoutMs <= 0
+  // timeout arms whether or not a signal is present. A timeoutMs of 0
   // disables it, leaving the signal (or a response) as the only way to settle.
   if (timeoutMs > 0) {
     const timeoutError = new TimeoutError(timeoutMs, 'device response');
@@ -321,11 +321,12 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
  */
 export function Client<R extends ClientRouter>(options: ClientOptions<R>): ClientInstance<R> {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
-  // NaN fails the `> 0` arming check exactly like the documented 0, so a
-  // NaN (e.g. Number() of an unset environment variable) would silently
-  // disable the timeout and leave every lost packet pending forever.
-  if (Number.isNaN(defaultTimeoutMs)) {
-    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a number (0 disables the timeout)');
+  // NaN and negative values fail the `> 0` arming check exactly like the
+  // documented 0, so a NaN (e.g. Number() of an unset environment variable)
+  // or a spent budget (`deadline - Date.now()`) would silently disable the
+  // timeout and leave every lost packet pending forever.
+  if (!(defaultTimeoutMs >= 0)) {
+    throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
   const { router } = options;
 
@@ -551,8 +552,8 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
         }
 
         const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-        if (Number.isNaN(timeoutMs)) {
-          throw new ValidationError('timeoutMs', timeoutMs, 'must be a number (0 disables the timeout)');
+        if (!(timeoutMs >= 0)) {
+          throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
         }
 
         // A createDecoder command gets a fresh decoder per exchange so commands

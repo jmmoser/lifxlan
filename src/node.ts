@@ -144,7 +144,8 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
   });
 
   // Created before the socket is bound, so a rejected option (a NaN
-  // defaultTimeoutMs) releases the socket instead of leaking it.
+  // defaultTimeoutMs) fails before the port is taken; the socket is closed
+  // on that path all the same.
   let client: ClientInstance;
   try {
     client = options.defaultTimeoutMs === undefined

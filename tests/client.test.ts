@@ -499,7 +499,7 @@ describe('client', () => {
     await settled;
   });
 
-  test('a NaN timeout is rejected instead of silently disabling the timeout', async () => {
+  test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
     // NaN fails the `> 0` arming check like 0, so a lost packet would leave
     // the call pending forever.
     assert.throws(() => Client({ defaultTimeoutMs: Number.NaN, router: Router({ onSend() {} }) }), ValidationError);
@@ -507,6 +507,10 @@ describe('client', () => {
     let sends = 0;
     const client = Client({ router: Router({ onSend() { sends++; } }) });
     await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: Number.NaN }), ValidationError);
+    // A negative value (a spent `deadline - Date.now()` budget) fails the
+    // same check.
+    assert.throws(() => Client({ defaultTimeoutMs: -1, router: Router({ onSend() {} }) }), ValidationError);
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: -5 }), ValidationError);
     assert.equal(sends, 0);
     client.dispose();
   });
