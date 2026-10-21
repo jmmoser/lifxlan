@@ -10,6 +10,7 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { openLan, type DenoDatagramConn, type DenoNetAddr } from '../src/deno.js';
+import { discover } from '../src/discovery.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
 import { encode, decodeHeader } from '../src/encoding.js';
@@ -228,6 +229,21 @@ describe('openLan (deno)', () => {
     assert.equal(errors.length, 0); // close() interrupting the loop is not an error
     assert.equal(typeof lan[Symbol.asyncDispose], 'function');
     await lan[Symbol.asyncDispose]();
+  });
+
+  test('discovery ends once close() begins instead of rebroadcasting forever', async () => {
+    // Deno's send() is async, so a closed socket only rejects; onSend must
+    // throw synchronously (as node:dgram does) for discover() to notice.
+    conn = fakeConn();
+    const lan = await openLan({ onSocketError() {} });
+    const discovery = discover(lan.router, lan.devices, { intervalMs: 5, maxIntervalMs: 5 });
+    const next = discovery.next();
+    await lan.close();
+    const sentAtClose = conn.sent.length;
+    const outcome = await Promise.race([next, new Promise((resolve) => setTimeout(() => resolve('still running'), 100))]);
+    assert.deepEqual(outcome, { value: undefined, done: true });
+    assert.ok(conn.sent.length <= sentAtClose + 1);
+    discovery.dispose();
   });
 
   test('async send failures route to onSocketError instead of rejecting anything', async () => {

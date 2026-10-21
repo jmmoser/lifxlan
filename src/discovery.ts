@@ -119,14 +119,15 @@ export function discover(
   if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
     throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
-  // Zero and negative intervals are rejected too: they clamp to 1ms below,
+  // A zero or negative intervalMs is rejected too: it clamps to 1ms below,
   // and unlike timeoutMs (where 0 disables) a 0 meant as "no repeat" would
-  // rebroadcast to the LAN at ~1kHz.
+  // rebroadcast to the LAN at ~1kHz. A low maxIntervalMs is harmless — it is
+  // clamped up to intervalMs — so only a non-number or NaN is rejected.
   if (!(typeof intervalMs === 'number' && intervalMs > 0)) {
     throw new ValidationError('intervalMs', intervalMs, 'must be a positive number');
   }
-  if (!(typeof maxIntervalMs === 'number' && maxIntervalMs > 0)) {
-    throw new ValidationError('maxIntervalMs', maxIntervalMs, 'must be a positive number');
+  if (typeof maxIntervalMs !== 'number' || Number.isNaN(maxIntervalMs)) {
+    throw new ValidationError('maxIntervalMs', maxIntervalMs, 'must be a number');
   }
   // A non-signal (e.g. an AbortController passed in place of its .signal)
   // would otherwise throw from addEventListener after the client and the

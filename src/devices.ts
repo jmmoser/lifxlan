@@ -96,7 +96,10 @@ function createDevice(config: DeviceConfig): MutableDevice {
     throw new ValidationError('address', config.address, 'is required');
   }
 
-  if (config.port !== undefined && !isValidPort(config.port)) {
+  // Number(): an untyped numeric string (e.g. process.env.LIFX_PORT) is
+  // accepted as before and stored as the number the type promises.
+  const port = config.port === undefined ? PORT : Number(config.port);
+  if (!isValidPort(port)) {
     throw new ValidationError('port', config.port, 'must be between 1 and 65535');
   }
 
@@ -140,7 +143,7 @@ function createDevice(config: DeviceConfig): MutableDevice {
 
   return {
     address: config.address,
-    port: config.port ?? PORT,
+    port,
     target,
     serialNumber,
   };
@@ -428,15 +431,18 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         return Promise.reject(new ValidationError('serialNumber', serialNumber, 'the all-zero serial is the broadcast address, never a registered device'));
       }
 
+      // Validated even when the device is already known, so a bad timeout
+      // surfaces at once rather than only once a device goes missing.
+      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+      if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
+        return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)'));
+      }
+
       const knownDevice = knownDevices.get(serialNumber);
       if (knownDevice) {
         return Promise.resolve(knownDevice);
       }
 
-      const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-      if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
-        return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)'));
-      }
 
       const { resolve, reject, promise } = PromiseWithResolvers<Device>();
 

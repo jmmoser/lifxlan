@@ -182,7 +182,9 @@ describe('discovery', () => {
     // a 1ms rebroadcast loop.
     expect(() => discover(router, Devices(), { intervalMs: 0, maxIntervalMs: 0 })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { intervalMs: -1000 })).toThrow(ValidationError);
-    expect(() => discover(router, Devices(), { maxIntervalMs: 0 })).toThrow(ValidationError);
+    // A low maxIntervalMs is harmless — clamped up to intervalMs — and was
+    // accepted before, so it still is (on its own router: it broadcasts).
+    discover(recordingRouter().router, Devices(), { maxIntervalMs: 0 }).dispose();
     // @ts-expect-error -- an untyped caller passing a bigint
     expect(() => discover(router, Devices(), { timeoutMs: 5000n })).toThrow(ValidationError);
     expect(sent.length).toBe(0);

@@ -40,6 +40,17 @@ upgrading is a matter of reading this file.
   another serial, so every `send()` timed out.
 - `router.register(handler, source)` rejects a non-integer `source` with a
   `ValidationError`.
+- Input that used to be accepted, and silently misbehaved, now throws (or,
+  from `send()`/`devices.get()`, rejects) with `ValidationError`; see Fixed
+  below for each case. In short: a `NaN`, negative, or non-number timeout;
+  a non-positive or non-number discovery `intervalMs`; a `signal` that is
+  not an `AbortSignal`; out-of-range uint32/uint64 time fields and dates
+  (including `NaN` durations); `GetColorZones`/`Get64` indices past the uint8
+  wire range; a location/group byte id that is not 16 bytes and an echo
+  payload over 64 bytes; a `devices.get()` serial that is not 12 hex digits
+  (or is all zeros); `send()` to an all-zero target; a `NaN` or fractional
+  `Device()` port. `devices.register()` also now ignores request-type
+  messages, invalid source ports, and message types missing from `Type`.
 
 ### Added
 
@@ -82,8 +93,9 @@ upgrading is a matter of reading this file.
   bytes instead of a `RangeError`.
 - The uint32 time fields — every `duration`, the waveform `period`, effect
   `speed`, and the HEV `durationSeconds` — throw `ValidationError` for a
-  negative or out-of-range value instead of wrapping it (`-1` encoded as
-  0xFFFFFFFF: a ~49.7 day transition, or a ~136 year HEV cycle).
+  negative, out-of-range, or `NaN` value instead of wrapping it (`-1` encoded
+  as 0xFFFFFFFF: a ~49.7 day transition, or a ~136 year HEV cycle; `NaN`
+  silently encoded 0, an instant transition).
 - Timeouts and discovery intervals above 2^31 - 1 ms (about 24.8 days),
   `Infinity` included, are clamped to that. Node and Bun run a larger
   `setTimeout` delay after ~1ms instead, so `timeoutMs: Infinity` on `send()`
@@ -91,11 +103,12 @@ upgrading is a matter of reading this file.
   `timeoutMs` ended discovery at once, and a large `intervalMs` (or a
   `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
   the whole LAN about once a millisecond until disposed. `discover()` now
-  throws `ValidationError` for an `intervalMs` or `maxIntervalMs` that is not
-  a positive number — `NaN` or an untyped non-number such as `'1s'` (which
-  became NaN in the delay math), but also `0` or a negative value, which was
-  clamped to 1ms — since each flooded the same way. Unlike `timeoutMs`, an
-  interval of `0` never meant "disabled".
+  throws `ValidationError` for an `intervalMs` that is not a positive number
+  — `NaN` or an untyped non-number such as `'1s'` (which became NaN in the
+  delay math), but also `0` or a negative value, which was clamped to 1ms —
+  since each flooded the same way (unlike `timeoutMs`, an interval of `0`
+  never meant "disabled"); and for a `maxIntervalMs` that is `NaN` or not a
+  number. A low `maxIntervalMs` is still clamped up to `intervalMs`.
 - `openLan()` (`lifxlan/node`) closes its socket when `bind()` throws
   synchronously (e.g. a non-string `address` from an untyped caller), not
   only when binding fails asynchronously. `discover()` leaves no registry
@@ -144,7 +157,15 @@ upgrading is a matter of reading this file.
   packet went out and the call waited for its timeout, or forever with
   `timeoutMs: 0`.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
-  range check.
+  range check. An untyped numeric string (e.g. `process.env.LIFX_PORT`),
+  which worked before, is accepted and stored as a number.
+- `devices.get()` validates its `timeoutMs` even when the device is already
+  registered, so a bad timeout surfaces at once rather than only once a
+  device goes missing.
+- On `lifxlan/deno`, `discover()` ends once `close()` begins, as on Node.
+  Deno's async `send()` only rejected on a closed socket, so discovery never
+  saw a throwing transport and kept rebroadcasting (and the process stayed
+  alive) after `close()`.
 - `devices.register()` registers only from message types devices send (State
   replies, `Acknowledgement`, `EchoResponse`) and ignores everything else. A
   socket bound to 56700 also receives other controllers' requests, including

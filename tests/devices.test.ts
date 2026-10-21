@@ -427,6 +427,22 @@ describe('devices', () => {
     expect(() => Device({ address: '' })).toThrow('Invalid address:  (is required)');
   });
 
+  test('Device factory accepts a numeric-string port as a number', () => {
+    // An untyped numeric string (e.g. process.env.LIFX_PORT) worked before;
+    // it is now stored as the number the type promises.
+    // @ts-expect-error -- an untyped caller passing a string port
+    const device = Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: '56700' });
+    expect(device.port).toBe(56700);
+    // @ts-expect-error -- an untyped caller passing a non-numeric string
+    expect(() => Device({ address: '192.168.1.1', serialNumber: 'abcdef123456', port: 'http' })).toThrow(ValidationError);
+  });
+
+  test('get() validates its timeout even for an already-registered device', async () => {
+    const devices = Devices();
+    devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
+    await assert.rejects(devices.get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
+  });
+
   test('Device factory validates port range', () => {
     expect(() => Device({ 
       address: '192.168.1.1', 
