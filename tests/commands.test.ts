@@ -564,6 +564,11 @@ describe('commands', () => {
     // required: its duration *is* the stored default, so a default of 0
     // would silently erase it.
     assert.deepEqual(Commands.SetHevCycle(false).payload, new Uint8Array([0, 0, 0, 0, 0]));
+    // Guard the required parameter (tsc checks tests): if a default crept
+    // back in, this directive would be unused and fail the typecheck. At
+    // runtime the omitted duration is rejected, not encoded as 0.
+    // @ts-expect-error -- durationSeconds is required on SetHevCycleConfiguration
+    assert.throws(() => Commands.SetHevCycleConfiguration(true), /Invalid durationSeconds/);
   });
 
   test('GetColorZones rejects indices outside the uint8 wire range', () => {

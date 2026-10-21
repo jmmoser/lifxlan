@@ -377,7 +377,7 @@ function assertUint32(parameter: string, value: number): void {
  * unrelated one.
  */
 function assertUint64(parameter: string, value: bigint): void {
-  if (value < 0n || value > MAX_UINT64) {
+  if (typeof value !== 'bigint' || value < 0n || value > MAX_UINT64) {
     throw new ValidationError(parameter, value, 'must be between 0 and 2^64 - 1');
   }
 }

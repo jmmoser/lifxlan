@@ -46,13 +46,17 @@ upgrading is a matter of reading this file.
   a non-positive or non-number discovery `intervalMs`, or a `NaN` or
   non-number `maxIntervalMs`; a `signal` that is not an `AbortSignal`;
   out-of-range uint32/uint64 time fields and dates (including `NaN` or
-  omitted durations and periods from untyped callers); `GetColorZones`/`Get64`
+  omitted durations and periods, and non-bigint effect durations, from
+  untyped callers); `GetColorZones`/`Get64`
   indices past the uint8 wire range, a fractional `Get64` `tileCount`, and a
   `Get64` range past tile 255; a location/group byte id that is not 16 bytes and an echo
   payload over 64 bytes; a `devices.get()` serial that is not 12 hex digits
   (or is all zeros); `send()` to an all-zero target; a `NaN` or fractional
   `Device()` port. `devices.register()` also now ignores request-type
   messages, invalid source ports, and message types missing from `Type`.
+- `'ack-only'` exchanges no longer decode the State packet a Get still gets
+  back, so a multi-packet command's `onResponse` (e.g. `GetColorZones`) is
+  not called in ack-only mode. See Fixed.
 - On `lifxlan/deno`, sending through the router throws synchronously (and
   `send()` rejects at once) once `close()` begins or the read loop ends —
   including after a receive error, which ends Deno's reception for good.
