@@ -92,8 +92,8 @@ upgrading is a matter of reading this file.
   `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
   the whole LAN about once a millisecond until disposed. `discover()` now
   throws `ValidationError` for a `NaN` `intervalMs` or `maxIntervalMs` (or an
-  untyped value such as `'1s'` that coerces to one), which flooded the same
-  way.
+  untyped non-number such as `'1s'`, which became NaN in the delay math),
+  which flooded the same way.
 - `openLan()` (`lifxlan/node`) closes its socket when `bind()` throws
   synchronously (e.g. a non-string `address` from an untyped caller), not
   only when binding fails asynchronously. `discover()` leaves no registry
@@ -108,7 +108,9 @@ upgrading is a matter of reading this file.
   rejected promise from `send()`/`get()`). Before, it failed the `> 0` arming
   check exactly like the documented `0` and silently disabled the timeout, so
   e.g. `Number()` of an unset environment variable, or a spent
-  `deadline - Date.now()` budget, left every lost packet pending forever.
+  `deadline - Date.now()` budget, left every lost packet pending forever. An
+  untyped non-number (e.g. a bigint, which passes a numeric comparison and
+  then throws in the timer math mid-setup) is rejected the same way.
 - `Get64` throws `ValidationError` for a `tileIndex` outside 0–255 or a
   `tileCount` outside 1–255 or not an integer. These fields are uint8 on the
   wire, and the decoder compared replies against the unwrapped values: a

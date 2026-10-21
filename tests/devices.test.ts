@@ -623,6 +623,10 @@ describe('devices', () => {
     await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
     expect(() => Devices({ defaultTimeoutMs: -1 })).toThrow(ValidationError);
     await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: -5 }), ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => Devices({ defaultTimeoutMs: 5000n })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: 5000n }), ValidationError);
   });
 
   test('get() with a timeoutMs past the setTimeout range (Infinity) does not reject at once', async () => {

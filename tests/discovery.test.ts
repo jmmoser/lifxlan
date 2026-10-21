@@ -168,11 +168,16 @@ describe('discovery', () => {
     expect(() => discover(router, Devices(), { maxIntervalMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { timeoutMs: Number.NaN })).toThrow(ValidationError);
     expect(() => discover(router, Devices(), { timeoutMs: -1 })).toThrow(ValidationError);
-    // An untyped string coerces to NaN in the delay math just the same.
-    const untyped: { intervalMs?: number } = JSON.parse('{"intervalMs":"1s"}');
-    expect(() => discover(router, Devices(), untyped)).toThrow(ValidationError);
-    const untypedMax: { maxIntervalMs?: number } = JSON.parse('{"maxIntervalMs":"forever"}');
-    expect(() => discover(router, Devices(), untypedMax)).toThrow(ValidationError);
+    // Untyped non-numbers: a string becomes NaN in the delay math, and a
+    // bigint makes Math.min/Math.max throw after setup began.
+    // @ts-expect-error -- an untyped caller passing a string
+    expect(() => discover(router, Devices(), { intervalMs: '1s' })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a string
+    expect(() => discover(router, Devices(), { maxIntervalMs: 'forever' })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => discover(router, Devices(), { intervalMs: 1000n })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    expect(() => discover(router, Devices(), { timeoutMs: 5000n })).toThrow(ValidationError);
     expect(sent.length).toBe(0);
   });
 

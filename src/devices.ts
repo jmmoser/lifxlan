@@ -241,7 +241,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
   // NaN and negative values fail the `> 0` arming check exactly like the
   // documented 0, so they would silently disable the timeout and leave
   // lookups pending forever.
-  if (!(defaultTimeoutMs >= 0)) {
+  if (!(typeof defaultTimeoutMs === 'number' && defaultTimeoutMs >= 0)) {
     throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
 
@@ -422,7 +422,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
 
       const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-      if (!(timeoutMs >= 0)) {
+      if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
         return Promise.reject(new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)'));
       }
 

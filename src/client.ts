@@ -73,7 +73,10 @@ function registerHandler<T>(
     pendingBySequence.delete(sequence);
     // Drop the per-device map once it has no pending exchanges so devices
     // that disappear from the network do not leak empty maps.
-    if (pendingBySequence.size === 0) {
+    // Only if the registry still holds this exchange's map: a newer send()
+    // may have replaced an emptied one, and deleting that would strand its
+    // pending exchanges.
+    if (pendingBySequence.size === 0 && responseHandlerMap.get(serialNumber) === pendingBySequence) {
       responseHandlerMap.delete(serialNumber);
     }
   }
@@ -306,11 +309,14 @@ export interface ClientInstance<R extends ClientRouter = ClientRouter> extends D
    * Never throws synchronously: every failure surfaces as a rejected promise,
    * so fan-outs like `Promise.all(devices.map(...))` observe all failures
    * uniformly — a disposed client, an aborted signal, exhausted sequence
-   * numbers, a throwing transport, a timeout or StateUnhandled reply, and
-   * ValidationError for invalid input: an unknown `responseMode`, a response
-   * mode the command has no decoder for, a NaN or negative `timeoutMs`, or a
-   * device whose target is all zeros (its reply carries the device's real
-   * serial, so it could never correlate — use `sendUnacknowledged()` for it).
+   * numbers, a throwing transport, a timeout or StateUnhandled reply, a reply
+   * the command's decoder cannot decode (e.g. a truncated packet, as a
+   * ValidationError), an error thrown by the command's own code
+   * (`createDecoder`, a `payload` getter), and ValidationError for invalid
+   * input: an unknown `responseMode`, a response mode the command has no
+   * decoder for, a `timeoutMs` that is not a non-negative number, or a device
+   * whose target is all zeros (its reply carries the device's real serial, so
+   * it could never correlate — use `sendUnacknowledged()` for it).
    */
   send<T, Default extends ResponseMode = 'response', Override extends RequestableModes<T> | undefined = undefined>(
     command: Command<T, Default>,
@@ -340,7 +346,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
   // documented 0, so a NaN (e.g. Number() of an unset environment variable)
   // or a spent budget (`deadline - Date.now()`) would silently disable the
   // timeout and leave every lost packet pending forever.
-  if (!(defaultTimeoutMs >= 0)) {
+  if (!(typeof defaultTimeoutMs === 'number' && defaultTimeoutMs >= 0)) {
     throw new ValidationError('defaultTimeoutMs', defaultTimeoutMs, 'must be a non-negative number (0 disables the timeout)');
   }
   const { router } = options;
@@ -560,7 +566,7 @@ export function Client<R extends ClientRouter>(options: ClientOptions<R>): Clien
         }
 
         const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
-        if (!(timeoutMs >= 0)) {
+        if (!(typeof timeoutMs === 'number' && timeoutMs >= 0)) {
           throw new ValidationError('timeoutMs', timeoutMs, 'must be a non-negative number (0 disables the timeout)');
         }
 

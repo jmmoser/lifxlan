@@ -511,6 +511,12 @@ describe('client', () => {
     // same check.
     assert.throws(() => Client({ defaultTimeoutMs: -1, router: Router({ onSend() {} }) }), ValidationError);
     await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: -5 }), ValidationError);
+    // An untyped bigint passes `>= 0` but throws in the timer math after the
+    // abort listener is attached; it must be rejected up front.
+    // @ts-expect-error -- an untyped caller passing a bigint
+    assert.throws(() => Client({ defaultTimeoutMs: 5000n, router: Router({ onSend() {} }) }), ValidationError);
+    // @ts-expect-error -- an untyped caller passing a bigint
+    await assert.rejects(client.send(GetPower(), sharedDevice, { timeoutMs: 5000n }), ValidationError);
     assert.equal(sends, 0);
     client.dispose();
   });
