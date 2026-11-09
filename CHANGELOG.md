@@ -81,6 +81,17 @@ upgrading is a matter of reading this file.
 
 ### Fixed
 
+- `GetColorZones` and `GetExtendedColorZones` ignore duplicate packets, as
+  `Get64` already did: a StateMultiZone or StateExtendedColorZones that UDP
+  delivered twice was added to the result (and passed to `onResponse`) twice.
+  `GetColorZones` also ignores a packet covering only zones outside the
+  requested range. `GetExtendedColorZones` no longer reports itself complete
+  after a packet of another type, before it has seen a real one.
+- A `'both'` exchange whose response has arrived ignores every packet but the
+  acknowledgement. Before, a duplicate State packet arriving before the ack
+  ran the decoder again — for `GetColorZones`, `GetExtendedColorZones` and
+  `Get64`, appending to the result about to be resolved — and a
+  StateUnhandled could reject a request the device had already answered.
 - An `'ack-only'` exchange no longer decodes the State packet a device sends
   anyway (Get messages are always answered), so a failing decoder or a
   throwing `onResponse` callback can no longer reject a call that only asked

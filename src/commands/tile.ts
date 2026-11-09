@@ -3,6 +3,7 @@ import { Type, TileEffectSkyType } from '../constants/index.js';
 import { ValidationError } from '../errors.js';
 import type { TileEffectType } from '../constants/index.js';
 import type { Command, Decoder } from './index.js';
+import { accumulate } from './accumulate.js';
 
 /** The pixel-grid row width of every current LIFX tile device. */
 const TILE_WIDTH = 8;
@@ -77,41 +78,18 @@ export function Get64(options: Get64Options) {
     // must not fill a slot either.
     const tilesSeen = new Set<number>();
 
-    const responses: Encoding.State64[] = [];
-
-    return (bytes, offsetRef, continuation, responseType) => {
-      let response: Encoding.State64 | undefined;
-
-      if (responseType === Type.State64) {
-        const decoded = Encoding.decodeState64(bytes, offsetRef);
-        const { tileIndex } = decoded;
-        if (tileIndex >= firstTile && tileIndex < endTile && !tilesSeen.has(tileIndex)) {
-          tilesSeen.add(tileIndex);
-          response = decoded;
-        }
-      }
-
-      // Update continuation to indicate if more responses are expected
-      if (continuation) {
-        if (response) {
-          responses.push(response);
-
-          // Call user callback if provided
-          let shouldContinue = true;
-          if (onResponse) {
-            const result = onResponse(response);
-            shouldContinue = result !== false; // false = stop early
-          }
-
-          continuation.expectMore = shouldContinue && tilesSeen.size < tileCount;
-        } else {
-          // Unknown response type, duplicate, or out-of-range tile - still expect more
-          continuation.expectMore = tilesSeen.size < tileCount;
-        }
-      }
-
-      return responses; // Always return the accumulated array
-    };
+    return accumulate<Encoding.State64>({
+      decode(bytes, offsetRef, responseType) {
+        return responseType === Type.State64 ? Encoding.decodeState64(bytes, offsetRef) : undefined;
+      },
+      record({ tileIndex }) {
+        if (tileIndex < firstTile || tileIndex >= endTile || tilesSeen.has(tileIndex)) return false;
+        tilesSeen.add(tileIndex);
+        return true;
+      },
+      outstanding: () => tilesSeen.size < tileCount,
+      onResponse,
+    });
   };
 
   return {

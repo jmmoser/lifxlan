@@ -1300,6 +1300,82 @@ describe('client', () => {
     client.dispose();
   });
 
+  // Replies to every request with the given packets, in order, on its sequence.
+  function replyingClient(packets: Array<{ type: number; payload: Uint8Array }>) {
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          for (const { type, payload } of packets) {
+            client.router.receive(encode(false, header.source, header.target, false, false, header.sequence, type, payload));
+          }
+        },
+      }),
+    });
+    return client;
+  }
+
+  test('a both-mode exchange ignores State packets once its response is in', async () => {
+    const power = (level: number) => {
+      const payload = new Uint8Array(2);
+      new DataView(payload.buffer).setUint16(0, level, true);
+      return { type: Type.StatePower, payload };
+    };
+    const unhandled = new Uint8Array(2);
+    new DataView(unhandled.buffer).setUint16(0, Type.GetPower, true);
+    let decodeCalls = 0;
+    const command: Command<number> = {
+      type: Type.GetPower,
+      responseType: Type.StatePower,
+      decode(bytes, offsetRef) {
+        decodeCalls++;
+        const level = new DataView(bytes.buffer, bytes.byteOffset).getUint16(offsetRef.current, true);
+        offsetRef.current += 2;
+        return level;
+      },
+    };
+    const client = replyingClient([
+      power(1),
+      // Neither a duplicate State nor a StateUnhandled can follow a response
+      // that already arrived; only the ack completes the exchange.
+      power(2),
+      { type: Type.StateUnhandled, payload: unhandled },
+      { type: Type.Acknowledgement, payload: new Uint8Array() },
+    ]);
+
+    assert.equal(await client.send(command, sharedDevice, { responseMode: 'both' }), 1);
+    assert.equal(decodeCalls, 1);
+    client.dispose();
+  });
+
+  test('a both-mode multi-packet exchange does not append a duplicate arriving before the ack', async () => {
+    const multiZone = new Uint8Array(2 + 8 * 8);
+    multiZone[0] = 8; // zonesCount
+    multiZone[1] = 0; // zoneIndex
+    const client = replyingClient([
+      { type: Type.StateMultiZone, payload: multiZone },
+      { type: Type.StateMultiZone, payload: multiZone },
+      { type: Type.Acknowledgement, payload: new Uint8Array() },
+    ]);
+
+    const result = await client.send(GetColorZones({ startIndex: 0, endIndex: 7 }), sharedDevice, { responseMode: 'both' });
+    assert.deepEqual(result.map((response) => response.zoneIndex), [0]);
+    client.dispose();
+  });
+
+  test('a both-mode exchange resolves when the ack precedes the response', async () => {
+    const payload = new Uint8Array(2);
+    new DataView(payload.buffer).setUint16(0, 7, true);
+    const client = replyingClient([
+      { type: Type.Acknowledgement, payload: new Uint8Array() },
+      { type: Type.StatePower, payload },
+    ]);
+
+    assert.equal(await client.send(GetPower(), sharedDevice, { responseMode: 'both' }), 7);
+    client.dispose();
+  });
+
   test('send with no responseMode and no defaultResponseMode falls back to response', async () => {
     const client = Client({
       defaultTimeoutMs: 0,
