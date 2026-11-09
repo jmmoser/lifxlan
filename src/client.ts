@@ -57,10 +57,14 @@ function registerHandler<T>(
   const { resolve, reject, promise } = PromiseWithResolvers<T | void>();
   const continuation = { expectMore: false };
 
-  let receivedAck = false;
-  let receivedResponse = false;
+  // Where the exchange stands. 'acked' and 'responded' are the two halves of
+  // a 'both' exchange, each waiting on the other; an 'ack-only' or
+  // 'response' exchange settles straight from 'waiting'. Once 'responded',
+  // only the ack can still arrive: a further State packet (a UDP duplicate,
+  // a late stray) must not re-run the decoder, which for an accumulating
+  // command would append to the very result about to be resolved.
+  let phase: 'waiting' | 'acked' | 'responded' | 'settled' = 'waiting';
   let responseResult: T | undefined;
-  let settled = false;
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
   function cleanup() {
@@ -81,9 +85,18 @@ function registerHandler<T>(
     }
   }
 
+  function settleResolve(value: T | undefined) {
+    // The decoder runs caller code (an onResponse callback) that can settle
+    // this exchange re-entrantly, e.g. by disposing the client.
+    if (phase === 'settled') return;
+    phase = 'settled';
+    cleanup();
+    resolve(value);
+  }
+
   function settleReject(reason: unknown) {
-    if (settled) return;
-    settled = true;
+    if (phase === 'settled') return;
+    phase = 'settled';
     cleanup();
     reject(reason);
   }
@@ -109,30 +122,28 @@ function registerHandler<T>(
     timeout = setTimeout(settleReject.bind(undefined, timeoutError), Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
   }
 
-  function checkForCompletion() {
-    if (settled) return true;
-    if (
-      (ackMode === 'ack-only' && receivedAck) ||
-      (ackMode === 'response' && receivedResponse) ||
-      (ackMode === 'both' && receivedAck && receivedResponse)
-    ) {
-      settled = true;
-      cleanup();
-      resolve(ackMode === 'ack-only' ? undefined : responseResult);
-      return true;
-    }
-    return false;
-  }
-
   pendingBySequence.set(sequence, {
     handle(type, bytes, offsetRef) {
-      if (settled) return;
+      if (phase === 'settled') return;
 
       if (type === Type.Acknowledgement) {
-        receivedAck = true;
-        checkForCompletion();
+        // A 'response' exchange did not ask for the ack; any that arrives
+        // anyway changes nothing.
+        if (ackMode === 'ack-only') {
+          settleResolve(undefined);
+        } else if (ackMode === 'both') {
+          if (phase === 'responded') {
+            settleResolve(responseResult);
+          } else {
+            phase = 'acked';
+          }
+        }
         return;
       }
+
+      // The response is in, so the device handled the request: neither a
+      // further State packet nor a StateUnhandled belongs to this exchange.
+      if (phase === 'responded') return;
 
       if (type === Type.StateUnhandled) {
         // Decoding runs inside the socket's receive path, so a truncated
@@ -182,9 +193,12 @@ function registerHandler<T>(
           return;
         }
 
-        receivedResponse = true;
-        responseResult = result;
-        checkForCompletion();
+        if (ackMode === 'both' && phase !== 'acked') {
+          responseResult = result;
+          phase = 'responded';
+        } else {
+          settleResolve(result);
+        }
       }
     },
     cancel(reason) {

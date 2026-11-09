@@ -1054,7 +1054,9 @@ describe('commands', () => {
     const result = decode(unknownBytes, offsetRef, continuation, 999);
     
     assert.equal(result.length, 0); // No responses added
-    assert.equal(continuation.expectMore, false); // No expected responses set up yet, so false
+    // Which packets to expect is only known from the first real one, so a
+    // packet of another type leaves the exchange open rather than ending it empty.
+    assert.equal(continuation.expectMore, true);
   });
 
   test('SetExtendedColorZones', () => {
@@ -1221,6 +1223,75 @@ describe('commands', () => {
     // No response packet at all.
     assert.ok(!('responseType' in Commands.SetReboot()));
     assert.ok(!('responseType' in Commands.Set64({ tileIndex: 0, colors: [] })));
+  });
+
+  test('GetColorZones ignores a duplicate StateMultiZone', () => {
+    const seen: number[] = [];
+    const cmd = Commands.GetColorZones({ startIndex: 0, endIndex: 255, onResponse: (response) => {
+      seen.push(response.zoneIndex);
+    } });
+    const multiZone = (zoneIndex: number) => {
+      const bytes = new Uint8Array(2 + 8 * 8);
+      bytes[0] = 16; // zonesCount
+      bytes[1] = zoneIndex;
+      return bytes;
+    };
+    const decode = cmd.createDecoder();
+    const continuation = { expectMore: false };
+
+    decode(multiZone(0), { current: 0 }, continuation, Type.StateMultiZone);
+    assert.equal(continuation.expectMore, true);
+    // UDP can deliver the same packet twice; zones 8..15 are still outstanding.
+    decode(multiZone(0), { current: 0 }, continuation, Type.StateMultiZone);
+    assert.equal(continuation.expectMore, true);
+    const result = decode(multiZone(8), { current: 0 }, continuation, Type.StateMultiZone);
+    assert.equal(continuation.expectMore, false);
+    assert.deepEqual(result.map((response) => response.zoneIndex), [0, 8]);
+    assert.deepEqual(seen, [0, 8]);
+  });
+
+  test('GetColorZones ignores a StateZone outside the requested range', () => {
+    const cmd = Commands.GetColorZones({ startIndex: 2, endIndex: 3 });
+    const stateZone = (zoneIndex: number) => {
+      const bytes = new Uint8Array(10);
+      bytes[0] = 8; // zonesCount
+      bytes[1] = zoneIndex;
+      return bytes;
+    };
+    const decode = cmd.createDecoder();
+    const continuation = { expectMore: false };
+
+    decode(stateZone(2), { current: 0 }, continuation, Type.StateZone);
+    decode(stateZone(5), { current: 0 }, continuation, Type.StateZone);
+    assert.equal(continuation.expectMore, true);
+    const result = decode(stateZone(3), { current: 0 }, continuation, Type.StateZone);
+    assert.equal(continuation.expectMore, false);
+    assert.deepEqual(result.map((response) => response.zoneIndex), [2, 3]);
+  });
+
+  test('GetExtendedColorZones ignores a duplicate packet', () => {
+    const seen: number[] = [];
+    const cmd = Commands.GetExtendedColorZones({ onResponse: (response) => {
+      seen.push(response.zoneIndex);
+    } });
+    const extended = (zoneIndex: number) => {
+      const bytes = new Uint8Array(5 + 82 * 8);
+      const view = new DataView(bytes.buffer);
+      view.setUint16(0, 150, true); // zonesCount
+      view.setUint16(2, zoneIndex, true);
+      bytes[4] = 82; // colorsCount
+      return bytes;
+    };
+    const decode = cmd.createDecoder();
+    const continuation = { expectMore: false };
+
+    decode(extended(0), { current: 0 }, continuation, Type.StateExtendedColorZones);
+    decode(extended(0), { current: 0 }, continuation, Type.StateExtendedColorZones);
+    assert.equal(continuation.expectMore, true);
+    const result = decode(extended(82), { current: 0 }, continuation, Type.StateExtendedColorZones);
+    assert.equal(continuation.expectMore, false);
+    assert.deepEqual(result.map((response) => response.zoneIndex), [0, 82]);
+    assert.deepEqual(seen, [0, 82]);
   });
 
   test('GetColorZones stops expecting zones the device does not have', () => {

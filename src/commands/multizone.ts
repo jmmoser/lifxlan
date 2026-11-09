@@ -3,6 +3,7 @@ import { Type, MultiZoneApplicationRequest, MultiZoneExtendedApplicationRequest 
 import type { MultiZoneEffectType } from '../constants/index.js';
 import { ValidationError } from '../errors.js';
 import type { Command, Decoder } from './index.js';
+import { accumulate } from './accumulate.js';
 
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
 
@@ -17,9 +18,10 @@ export interface GetColorZonesOptions {
    */
   endIndex: number;
   /**
-   * Called once per StateZone/StateMultiZone packet as it arrives. Return
-   * false to stop waiting for further packets and resolve with what has
-   * accumulated.
+   * Called once per StateZone/StateMultiZone packet that reports a requested
+   * zone not yet seen (duplicates and packets covering only zones outside the
+   * range are ignored). Return false to stop waiting for further packets and
+   * resolve with what has accumulated.
    */
   onResponse?: (response: ColorZoneResponse) => boolean | void;
 }
@@ -49,53 +51,32 @@ export function GetColorZones(options: GetColorZonesOptions) {
       expectedZones.add(i);
     }
 
-    // A device only reports zones it has, so anything requested at or past
-    // its zonesCount will never arrive and must not hold the exchange open.
-    const dropZonesFrom = (zonesCount: number) => {
-      for (const zone of expectedZones) {
-        if (zone >= zonesCount) expectedZones.delete(zone);
-      }
-    };
-
-    const responses: ColorZoneResponse[] = [];
-
-    return (bytes, offsetRef, continuation, responseType) => {
-      let response: ColorZoneResponse | undefined;
-
-      if (responseType === Type.StateZone) {
-        response = Encoding.decodeStateZone(bytes, offsetRef);
-        dropZonesFrom(response.zonesCount);
-        expectedZones.delete(response.zoneIndex);
-      } else if (responseType === Type.StateMultiZone) {
-        response = Encoding.decodeStateMultiZone(bytes, offsetRef);
-        dropZonesFrom(response.zonesCount);
-        // Remove all zones covered by this response
-        for (let i = 0; i < response.colors.length; i++) {
-          expectedZones.delete(response.zoneIndex + i);
+    return accumulate<ColorZoneResponse>({
+      decode(bytes, offsetRef, responseType) {
+        if (responseType === Type.StateZone) return Encoding.decodeStateZone(bytes, offsetRef);
+        if (responseType === Type.StateMultiZone) return Encoding.decodeStateMultiZone(bytes, offsetRef);
+        return undefined;
+      },
+      record(response) {
+        // A device only reports zones it has, so anything requested at or
+        // past its zonesCount will never arrive and must not hold the
+        // exchange open. zonesCount is the device's own report, so it is
+        // applied even from a packet that is otherwise dropped.
+        for (const zone of expectedZones) {
+          if (zone >= response.zonesCount) expectedZones.delete(zone);
         }
-      }
-
-      // Update continuation to indicate if more responses are expected
-      if (continuation) {
-        if (response) {
-          responses.push(response);
-
-          // Call user callback if provided
-          let shouldContinue = true;
-          if (onResponse) {
-            const result = onResponse(response);
-            shouldContinue = result !== false; // false = stop early
-          }
-
-          continuation.expectMore = shouldContinue && expectedZones.size > 0;
-        } else {
-          // Unknown response type - still expect more responses
-          continuation.expectMore = expectedZones.size > 0;
+        // A StateMultiZone always carries 8 colors; a StateZone carries one.
+        // It counts only if it fills a zone still outstanding.
+        const covered = 'colors' in response ? response.colors.length : 1;
+        let fresh = false;
+        for (let i = 0; i < covered; i++) {
+          if (expectedZones.delete(response.zoneIndex + i)) fresh = true;
         }
-      }
-
-      return responses; // Always return the accumulated array
-    };
+        return fresh;
+      },
+      outstanding: () => expectedZones.size > 0,
+      onResponse,
+    });
   };
 
   return {
@@ -191,9 +172,9 @@ export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
 
 export interface GetExtendedColorZonesOptions {
   /**
-   * Called once per StateExtendedColorZones packet as it arrives. Return
-   * false to stop waiting for further packets and resolve with what has
-   * accumulated.
+   * Called once per distinct StateExtendedColorZones packet as it arrives
+   * (a duplicate of a packet already seen is ignored). Return false to stop
+   * waiting for further packets and resolve with what has accumulated.
    */
   onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void;
 }
@@ -205,50 +186,29 @@ export function GetExtendedColorZones(options: GetExtendedColorZonesOptions = {}
   // fresh decoder, making this command safe to reuse across concurrent
   // sends and devices.
   const createDecoder = (): Decoder<Encoding.StateExtendedColorZones[]> => {
-    const expectedZoneIndexes = new Set<number>();
-    let firstResponse = true;
+    // Each packet carries up to 82 zones, starting at zone 0, 82, 164, …;
+    // which of those to expect is only known once the first packet reports
+    // the device's zonesCount, so until then the exchange is still open.
+    let expectedZoneIndexes: Set<number> | undefined;
 
-    const responses: Encoding.StateExtendedColorZones[] = [];
-
-    return (bytes, offsetRef, continuation, responseType) => {
-      let response: Encoding.StateExtendedColorZones | undefined;
-
-      if (responseType === Type.StateExtendedColorZones) {
-        response = Encoding.decodeStateExtendedColorZones(bytes, offsetRef);
-
-        // On first response, calculate expected zone indexes based on total zones
-        if (firstResponse && response.zonesCount > 82) {
-          firstResponse = false;
-          // Each response can contain up to 82 zones
-          for (let i = 0; i < response.zonesCount; i += 82) {
+    return accumulate<Encoding.StateExtendedColorZones>({
+      decode(bytes, offsetRef, responseType) {
+        return responseType === Type.StateExtendedColorZones
+          ? Encoding.decodeStateExtendedColorZones(bytes, offsetRef)
+          : undefined;
+      },
+      record(response) {
+        if (expectedZoneIndexes === undefined) {
+          expectedZoneIndexes = new Set([0]);
+          for (let i = 82; i < response.zonesCount; i += 82) {
             expectedZoneIndexes.add(i);
           }
         }
-
-        expectedZoneIndexes.delete(response.zoneIndex);
-      }
-
-      // Update continuation to indicate if more responses are expected
-      if (continuation) {
-        if (response) {
-          responses.push(response);
-
-          // Call user callback if provided
-          let shouldContinue = true;
-          if (onResponse) {
-            const result = onResponse(response);
-            shouldContinue = result !== false; // false = stop early
-          }
-
-          continuation.expectMore = shouldContinue && expectedZoneIndexes.size > 0;
-        } else {
-          // Unknown response type - still expect more responses
-          continuation.expectMore = expectedZoneIndexes.size > 0;
-        }
-      }
-
-      return responses; // Always return the accumulated array
-    };
+        return expectedZoneIndexes.delete(response.zoneIndex);
+      },
+      outstanding: () => expectedZoneIndexes === undefined || expectedZoneIndexes.size > 0,
+      onResponse,
+    });
   };
 
   return {
