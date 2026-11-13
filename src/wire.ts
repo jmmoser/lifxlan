@@ -579,18 +579,18 @@ function ensureSize(payload: Uint8Array, byteLength: number): void {
   }
 }
 
-const readColor = (bytes: Uint8Array, offset: number): Color => ({
-  hue: readUint16(bytes, offset),
-  saturation: readUint16(bytes, offset + 2),
-  brightness: readUint16(bytes, offset + 4),
-  kelvin: readUint16(bytes, offset + 6),
-});
-
 function readColors(bytes: Uint8Array, offset: number, count: number): Color[] {
   const colors: Color[] = new Array(count);
-  for (let i = 0; i < count; i++) {
-    colors[i] = readColor(bytes, offset);
-    offset += 8;
+  // The hot loop of every zone, tile, and palette decode: the reads are
+  // written out rather than delegated so both V8 and JavaScriptCore keep
+  // them in one frame.
+  for (let i = 0; i < count; i++, offset += 8) {
+    colors[i] = {
+      hue: bytes[offset]! | (bytes[offset + 1]! << 8),
+      saturation: bytes[offset + 2]! | (bytes[offset + 3]! << 8),
+      brightness: bytes[offset + 4]! | (bytes[offset + 5]! << 8),
+      kelvin: bytes[offset + 6]! | (bytes[offset + 7]! << 8),
+    };
   }
   return colors;
 }
