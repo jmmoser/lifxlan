@@ -1,4 +1,4 @@
-import * as Encoding from '../encoding.js';
+import * as Encoding from '../wire.js';
 import { Type } from '../constants/index.js';
 import type { Command } from './index.js';
 
@@ -12,7 +12,11 @@ export function GetRPower(relayIndex: number) {
   } satisfies Command<Encoding.StateRPower, 'response'>;
 }
 
-export function SetRPower(relayIndex: number, level: number) {
+/**
+ * @param level A boolean (on/off) or an unsigned 16-bit power level (0 is
+ * off, any other value is on).
+ */
+export function SetRPower(relayIndex: number, level: number | boolean) {
   return {
     type: Type.SetRPower,
     responseType: Type.StateRPower,

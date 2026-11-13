@@ -11,7 +11,7 @@ import dgram from 'node:dgram';
 import { openLan } from '../src/node.js';
 import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
-import { encode, decodeHeader, type Header } from '../src/encoding.js';
+import { encode, decodeHeader, type Header } from '../src/wire.js';
 import { GetPower } from '../src/commands/index.js';
 import { DisposedClientError, ValidationError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
@@ -74,7 +74,7 @@ describe('openLan', () => {
       assert.equal(power, 0xffff);
       // The reply flowed through the built-in wiring, so the fake device is
       // now also in the registry.
-      assert.equal(devices.registered.get(SERIAL)?.port, fake.port);
+      assert.equal(devices.get(SERIAL)?.port, fake.port);
     } finally {
       await close();
       await closeSocket(fake.socket);
@@ -91,7 +91,7 @@ describe('openLan', () => {
       onAdded(device) {
         added.push(device);
       },
-      onMessage(header) {
+      onMessage({ header }) {
         tapped.push(header);
       },
     });
@@ -111,7 +111,7 @@ describe('openLan', () => {
       );
       fake.send(announce, lanAddress.port, '127.0.0.1');
 
-      const device = await lan.devices.get(SERIAL, { timeoutMs: 2000 });
+      const device = await lan.devices.waitFor(SERIAL, { timeoutMs: 2000 });
       assert.equal(device.address, '127.0.0.1');
       assert.equal(device.port, fakePort);
       assert.equal(added.length, 1);
@@ -141,9 +141,9 @@ describe('openLan', () => {
         Type.StateService, new Uint8Array([1, 0x7c, 0xdd, 0x00, 0x00]),
       );
       fake.send(announce(SERIAL), lanPort, '127.0.0.1');
-      await lan.devices.get(SERIAL, { timeoutMs: 2000 });
+      await lan.devices.waitFor(SERIAL, { timeoutMs: 2000 });
       fake.send(announce('d073d5abcdef'), lanPort, '127.0.0.1');
-      await lan.devices.get('d073d5abcdef', { timeoutMs: 2000 });
+      await lan.devices.waitFor('d073d5abcdef', { timeoutMs: 2000 });
       assert.deepEqual(errors, [boom, boom]);
     } finally {
       await lan.close();

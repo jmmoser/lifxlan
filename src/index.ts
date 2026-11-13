@@ -6,7 +6,7 @@
  *
  * The wire-format encode/decode functions live in the 'lifxlan/encoding'
  * subpath entry point; the optional products.json registry lives in
- * 'lifxlan/products'; the optional discovery helper lives in
+ * 'lifxlan/products' (with its PRODUCTS_URL); the optional discovery helper lives in
  * 'lifxlan/discovery'; the optional socket wiring lives in 'lifxlan/node'
  * (Node.js/Bun) and 'lifxlan/deno' (Deno). All are equally part of the
  * semver surface.
@@ -16,10 +16,8 @@
 export {
   PORT,
   BROADCAST_ADDRESS,
-  PRODUCTS_URL,
   NO_TARGET,
   ServiceType,
-  Direction,
 } from './constants/core.js';
 export { Type } from './constants/types.js';
 export { Waveform, LightLastHevCycleResult } from './constants/light.js';
@@ -31,13 +29,16 @@ export {
 export { TileEffectType, TileEffectSkyType } from './constants/tile.js';
 export { ButtonGesture, ButtonTargetType } from './constants/button.js';
 
-/** Core abstractions */
+/**
+ * Core abstractions. `Router`, `Client`, `Devices`, and `Device` are each
+ * both the factory function and the type of what it returns.
+ */
 export { Router } from './router.js';
-export type { RouterInstance, ClientRouter, RouterOptions, MessageHandler, ReceivedMessage } from './router.js';
+export type { ClientRouter, RouterOptions, MessageHandler, ReceivedMessage } from './router.js';
 export { Client } from './client.js';
-export type { ClientInstance, ClientOptions, SendOptions, ResponseMode } from './client.js';
+export type { ClientOptions, SendOptions, BroadcastOptions, ResponseMode } from './client.js';
 export { Device, Devices } from './devices.js';
-export type { DeviceConfig, DevicesOptions, DevicesInstance, GetDeviceOptions, DeviceEventHandlers, RegistrationMessage } from './devices.js';
+export type { DeviceConfig, DevicesOptions, WaitForDeviceOptions, DeviceEventHandlers, RegistrationMessage } from './devices.js';
 
 /** Errors */
 export {
@@ -48,12 +49,12 @@ export {
   SequenceExhaustionError,
   DisposedClientError,
   DeviceRemovedError,
-  AbortError,
+  DecodeError,
   ValidationError,
 } from './errors.js';
 
 /** Commands */
-export type { Command, Decoder } from './commands/index.js';
+export type { Command, Decoder, Collector } from './commands/index.js';
 export {
   GetService,
   GetHostFirmware,
@@ -98,7 +99,7 @@ export {
   GetExtendedColorZones,
   SetExtendedColorZones,
 } from './commands/multizone.js';
-export type { ColorZoneResponse } from './commands/multizone.js';
+export type { ColorZones, ColorZoneResponse } from './commands/multizone.js';
 export {
   GetDeviceChain,
   Get64,
@@ -112,14 +113,13 @@ export { GetButton, SetButton } from './commands/button.js';
 export { SensorGetAmbientLight } from './commands/sensor.js';
 
 /**
- * Decoded protocol message types. The encode/decode functions that produce
- * and consume these shapes live in the 'lifxlan/encoding' subpath entry
- * point, keeping the wire-format helpers out of the high-level surface.
+ * Decoded protocol message types. The decode functions that produce these
+ * shapes live in the 'lifxlan/encoding' subpath entry point, keeping the
+ * wire-format helpers out of the high-level surface.
  */
 export type {
   Header,
   Color,
-  OffsetRef,
   StateService,
   StateHostFirmware,
   StateWifiInfo,
@@ -146,7 +146,7 @@ export type {
   ButtonAction,
   ButtonInput,
   ButtonActionInput,
-} from './encoding.js';
+} from './wire.js';
 
 /** Utilities */
 export {

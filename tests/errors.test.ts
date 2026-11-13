@@ -6,7 +6,7 @@ import {
   SourceExhaustionError,
   SequenceExhaustionError,
   DisposedClientError,
-  AbortError,
+  DecodeError,
   ValidationError,
 } from '../src/errors.js';
 
@@ -46,14 +46,14 @@ describe('errors', () => {
     const error = new UnhandledCommandError(42, 'DEVICE123');
     expect(error.message).toBe('Device DEVICE123 returned unhandled command type: 42');
     expect(error.commandType).toBe(42);
-    expect(error.deviceSerial).toBe('DEVICE123');
+    expect(error.serialNumber).toBe('DEVICE123');
     expect(error instanceof LifxError).toBe(true);
   });
 
   test('UnhandledCommandError without device serial', () => {
     const error = new UnhandledCommandError(42);
     expect(error.message).toBe('Device unknown returned unhandled command type: 42');
-    expect(error.deviceSerial).toBeUndefined();
+    expect(error.serialNumber).toBeUndefined();
   });
 
   test('SequenceExhaustionError', () => {
@@ -76,17 +76,15 @@ describe('errors', () => {
     expect(error instanceof LifxError).toBe(true);
   });
 
-  test('AbortError', () => {
-    const error = new AbortError('device response');
-    expect(error.message).toBe('device response was aborted');
-    expect(error.operation).toBe('device response');
+  test('DecodeError', () => {
+    const error = new DecodeError('expected a payload of at least 2 bytes, got 1', { expected: 2, available: 1 });
+    expect(error.message).toBe('Malformed message: expected a payload of at least 2 bytes, got 1');
+    expect(error.name).toBe('DecodeError');
+    expect(error.reason).toBe('expected a payload of at least 2 bytes, got 1');
+    expect(error.context).toEqual({ reason: 'expected a payload of at least 2 bytes, got 1', expected: 2, available: 1 });
     expect(error instanceof LifxError).toBe(true);
-  });
-
-  test('AbortError with default operation', () => {
-    const error = new AbortError();
-    expect(error.message).toBe('operation was aborted');
-    expect(error.operation).toBe('operation');
+    // A malformed packet is not a caller error.
+    expect(error instanceof ValidationError).toBe(false);
   });
 
   test('ValidationError', () => {

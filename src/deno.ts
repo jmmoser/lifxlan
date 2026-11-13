@@ -14,13 +14,11 @@
  * loaded unless asked for.
  */
 
-import { Client } from './client.js';
-import { Devices } from './devices.js';
-import { Router } from './router.js';
+import { wire } from './lan.js';
 
-import type { ClientInstance } from './client.js';
-import type { DeviceEventHandlers, DevicesInstance } from './devices.js';
-import type { MessageHandler, RouterInstance } from './router.js';
+import type { Lan as LanOf, OpenLanOptions } from './lan.js';
+
+export type { OpenLanOptions };
 
 /** The slice of `Deno.NetAddr` this module reads and sends. */
 export interface DenoNetAddr {
@@ -41,80 +39,16 @@ declare const Deno: {
   listenDatagram(options: { hostname?: string; port: number; transport: 'udp' }): DenoDatagramConn;
 };
 
-export interface OpenLanOptions extends DeviceEventHandlers {
-  /**
-   * Local UDP port to bind. Defaults to 0 (an ephemeral port picked by the
-   * OS), which is what you want unless a firewall rule requires a fixed
-   * port — LIFX devices reply to whatever port the request came from.
-   */
-  port?: number;
-  /**
-   * Local address to bind (Deno calls this `hostname`; named `address` here
-   * for symmetry with 'lifxlan/node'). Defaults to '0.0.0.0'.
-   */
-  address?: string;
-  /**
-   * How long `client.send()` waits before rejecting with TimeoutError,
-   * forwarded to the {@link Client}. Defaults to 3000ms.
-   */
-  defaultTimeoutMs?: number;
-  /**
-   * Router-wide tap invoked for every successfully decoded inbound message,
-   * forwarded to {@link Router}.
-   */
-  onMessage?: MessageHandler;
-  /**
-   * Observes inbound datagrams that could not be decoded and errors thrown
-   * by the `onMessage` tap (or a client's handler) while processing one,
-   * forwarded to {@link Router}. When omitted they are discarded, so neither
-   * a malformed packet nor a buggy callback can crash the process or stop
-   * reception.
-   */
-  onError?: (error: unknown, message: Uint8Array) => void;
-  /**
-   * Observes asynchronous send failures and an unexpected end of the read
-   * loop. Once the read loop has ended — by close(), the caller closing the
-   * raw socket, or a receive error — no reply can arrive, so further sends
-   * through the router throw synchronously (send() rejects) instead. When omitted they are discarded, matching the library's
-   * UDP-is-best-effort semantics — a lost packet already surfaces as
-   * TimeoutError on acknowledged sends. The interruption `close()` inflicts
-   * on the read loop is normal shutdown and is never reported here.
-   * Synchronous `Deno.listenDatagram` failures (missing permissions, port in
-   * use) are not routed here either; they reject the promise returned by
-   * {@link openLan}.
-   */
-  onSocketError?: (error: Error) => void;
-}
-
-export interface LanInstance extends AsyncDisposable {
-  readonly router: RouterInstance;
-  readonly devices: DevicesInstance;
-  readonly client: ClientInstance;
-  /**
-   * The underlying `Deno.DatagramConn` (typed as the structural slice this
-   * module declares) — the escape hatch for anything the options don't
-   * cover, such as `socket.addr.port` for the bound port. The background
-   * read loop already consumes the socket's async iterator; don't iterate it
-   * yourself. Closing it yourself ends the read loop, after which sends
-   * through the router throw; Deno reports the close asynchronously, so a
-   * send in the same tick still goes to the closed socket (its failure
-   * reaches `onSocketError` and a `send()` waits out its timeout). Prefer
-   * `close()`, which takes effect at once.
-   */
-  readonly socket: DenoDatagramConn;
-  /**
-   * Disposes the client (pending sends reject with DisposedClientError
-   * instead of dangling until their timeouts) and closes the socket,
-   * resolving once the read loop has ended — the settled promise is the
-   * guarantee that no further datagram handling (registration, onMessage)
-   * will run; awaiting is optional, since teardown starts synchronously.
-   * Idempotent — every call returns the same promise. An `await using`
-   * declaration does the same through `Symbol.asyncDispose` at end of
-   * scope. A freestanding closure (nothing on this instance relies on
-   * `this`), so destructuring it off the instance is safe.
-   */
-  close(): Promise<void>;
-}
+/**
+ * What {@link openLan} resolves to: a Router, Devices registry, and Client
+ * wired to one `Deno.DatagramConn` (typed as the structural slice this
+ * module declares), plus `close()`. Closing the raw socket yourself ends
+ * the read loop, after which sends through the router throw; Deno reports
+ * that close asynchronously, so a send in the same tick still goes to the
+ * closed socket (its failure reaches `onSocketError` and a `send()` waits
+ * out its timeout). Prefer `close()`, which takes effect at once.
+ */
+export type Lan = LanOf<DenoDatagramConn>;
 
 function toError(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
@@ -122,7 +56,7 @@ function toError(err: unknown): Error {
 
 /**
  * Opens a UDP socket via `Deno.listenDatagram` and returns a ready-to-use
- * {@link Router}, {@link Devices} registry, and {@link Client} wired to it:
+ * `Router`, `Devices` registry, and `Client` wired to it:
  * outbound messages go out the socket, and a background read loop feeds
  * inbound datagrams through `router.receive()` into `devices.register()`.
  * The socket is bound synchronously; the function is async only for
@@ -140,12 +74,12 @@ function toError(err: unknown): Error {
  *
  * const { client, devices, router, close } = await openLan();
  * using discovery = discover(router, devices);
- * const device = await devices.get('d07123456789');
+ * const device = await devices.waitFor('d07123456789');
  * await client.send(SetPower(true), device);
  * await close();
  * ```
  */
-export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance> {
+export async function openLan(options: OpenLanOptions = {}): Promise<Lan> {
   const socket = Deno.listenDatagram({
     hostname: options.address ?? '0.0.0.0',
     port: options.port ?? 0,
@@ -157,8 +91,11 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
   let closing = false;
   let readEnded = false;
 
-  const router = Router({
-    onSend(message, port, address) {
+  // Created before the read loop starts, so a rejected option (a NaN
+  // defaultTimeoutMs) releases the socket instead of leaking it.
+  let wired: ReturnType<typeof wire>;
+  try {
+    wired = wire(options, (message, port, address) => {
       // Deno's send() is async, so a closed socket only rejects; throw
       // synchronously instead, as node:dgram does, so senders that stop on a
       // throwing transport (discover()) end — once close() has begun, or
@@ -172,28 +109,12 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       socket.send(message, { transport: 'udp', hostname: address, port }).catch((err) => {
         if (onSocketError) onSocketError(toError(err));
       });
-    },
-    ...(options.onMessage ? { onMessage: options.onMessage } : {}),
-    ...(options.onError ? { onError: options.onError } : {}),
-  });
-
-  const devices = Devices({
-    ...(options.onAdded ? { onAdded: options.onAdded } : {}),
-    ...(options.onChanged ? { onChanged: options.onChanged } : {}),
-    ...(options.onRemoved ? { onRemoved: options.onRemoved } : {}),
-  });
-
-  // Created before the read loop starts, so a rejected option (a NaN
-  // defaultTimeoutMs) releases the socket instead of leaking it.
-  let client: ClientInstance;
-  try {
-    client = options.defaultTimeoutMs === undefined
-      ? Client({ router })
-      : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
+    });
   } catch (err) {
     try { socket.close(); } catch { /* already closed */ }
     throw err;
   }
+  const { router, devices, client } = wired;
 
   const reading = (async () => {
     try {

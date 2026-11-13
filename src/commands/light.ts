@@ -1,4 +1,4 @@
-import * as Encoding from '../encoding.js';
+import * as Encoding from '../wire.js';
 import { Type } from '../constants/index.js';
 import type { Waveform } from '../constants/index.js';
 import type { Command } from './index.js';
@@ -22,7 +22,7 @@ export interface SetColorOptions {
   /** Color temperature in Kelvin (relevant when saturation is low). */
   kelvin: number;
   /** Transition time in milliseconds. Defaults to 0 (immediate). */
-  duration?: number;
+  durationMs?: number;
 }
 
 export function SetColor(options: SetColorOptions) {
@@ -34,7 +34,7 @@ export function SetColor(options: SetColorOptions) {
       options.saturation,
       options.brightness,
       options.kelvin,
-      options.duration ?? 0,
+      options.durationMs ?? 0,
     ),
     decode: Encoding.decodeLightState,
     defaultResponseMode: 'ack-only',
@@ -56,7 +56,7 @@ export interface SetWaveformOptions {
   /** Color temperature in Kelvin (relevant when saturation is low). */
   kelvin: number;
   /** Length of one waveform cycle in milliseconds. */
-  period: number;
+  periodMs: number;
   /** Number of cycles to run. May be fractional. */
   cycles: number;
   /**
@@ -78,7 +78,7 @@ export function SetWaveform(options: SetWaveformOptions) {
       options.saturation,
       options.brightness,
       options.kelvin,
-      options.period,
+      options.periodMs,
       options.cycles,
       options.skewRatio ?? 0,
       options.waveform,
@@ -99,13 +99,13 @@ export function GetLightPower() {
 
 /**
  * @param level A boolean (on/off) or an unsigned 16-bit power level.
- * @param duration Transition time in milliseconds. Defaults to 0 (immediate).
+ * @param durationMs Transition time in milliseconds. Defaults to 0 (immediate).
  */
-export function SetLightPower(level: number | boolean, duration = 0) {
+export function SetLightPower(level: number | boolean, durationMs = 0) {
   return {
     type: Type.SetLightPower,
     responseType: Type.StateLightPower,
-    payload: Encoding.encodeSetLightPower(level, duration),
+    payload: Encoding.encodeSetLightPower(level, durationMs),
     decode: Encoding.decodeStateLightPower,
     defaultResponseMode: 'ack-only',
   } satisfies Command<number, 'ack-only'>;
@@ -131,7 +131,7 @@ export interface SetWaveformOptionalOptions {
   /** Color temperature in Kelvin (relevant when saturation is low). Omit to leave unchanged. */
   kelvin?: number;
   /** Length of one waveform cycle in milliseconds. */
-  period: number;
+  periodMs: number;
   /** Number of cycles to run. May be fractional. */
   cycles: number;
   /**
@@ -163,7 +163,7 @@ export function SetWaveformOptional(options: SetWaveformOptionalOptions) {
       options.saturation ?? 0,
       options.brightness ?? 0,
       options.kelvin ?? 0,
-      options.period,
+      options.periodMs,
       options.cycles,
       options.skewRatio ?? 0,
       options.waveform,

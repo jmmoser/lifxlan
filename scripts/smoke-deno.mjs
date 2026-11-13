@@ -40,7 +40,7 @@ if (power !== 0xFFFF) {
 }
 // The reply flowed through openLan()'s read loop, so the fake device must
 // have landed in the registry.
-if (lan.devices.registered.get(SERIAL)?.port !== fake.addr.port) {
+if (lan.devices.get(SERIAL)?.port !== fake.addr.port) {
   throw new Error('reply did not register the device');
 }
 

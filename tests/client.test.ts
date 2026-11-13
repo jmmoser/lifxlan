@@ -4,10 +4,10 @@ import { Client } from '../src/client.js';
 import { Router, type ClientRouter, type MessageHandler } from '../src/router.js';
 import { Device, type Device as DeviceType } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
-import { encode, decodeHeader, type Header } from '../src/encoding.js';
+import { encode, decodeHeader, type Header } from '../src/wire.js';
 import type { Command } from '../src/commands/index.js';
 import { GetPower, GetService, GetColor, GetColorZones, SetPower } from '../src/commands/index.js';
-import { UnhandledCommandError, TimeoutError, ValidationError, SequenceExhaustionError } from '../src/errors.js';
+import { UnhandledCommandError, TimeoutError, ValidationError, SequenceExhaustionError, DecodeError } from '../src/errors.js';
 
 describe('client', () => {
   const sharedDevice = Device({
@@ -76,7 +76,7 @@ describe('client', () => {
 
   test('works with a custom router that implements only ClientRouter', async () => {
     // This router has no receive() pipeline — it synthesizes responses in
-    // send() — proving Client needs only ClientRouter, not RouterInstance.
+    // send() — proving Client needs only ClientRouter, not Router.
     const handlers = new Map<number, MessageHandler>();
     const router: ClientRouter = {
       register(handler, source) {
@@ -103,7 +103,7 @@ describe('client', () => {
           Type.StatePower,
           payload,
         ));
-        handlers.get(request.source)?.(response, payload, serialNumber ?? '');
+        handlers.get(request.source)?.({ header: response, payload, serialNumber: serialNumber ?? '' });
       },
     };
 
@@ -777,13 +777,13 @@ describe('client', () => {
     await assert.rejects(retry, /socket closed/);
   });
 
-  test('send rejects when createDecoder throws synchronously', async () => {
+  test('send rejects when collect throws synchronously', async () => {
     const client = Client({
       router: Router({ onSend() {} }),
     });
 
     const promise = client.send(
-      { type: 1234, createDecoder: () => { throw new Error('decoder construction failed'); } },
+      { type: 1234, collect: () => { throw new Error('decoder construction failed'); } },
       sharedDevice,
     );
     await assert.rejects(promise, /decoder construction failed/);
@@ -1002,19 +1002,12 @@ describe('client', () => {
     // Request zones 0-1, should receive 2 StateZone responses
     const result = await client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), device);
     
-    // TODO: is it possible to get more than 1 response?
-    assert.equal(Array.isArray(result), true);
-    assert.equal(result.length, 2);
-    const color0 = result[0];
-    assert.ok(color0);
-    assert.equal(color0.zoneIndex, 0);
-    assert.ok('hue' in color0);
-    assert.equal(color0.hue, 120);
-    const color1 = result[1];
-    assert.ok(color1);
-    assert.equal(color1.zoneIndex, 1);
-    assert.ok('hue' in color1);
-    assert.equal(color1.hue, 240);
+    // The two packets are assembled into one result, in zone order.
+    assert.equal(result.zonesCount, 2);
+    assert.equal(result.zoneIndex, 0);
+    assert.equal(result.colors.length, 2);
+    assert.equal(result.colors[0]?.hue, 120);
+    assert.equal(result.colors[1]?.hue, 240);
     assert.equal(responseCount, 2); // Verify both responses were received
   });
 
@@ -1061,12 +1054,9 @@ describe('client', () => {
 
     // Each exchange must get fresh accumulation state: two zones each, not a
     // shared array interleaving both devices' responses.
-    assert.equal(resultA.length, 2);
-    assert.equal(resultB.length, 2);
-    assert.equal(resultA[0]?.zoneIndex, 0);
-    assert.equal(resultA[1]?.zoneIndex, 1);
-    assert.equal(resultB[0]?.zoneIndex, 0);
-    assert.equal(resultB[1]?.zoneIndex, 1);
+    assert.notEqual(resultA.colors, resultB.colors);
+    assert.deepEqual(resultA.colors.map((color) => color.hue), [120, 121]);
+    assert.deepEqual(resultB.colors.map((color) => color.hue), [120, 121]);
 
     client.dispose();
   });
@@ -1464,18 +1454,21 @@ describe('client', () => {
       }),
     });
 
-    // Create command with decode function that accepts responseType (4th parameter)
+    // Create command with a decode function that reads the packet type (2nd parameter)
+    let seenType: number | undefined;
     const commandWithResponseType = {
       type: Type.GetPower,
       payload: new Uint8Array(),
-      decode: (bytes: Uint8Array, offsetRef: { current: number }, _continuation?: { expectMore: boolean }, _responseType?: number) => {
-        const view = new DataView(bytes.buffer, bytes.byteOffset + offsetRef.current);
+      decode: (payload: Uint8Array, type: number) => {
+        seenType = type;
+        const view = new DataView(payload.buffer, payload.byteOffset);
         return view.getUint16(0, true);
       },
     };
 
     const result = await client.send(commandWithResponseType, sharedDevice);
     assert.equal(result, 0xFFFF);
+    assert.equal(seenType, Type.StatePower);
     
     client.dispose();
   });
@@ -1525,9 +1518,170 @@ describe('client', () => {
 
     await assert.rejects(
       () => client.send(GetPower(), sharedDevice),
-      (error) => error instanceof ValidationError,
+      (error) => error instanceof DecodeError,
     );
 
+    client.dispose();
+  });
+
+  test('a truncated reply rejects with DecodeError, not ValidationError', async () => {
+    // A malformed packet is something the network did, not a caller mistake:
+    // code that retries on DecodeError must not also swallow bad input.
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.StatePower, new Uint8Array(1)),
+          );
+        },
+      }),
+    });
+
+    await assert.rejects(
+      () => client.send(GetPower(), sharedDevice),
+      (error) => error instanceof DecodeError && !(error instanceof ValidationError),
+    );
+
+    client.dispose();
+  });
+
+  test('broadcast goes to the limited broadcast address and LIFX port by default', () => {
+    const sent: Array<{ port: number; address: string; serialNumber: string | undefined }> = [];
+    const client = Client({
+      router: Router({
+        onSend(_message, port, address, serialNumber) {
+          sent.push({ port, address, serialNumber });
+        },
+      }),
+    });
+
+    client.broadcast(GetService());
+    assert.deepEqual(sent, [{ port: 56700, address: '255.255.255.255', serialNumber: undefined }]);
+
+    client.dispose();
+  });
+
+  test('broadcast accepts a directed broadcast address and a port', () => {
+    const sent: Array<{ tagged: boolean; port: number; address: string }> = [];
+    const client = Client({
+      router: Router({
+        onSend(message, port, address) {
+          sent.push({ tagged: decodeHeader(message).tagged, port, address });
+        },
+      }),
+    });
+
+    client.broadcast(GetService(), { address: '192.168.1.255' });
+    client.broadcast(GetService(), { address: '10.0.0.255', port: 56701 });
+    client.broadcast(GetService(), { port: 56702 });
+
+    // Still a tagged, all-device message — only the destination changes.
+    assert.deepEqual(sent, [
+      { tagged: true, port: 56700, address: '192.168.1.255' },
+      { tagged: true, port: 56701, address: '10.0.0.255' },
+      { tagged: true, port: 56702, address: '255.255.255.255' },
+    ]);
+
+    client.dispose();
+  });
+
+  test('a collecting command resolves with the collector result once add() reports completion', async () => {
+    const calls: Array<{ byte: number | undefined; type: number }> = [];
+    let collectors = 0;
+    const command = {
+      type: 1234,
+      collect() {
+        collectors++;
+        const bytes: number[] = [];
+        return {
+          add(payload: Uint8Array, type: number) {
+            calls.push({ byte: payload[0], type });
+            if (type !== 1235) return false; // not part of the result
+            bytes.push(payload[0] ?? 0);
+            return bytes.length === 2;
+          },
+          result: () => bytes,
+        };
+      },
+    };
+
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          const reply = (type: number, byte: number) => client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, type, new Uint8Array([byte])),
+          );
+          reply(1235, 7);
+          reply(999, 8); // ignored by the collector; the exchange stays open
+          reply(1235, 9);
+          reply(1235, 10); // arrives after completion; nobody is listening
+        },
+      }),
+    });
+
+    assert.deepEqual(await client.send(command, sharedDevice), [7, 9]);
+    assert.deepEqual(calls, [{ byte: 7, type: 1235 }, { byte: 8, type: 999 }, { byte: 9, type: 1235 }]);
+
+    // Every send() gets its own collector.
+    assert.deepEqual(await client.send(command, sharedDevice), [7, 9]);
+    assert.equal(collectors, 2);
+
+    client.dispose();
+  });
+
+  test('a collector that throws rejects the exchange', async () => {
+    const command = {
+      type: 1234,
+      collect: () => ({
+        add(): boolean { throw new Error('collector failed'); },
+        result: () => 0,
+      }),
+    };
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          assert.doesNotThrow(() => {
+            client.router.receive(
+              encode(header.tagged, header.source, header.target, false, false, header.sequence, 1235, new Uint8Array(1)),
+            );
+          });
+        },
+      }),
+    });
+
+    await assert.rejects(client.send(command, sharedDevice), /collector failed/);
+    client.dispose();
+  });
+
+  test('an ack-only exchange never creates a collector', async () => {
+    let collectors = 0;
+    const command = {
+      type: 1234,
+      collect() {
+        collectors++;
+        return { add: () => true, result: () => 0 };
+      },
+    };
+    const client = Client({
+      defaultTimeoutMs: 0,
+      router: Router({
+        onSend(message) {
+          const header = decodeHeader(message);
+          client.router.receive(
+            encode(header.tagged, header.source, header.target, false, false, header.sequence, Type.Acknowledgement),
+          );
+        },
+      }),
+    });
+
+    await client.send(command, sharedDevice, { responseMode: 'ack-only' });
+    assert.equal(collectors, 0);
     client.dispose();
   });
 
@@ -1583,7 +1737,8 @@ describe('client', () => {
     });
 
     const zones = await client.send(GetColorZones({ startIndex: 0, endIndex: 255 }), sharedDevice, { timeoutMs: 50 });
-    assert.equal(zones.length, 2);
+    assert.equal(zones.zonesCount, 16);
+    assert.equal(zones.colors.length, 16);
 
     client.dispose();
   });

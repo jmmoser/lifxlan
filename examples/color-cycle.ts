@@ -30,7 +30,7 @@ while (Date.now() - start < RUN_MS) {
   const elapsed = Date.now() - start;
   const hue = Math.round(((elapsed % HUE_CYCLE_MS) / HUE_CYCLE_MS) * 65535);
   for (const device of devices) {
-    client.sendUnacknowledged(SetColor({ hue, saturation: 65535, brightness: 65535, kelvin: 3500, duration: FRAME_MS }), device);
+    client.sendUnacknowledged(SetColor({ hue, saturation: 65535, brightness: 65535, kelvin: 3500, durationMs: FRAME_MS }), device);
   }
   await new Promise((resolve) => setTimeout(resolve, FRAME_MS));
 }

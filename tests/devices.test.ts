@@ -2,7 +2,7 @@ import { describe, test, spyOn, expect } from 'bun:test';
 import assert from 'node:assert';
 import { Devices, Device, type RegistrationMessage } from '../src/devices.js';
 import { Router } from '../src/router.js';
-import { encode } from '../src/encoding.js';
+import { encode } from '../src/wire.js';
 import { Type } from '../src/constants/index.js';
 import { DeviceRemovedError, TimeoutError, ValidationError } from '../src/errors.js';
 import { received } from './helpers.js';
@@ -18,15 +18,15 @@ describe('devices', () => {
     const devices = Devices();
     devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
 
-    const found = await devices.get('D073D5AA0001', { timeoutMs: 50 });
+    const found = await devices.waitFor('D073D5AA0001', { timeoutMs: 50 });
     assert.equal(found.serialNumber, 'd073d5aa0001');
 
-    const pending = devices.get('D073D5AA0002', { timeoutMs: 100 });
+    const pending = devices.waitFor('D073D5AA0002', { timeoutMs: 100 });
     devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
     assert.equal((await pending).serialNumber, 'd073d5aa0002');
 
     assert.equal(devices.remove('D073D5AA0001'), true);
-    assert.equal(devices.registered.has('d073d5aa0001'), false);
+    assert.equal(devices.has('d073d5aa0001'), false);
   });
 
   test('Device rejects a serial number that disagrees with target', () => {
@@ -95,7 +95,7 @@ describe('devices', () => {
     devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
     devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
 
-    expect(devices.registered.size).toBe(1);
+    expect(devices.size).toBe(1);
   });
 
   test('registered device changes address calls onChanged', () => {
@@ -116,7 +116,7 @@ describe('devices', () => {
   test('get device resolves to the same device', async () => {
     const devices = Devices();
 
-    const devicePromise = devices.get(sharedDevice.serialNumber);
+    const devicePromise = devices.waitFor(sharedDevice.serialNumber);
     expect(Bun.peek(devicePromise)).toEqual(devicePromise);
 
     devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
@@ -124,14 +124,14 @@ describe('devices', () => {
     const device = await devicePromise;
     expect(device).toEqual(sharedDevice);
 
-    const existingDevicePromise = devices.get(sharedDevice.serialNumber);
+    const existingDevicePromise = devices.waitFor(sharedDevice.serialNumber);
     expect(Bun.peek(existingDevicePromise)).toEqual(device);
   });
 
   test('get device with abort signal', async () => {
     const devices = Devices();
 
-    const devicePromise = devices.get(sharedDevice.serialNumber, { signal: new AbortController().signal });
+    const devicePromise = devices.waitFor(sharedDevice.serialNumber, { signal: new AbortController().signal });
     expect(Bun.peek(devicePromise)).toEqual(devicePromise);
 
     devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
@@ -145,7 +145,7 @@ describe('devices', () => {
 
     // Rejects with the signal's reason (a DOMException named TimeoutError here).
     await assert.rejects(
-      devices.get(sharedDevice.serialNumber, { signal: AbortSignal.timeout(0) }),
+      devices.waitFor(sharedDevice.serialNumber, { signal: AbortSignal.timeout(0) }),
       (error) => error instanceof DOMException && error.name === 'TimeoutError',
     );
   });
@@ -162,10 +162,10 @@ describe('devices', () => {
     const devices = Devices(devicesOptions);
 
     devices.register(sharedDevice.port, sharedDevice.address, received(sharedDevice.serialNumber));
-    expect(devices.registered.size).toBe(1);
+    expect(devices.size).toBe(1);
 
     devices.remove(sharedDevice.serialNumber);
-    expect(devices.registered.size).toBe(0);
+    expect(devices.size).toBe(0);
 
     expect(onRemoved).toHaveBeenCalledTimes(1);
   });
@@ -177,8 +177,8 @@ describe('devices', () => {
     const controller1 = new AbortController();
     const controller2 = new AbortController();
     
-    const promise1 = devices.get(sharedDevice.serialNumber, { signal: controller1.signal });
-    const promise2 = devices.get(sharedDevice.serialNumber, { signal: controller2.signal });
+    const promise1 = devices.waitFor(sharedDevice.serialNumber, { signal: controller1.signal });
+    const promise2 = devices.waitFor(sharedDevice.serialNumber, { signal: controller2.signal });
 
     // Abort the first one
     controller1.abort();
@@ -196,7 +196,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 10 });
 
     // Get device without registering it, should timeout
-    const promise = devices.get('d073d5ffffff');
+    const promise = devices.waitFor('d073d5ffffff');
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
@@ -205,14 +205,14 @@ describe('devices', () => {
 
     // The signal never aborts; the timeout must still settle the promise
     // instead of hanging forever.
-    const promise = devices.get('d073d5ffffff', { signal: new AbortController().signal });
+    const promise = devices.waitFor('d073d5ffffff', { signal: new AbortController().signal });
     await expect(promise).rejects.toThrow('device discovery timed out');
   });
 
   test('get device per-call timeoutMs overrides the default', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
-    const promise = devices.get('d073d5ffffff', { timeoutMs: 10 });
+    const promise = devices.waitFor('d073d5ffffff', { timeoutMs: 10 });
     await expect(promise).rejects.toThrow('device discovery timed out after 10ms');
   });
 
@@ -221,7 +221,7 @@ describe('devices', () => {
 
     const reason = new Error('already cancelled');
     await assert.rejects(
-      devices.get('d073d5ffffff', { signal: AbortSignal.abort(reason) }),
+      devices.waitFor('d073d5ffffff', { signal: AbortSignal.abort(reason) }),
       (error) => error === reason,
     );
 
@@ -236,7 +236,7 @@ describe('devices', () => {
     // Abort wins over the cache: the caller explicitly cancelled.
     const reason = new Error('already cancelled');
     await assert.rejects(
-      devices.get(sharedDevice.serialNumber, { signal: AbortSignal.abort(reason) }),
+      devices.waitFor(sharedDevice.serialNumber, { signal: AbortSignal.abort(reason) }),
       (error) => error === reason,
     );
   });
@@ -245,7 +245,7 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 0 });
 
     const controller = new AbortController();
-    const promise = devices.get('d073d5ffffff', { signal: controller.signal });
+    const promise = devices.waitFor('d073d5ffffff', { signal: controller.signal });
 
     const reason = new Error('user cancelled');
     controller.abort(reason);
@@ -260,7 +260,7 @@ describe('devices', () => {
 
     // Must not throw
     devices.register(56700, '1.2.3.4', received('abcdef123456'));
-    expect(devices.registered.size).toBe(1);
+    expect(devices.size).toBe(1);
   });
 
   test('Devices.register tolerates a throwing onChanged callback', () => {
@@ -313,7 +313,7 @@ describe('devices', () => {
     // registration must not resurrect it.
     const devices = Devices({ defaultTimeoutMs: 0 });
 
-    const p = devices.get('abcdef123456');
+    const p = devices.waitFor('abcdef123456');
     const rejection = assert.rejects(p, (error: unknown) => (
       error instanceof DeviceRemovedError && error.serialNumber === 'abcdef123456'
     ));
@@ -330,7 +330,7 @@ describe('devices', () => {
     devices.remove('abcdef123456');
 
     const c = new AbortController();
-    const p = devices.get('abcdef123456', { signal: c.signal });
+    const p = devices.waitFor('abcdef123456', { signal: c.signal });
     devices.remove('abcdef123456');
     await assert.rejects(p, (error: unknown) => error instanceof DeviceRemovedError);
 
@@ -341,12 +341,12 @@ describe('devices', () => {
   test('a waiter rejected by remove() does not drop a newer waiter for the same serial', async () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
-    const p1 = devices.get('abcdef123456');
+    const p1 = devices.waitFor('abcdef123456');
     devices.remove('abcdef123456');
     await assert.rejects(p1, (error: unknown) => error instanceof DeviceRemovedError);
 
     // Waiter B registers a fresh set for the same serial after the removal.
-    const p2 = devices.get('abcdef123456');
+    const p2 = devices.waitFor('abcdef123456');
 
     devices.register(56700, '192.168.1.1', received('abcdef123456'));
     const device = await p2;
@@ -357,8 +357,8 @@ describe('devices', () => {
     const devices = Devices({ defaultTimeoutMs: 60000 });
 
     const c1 = new AbortController();
-    const p1 = devices.get('abcdef123456', { signal: c1.signal });
-    const p2 = devices.get('abcdef123456');
+    const p1 = devices.waitFor('abcdef123456', { signal: c1.signal });
+    const p2 = devices.waitFor('abcdef123456');
 
     // A settles first — it must only remove its own waiter, not B's.
     c1.abort();
@@ -388,7 +388,7 @@ describe('devices', () => {
       encode(true, 2, new Uint8Array(6), true, false, 255, Type.GetService),
     );
     expect(devices.register(56700, '1.2.3.4', message)).toBeUndefined();
-    expect(devices.registered.size).toBe(0);
+    expect(devices.size).toBe(0);
     expect(added).toEqual([]);
   });
 
@@ -397,8 +397,8 @@ describe('devices', () => {
 
     const c1 = new AbortController();
     const c2 = new AbortController();
-    const p1 = devices.get('abcdef123456', { signal: c1.signal });
-    const p2 = devices.get('abcdef123456', { signal: c2.signal });
+    const p1 = devices.waitFor('abcdef123456', { signal: c1.signal });
+    const p2 = devices.waitFor('abcdef123456', { signal: c2.signal });
 
     c1.abort();
     await assert.rejects(p1, /aborted/);
@@ -414,7 +414,7 @@ describe('devices', () => {
     const devices = Devices();
     const controller = new AbortController();
     
-    const promise = devices.get('d073d5fffffe', { signal: controller.signal });
+    const promise = devices.waitFor('d073d5fffffe', { signal: controller.signal });
     controller.abort();
     
     expect(promise).rejects.toThrow('aborted');
@@ -440,7 +440,7 @@ describe('devices', () => {
   test('get() validates its timeout even for an already-registered device', async () => {
     const devices = Devices();
     devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
-    await assert.rejects(devices.get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
+    await assert.rejects(devices.waitFor('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
   });
 
   test('Device factory validates port range', () => {
@@ -622,29 +622,29 @@ describe('devices', () => {
     // Registry keys are 12 lowercase hex digits from the wire; a MAC-style
     // serial would otherwise wait out its timeout (or forever with 0).
     const devices = Devices({ defaultTimeoutMs: 0 });
-    await assert.rejects(devices.get('d0:73:d5:12:34:56'), ValidationError);
-    await assert.rejects(devices.get('nonexistent'), ValidationError);
+    await assert.rejects(devices.waitFor('d0:73:d5:12:34:56'), ValidationError);
+    await assert.rejects(devices.waitFor('nonexistent'), ValidationError);
     // A non-string (e.g. an unset environment variable) rejects too, rather
     // than throwing synchronously out of get().
     // @ts-expect-error -- an untyped caller passing undefined
-    const fromUnsetEnv = devices.get(undefined);
+    const fromUnsetEnv = devices.waitFor(undefined);
     await assert.rejects(fromUnsetEnv, ValidationError);
     // @ts-expect-error -- an untyped caller passing a number
-    const numeric = devices.get(0xd073d5123456);
+    const numeric = devices.waitFor(0xd073d5123456);
     await assert.rejects(numeric, ValidationError);
     // So does an AbortController passed in place of its .signal, which threw
     // synchronously out of addEventListener.
     // @ts-expect-error -- an untyped caller passing the controller itself
-    const withController = devices.get('d073d5ffffff', { signal: new AbortController() });
+    const withController = devices.waitFor('d073d5ffffff', { signal: new AbortController() });
     await assert.rejects(withController, ValidationError);
     // null still means "no signal" (fetch()'s convention), not an error.
     // @ts-expect-error -- an untyped caller passing null
-    await assert.rejects(devices.get('d073d5ffffff', { signal: null, timeoutMs: 1 }), TimeoutError);
+    await assert.rejects(devices.waitFor('d073d5ffffff', { signal: null, timeoutMs: 1 }), TimeoutError);
     // Nor the all-zero broadcast serial, which register() never registers.
-    await assert.rejects(devices.get('000000000000'), ValidationError);
+    await assert.rejects(devices.waitFor('000000000000'), ValidationError);
     // Uppercase hex is still accepted.
     const device = devices.register(56700, '10.0.0.7', received('d073d5123456'));
-    assert.equal(await devices.get('D073D5123456'), device);
+    assert.equal(await devices.waitFor('D073D5123456'), device);
   });
 
   test('a NaN or negative timeout is rejected instead of silently disabling the timeout', async () => {
@@ -652,25 +652,85 @@ describe('devices', () => {
     // assert.rejects, not expect().rejects: on a regression the lookup never
     // settles, and Bun's expect().rejects then hangs the run instead of
     // failing at the test timeout.
-    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
+    await assert.rejects(Devices().waitFor('d073d5aa0001', { timeoutMs: Number.NaN }), ValidationError);
     expect(() => Devices({ defaultTimeoutMs: -1 })).toThrow(ValidationError);
-    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: -5 }), ValidationError);
+    await assert.rejects(Devices().waitFor('d073d5aa0001', { timeoutMs: -5 }), ValidationError);
     // @ts-expect-error -- an untyped caller passing a bigint
     expect(() => Devices({ defaultTimeoutMs: 5000n })).toThrow(ValidationError);
     // @ts-expect-error -- an untyped caller passing a bigint
-    await assert.rejects(Devices().get('d073d5aa0001', { timeoutMs: 5000n }), ValidationError);
+    await assert.rejects(Devices().waitFor('d073d5aa0001', { timeoutMs: 5000n }), ValidationError);
   });
 
   test('get() with a timeoutMs past the setTimeout range (Infinity) does not reject at once', async () => {
     const devices = Devices({ defaultTimeoutMs: Infinity });
     const controller = new AbortController();
-    const lookup = devices.get('d073d5aa0001', { signal: controller.signal });
+    const lookup = devices.waitFor('d073d5aa0001', { signal: controller.signal });
     await new Promise((resolve) => setTimeout(resolve, 20));
     const reason = new Error('done waiting');
     controller.abort(reason);
     await expect(lookup).rejects.toBe(reason);
   });
 });
+describe('devices lookup', () => {
+  test('get() returns a registered device synchronously and undefined otherwise', () => {
+    const devices = Devices();
+    expect(devices.get('d073d5aa0001')).toBeUndefined();
+
+    const device = devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+    expect(device).toBeDefined();
+    expect(devices.get('d073d5aa0001')).toBe(device);
+  });
+
+  test('get() and has() match the serial number case-insensitively', () => {
+    const devices = Devices();
+    const device = devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+
+    // A serial copied in uppercase from a label still finds the device.
+    expect(devices.get('D073D5AA0001')).toBe(device);
+    expect(devices.has('D073D5AA0001')).toBe(true);
+    expect(devices.has('d073d5aa0001')).toBe(true);
+    expect(devices.has('d073d5aa0002')).toBe(false);
+  });
+
+  test('get() and has() treat a non-string as not registered instead of throwing', () => {
+    const devices = Devices();
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+
+    // @ts-expect-error -- an untyped caller passing an unset environment variable
+    expect(devices.get(undefined)).toBeUndefined();
+    // @ts-expect-error -- an untyped caller passing a number
+    expect(devices.has(123)).toBe(false);
+  });
+
+  test('size and iteration track registration and removal', () => {
+    const devices = Devices();
+    expect(devices.size).toBe(0);
+    expect([...devices]).toEqual([]);
+
+    const first = devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+    const second = devices.register(56700, '10.0.0.2', received('d073d5aa0002'));
+    expect(devices.size).toBe(2);
+    const listed = [...devices];
+    expect(listed.length).toBe(2);
+    expect(listed[0]).toBe(first);
+    expect(listed[1]).toBe(second);
+
+    devices.remove('D073D5AA0001');
+    expect(devices.size).toBe(1);
+    expect(devices.get('d073d5aa0001')).toBeUndefined();
+    expect([...devices][0]).toBe(second);
+  });
+
+  test('waitFor() resolves with the same object get() returns', async () => {
+    const devices = Devices();
+    const pending = devices.waitFor('D073D5AA0001');
+    devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
+    const device = await pending;
+    expect(device.address).toBe('10.0.0.1');
+    expect(devices.get('d073d5aa0001')).toBe(device);
+  });
+});
+
 describe('devices subscribe', () => {
   test('subscriber callbacks fire alongside constructor callbacks', () => {
     const constructorEvents: string[] = [];
@@ -723,7 +783,7 @@ describe('devices subscribe', () => {
     devices.register(56700, '10.0.0.1', received('d073d5aa0001'));
 
     expect(events).toEqual(['d073d5aa0001']);
-    expect(devices.registered.size).toBe(1);
+    expect(devices.size).toBe(1);
   });
 
   test('subscribing the same function twice invokes it twice and removes independently', () => {
@@ -818,7 +878,7 @@ describe('devices subscribe', () => {
       expect(device?.serialNumber).toBe('d073d5aa0001');
       expect(device?.address).toBe('10.0.0.7');
       expect(device?.port).toBe(56700);
-      expect(devices.registered.get('d073d5aa0001')).toBe(device);
+      expect(devices.get('d073d5aa0001')).toBe(device);
     });
 
     test('derives the target from the received header', () => {
@@ -855,7 +915,7 @@ describe('devices subscribe', () => {
       const moved = devices.register(56700, '10.0.0.9', received('d073d5aa0001'));
 
       expect(moved?.address).toBe('10.0.0.9');
-      expect(devices.registered.size).toBe(1);
+      expect(devices.size).toBe(1);
       expect(changed).toEqual(['10.0.0.9']);
     });
 
@@ -872,7 +932,7 @@ describe('devices subscribe', () => {
 
       expect(device?.serialNumber).toBe('d073d5aa0001');
       expect(device?.target).toEqual(target);
-      expect(devices.registered.get('d073d5aa0001')).toBe(device);
+      expect(devices.get('d073d5aa0001')).toBe(device);
     });
 
     test('a request another controller sent to a device does not register or re-address it', () => {
@@ -885,7 +945,7 @@ describe('devices subscribe', () => {
       const devices = Devices({ onChanged: (device) => changed.push(device.address) });
 
       expect(devices.register(56700, '10.0.0.20', request(Type.GetColor))).toBeUndefined();
-      expect(devices.registered.size).toBe(0);
+      expect(devices.size).toBe(0);
 
       const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
       expect(devices.register(56700, '10.0.0.20', request(Type.SetColor))).toBeUndefined();
@@ -931,7 +991,7 @@ describe('devices subscribe', () => {
       const devices = Devices({ onChanged: (device) => changed.push(device.address) });
 
       expect(devices.register(0, '10.0.0.7', received('d073d5aa0001'))).toBeUndefined();
-      expect(devices.registered.size).toBe(0);
+      expect(devices.size).toBe(0);
 
       // A known device is not re-addressed to an unusable port either.
       const device = devices.register(56700, '10.0.0.7', received('d073d5aa0001'));
@@ -949,7 +1009,7 @@ describe('devices subscribe', () => {
       const device = devices.register(56700, '10.0.0.7', undefined);
 
       expect(device).toBeUndefined();
-      expect(devices.registered.size).toBe(0);
+      expect(devices.size).toBe(0);
       expect(added).toEqual([]);
     });
   });

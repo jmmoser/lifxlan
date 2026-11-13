@@ -44,7 +44,7 @@ const { client, devices, router, close } = await openLan();
 using discovery = discover(router, devices);
 
 // Wait for a specific device (replace with your device's serial number)
-const device = await devices.get('d07123456789');
+const device = await devices.waitFor('d07123456789');
 
 // Turn the light on!
 await client.send(SetPower(true), device);
@@ -83,6 +83,8 @@ The library uses three main components:
 
 Each `Client` gets a unique **source** id from the `Router` and tracks a per-device **sequence** number internally; together they correlate responses with their requests, so many clients can share one router and socket. Sequence is managed for you; a `Device` is just a network descriptor.
 
+`Router`, `Client`, `Devices`, and `Device` each name both the factory function and the type it returns, so the same identifier works in either position: `const client: Client = Client({ router })`.
+
 ### Bring Your Own Socket
 
 The core library doesn't include a UDP socket implementation - you provide it. This makes it work across different server-side JavaScript runtimes:
@@ -95,7 +97,7 @@ The optional [`lifxlan/node`](#the-openlan-helper) (Node.js/Bun) and [`lifxlan/d
 
 ### Buffer Ownership
 
-For performance, decoding is zero-copy: the buffer you pass to `router.receive()` is consumed, not copied. Decoded values — `header.target`, `payload`, and the results resolved by `client.send()` — are views into that buffer. Node's `dgram`, Bun's `udpSocket`, and Deno's `listenDatagram` all allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `new Uint8Array(message)` — not `message.slice()`, which on a Node `Buffer` is a view), and copy any decoded bytes you intend to keep long-term.
+For performance, the buffer you pass to `router.receive()` is consumed, not copied. `header.target`, the raw `payload`, and the byte-array fields of decoded results — an `EchoRequest` reply, an effect's `parameters`, a button action's `target` — are views into that buffer; every other decoded value (numbers, strings, dates, colors) is copied out and owns nothing of it. Node's `dgram`, Bun's `udpSocket`, and Deno's `listenDatagram` all allocate a fresh buffer per datagram, so the examples in this README are safe as-is. If your socket layer reuses a receive buffer, pass a copy to `router.receive()` (e.g. `new Uint8Array(message)` — not `message.slice()`, which on a Node `Buffer` is a view), and copy any of those byte arrays you intend to keep long-term.
 
 ### Response Mode Control
 
@@ -374,13 +376,15 @@ for await (const device of discover(router, devices, { timeoutMs: 3000 })) {
 await close();
 ```
 
-`discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.get()`, where abort *rejects* — there it means the lookup failed; here it just means "stop collecting".)
+`discover()` owns its broadcast timer and a client, releasing both when iteration ends — which is never an error. A `timeoutMs` budget or aborted `signal` ends it after draining already-queued devices; `break` or `dispose()` end it at once and discard the rest. Either way the timer is cleared, so the loop can't leak it. (Contrast `devices.waitFor()`, where abort *rejects* — there it means the device never appeared; here it just means "stop collecting".)
+
+Broadcasts go to the limited broadcast address `255.255.255.255`, which the OS sends out a single interface of its choosing. On a host with several interfaces — Wi-Fi plus Ethernet, a VPN, Docker bridges — pass the subnet-directed broadcast address of the network the lights are on: `discover(router, devices, { broadcastAddress: '192.168.1.255' })`. `client.broadcast(command, { address })` takes the same address for one-off broadcasts.
 
 The iterator is `Disposable`, so `using` stops discovery at end of scope:
 
 ```javascript
 using discovery = discover(router, devices);
-const device = await devices.get('d07123456789');
+const device = await devices.waitFor('d07123456789');
 ```
 
 The same shape grabs the *first* device found — no loop, no serial number — by calling the iterator directly:
@@ -411,7 +415,7 @@ client.broadcast(GetService());
 const scan = setInterval(() => client.broadcast(GetService()), 1000);
 
 // Wait for one specific device...
-const device = await devices.get('d07123456789');
+const device = await devices.waitFor('d07123456789');
 clearInterval(scan);
 
 // ...or scan for a fixed window, then act on everything discovered:
@@ -420,7 +424,7 @@ clearInterval(scan);
 //   for (const device of devices) { /* ... */ }
 ```
 
-A single broadcast can be lost (UDP is best-effort), so repeat on an interval until you've found what you're looking for. `devices.get()` resolves as soon as a matching device registers; for "all devices", broadcast for a few seconds, then iterate the `devices` registry. Because `devices.register()` updates a known device's address in place, leaving a slow interval running also tracks devices whose IP changes (DHCP) — the same reason `discover()` keeps broadcasting until disposed.
+A single broadcast can be lost (UDP is best-effort), so repeat on an interval until you've found what you're looking for. `devices.waitFor()` resolves as soon as a matching device registers; for "all devices", broadcast for a few seconds, then iterate the `devices` registry. The registry also answers synchronously: `devices.get(serialNumber)` returns the device or `undefined`, alongside `devices.has(serialNumber)` and `devices.size` (serial numbers match case-insensitively throughout). Because `devices.register()` updates a known device's address in place, leaving a slow interval running also tracks devices whose IP changes (DHCP) — the same reason `discover()` keeps broadcasting until disposed.
 
 ### Error Handling with Retries
 
@@ -463,9 +467,9 @@ try {
 }
 ```
 
-Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.get()` accepts the same options: `devices.get(serialNumber, { signal, timeoutMs })`.
+Pass `timeoutMs: 0` to disable the timeout for a call, leaving the signal (or a response) as the only way to settle it. `devices.waitFor()` accepts the same options: `devices.waitFor(serialNumber, { signal, timeoutMs })`.
 
-**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, sequence exhaustion, or a `ValidationError` for invalid input (a NaN or negative `timeoutMs`, or a device whose target is all zeros) — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `sendUnacknowledged()` throw synchronously instead, since they have no promise to reject.)
+**`send()` never throws synchronously.** Every failure — a disposed client, an aborted signal, a missing decoder, a throwing transport, sequence exhaustion, a `DecodeError` for a malformed reply, or a `ValidationError` for invalid input (a NaN or negative `timeoutMs`, or a device whose target is all zeros) — is delivered through the returned promise, so `Promise.all(devices.map(d => client.send(cmd, d)))` observes failures uniformly. (The fire-and-forget `broadcast()` and `sendUnacknowledged()` throw synchronously instead, since they have no promise to reject.)
 
 Each client can have up to 255 requests in flight per device; sequence numbers are recycled as responses arrive, skipping any still held by pending requests. If all 255 are genuinely in flight, `send()` rejects with `SequenceExhaustionError`.
 
@@ -545,7 +549,7 @@ console.log('Light is now:', currentState.hue);
 
 // Fast mode: fire-and-forget for animations (no promise)
 for (let i = 0; i < 360; i += 10) {
-  client.sendUnacknowledged(SetColor({ hue: i * 182, saturation: 65535, brightness: 65535, kelvin: 3500, duration: 100 }), device);
+  client.sendUnacknowledged(SetColor({ hue: i * 182, saturation: 65535, brightness: 65535, kelvin: 3500, durationMs: 100 }), device);
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
@@ -623,7 +627,7 @@ while (true) {
       PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
     
     client.sendUnacknowledged(
-      SetColor({ hue, saturation, brightness, kelvin, duration: 1000 }), 
+      SetColor({ hue, saturation, brightness, kelvin, durationMs: 1000 }),
       device
     );
     
@@ -637,8 +641,8 @@ while (true) {
 Not every device supports every command — multizone, extended multizone, HEV, infrared, relays, and buttons are all product-specific. The optional `lifxlan/products` subpath resolves the vendor/product ids from a `GetVersion` (plus, optionally, the firmware version from `GetHostFirmware`) against the official [products.json](https://github.com/LIFX/products) registry:
 
 ```javascript
-import { PRODUCTS_URL, GetVersion, GetHostFirmware } from 'lifxlan';
-import { Products } from 'lifxlan/products';
+import { GetVersion, GetHostFirmware } from 'lifxlan';
+import { Products, PRODUCTS_URL } from 'lifxlan/products';
 
 // Bring your own data: fetch it at runtime or vendor the file.
 const products = Products(await (await fetch(PRODUCTS_URL)).json());
@@ -654,16 +658,24 @@ if (features?.extended_multizone) {
 
 ### Multizone Strips
 
-`GetColorZones` takes an inclusive zone range; the LIFX-documented way to read every zone is `0..255`, and the exchange completes as soon as every zone the device actually has in that range has been reported (a 16-zone strip answers with two `StateMultiZone` packets). `onResponse` observes packets as they arrive; return `false` to stop early.
+`GetColorZones` takes an inclusive zone range; the LIFX-documented way to read every zone is `0..255`. A device answers with as many packets as it needs (a 16-zone strip sends two), and `send()` assembles them: it resolves once every requested zone the device has is in, with one color per zone in zone order.
 
 ```javascript
-import { GetColorZones, SetColorZones } from 'lifxlan';
+import { GetColorZones, GetExtendedColorZones, SetColorZones } from 'lifxlan';
 
-const packets = await client.send(GetColorZones({ startIndex: 0, endIndex: 255 }), device);
-console.log(packets[0].zonesCount, 'zones');
+const zones = await client.send(GetColorZones({ startIndex: 0, endIndex: 255 }), device);
+console.log(zones.zonesCount, 'zones');      // the device's total
+console.log(zones.colors[3].hue);            // zones.colors[i] is zone zones.zoneIndex + i
+
+// Devices with extended multizone support report every zone in one call.
+const all = await client.send(GetExtendedColorZones(), device);
 
 await client.send(SetColorZones({ startIndex: 0, endIndex: 7, hue: 0, saturation: 65535, brightness: 65535, kelvin: 3500 }), device);
 ```
+
+`Get64` works the same way for tile chains, resolving with one frame per tile ordered by `tileIndex`. All three accept `onResponse` to observe each packet as it arrives; return `false` from it to stop early and resolve with what has been received (zones up to the first one still missing; the tiles that answered).
+
+Every decoded array holds only real entries — `zones.colors`, a chain's `devices`, an effect's `palette`, a switch's `buttons` — never the fixed-size padding of the wire message, so `.length` is the count.
 
 ### LIFX Switch (Relays and Buttons)
 
@@ -672,7 +684,7 @@ import { GetRPower, SetRPower, GetButton, SetButton, ButtonGesture, ButtonTarget
 
 // Toggle relay 0
 const { level } = await client.send(GetRPower(0), device);
-await client.send(SetRPower(0, level > 0 ? 0 : 65535), device);
+await client.send(SetRPower(0, level === 0), device);
 
 // Read the button configuration
 const state = await client.send(GetButton(), device);
@@ -681,15 +693,15 @@ console.log(state.count, state.buttons[0].actions[0].gesture);
 
 ### Custom Commands
 
+A command is a plain object: the request `type`, an optional request `payload`, and a `decode` function that turns the reply's payload into the result `send()` resolves with.
+
 ```javascript
 /**
- * @param {Uint8Array} bytes
- * @param {{ current: number; }} offsetRef
+ * @param {Uint8Array} payload the reply's payload
+ * @param {number} type the reply's message type
  */
-function decodeCustom(bytes, offsetRef) {
-  const val1 = bytes[offsetRef.current++];
-  const val2 = bytes[offsetRef.current++];
-  return { val1, val2 };
+function decodeCustom(payload, type) {
+  return { val1: payload[0], val2: payload[1] };
 }
 
 function CustomCommand() {
@@ -704,39 +716,38 @@ const res = await client.send(CustomCommand(), device);
 console.log(res.val1, res.val2);
 ```
 
-`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. `responseType` is optional but recommended: with it set, `send()` ignores a reply of any other type (a late packet from an earlier exchange whose sequence number has been reused) instead of handing it to `decode`. Every built-in command that decodes a reply declares it, except `GetColorZones`, whose two possible reply types its own decoder tells apart; commands with no reply packet (`SetReboot`, `Set64`, `SetUserPosition`) have nothing to declare. A `StateUnhandled` reply is filtered the same way: one naming a request type other than the command's own is ignored rather than rejecting the exchange.
+`decode` must be stateless — the same command object may be sent multiple times, concurrently, to multiple devices. `responseType` is optional but recommended: with it set, `send()` ignores a reply of any other type (a late packet from an earlier exchange whose sequence number has been reused) instead of handing it to `decode`. Every built-in command that decodes a reply declares it, except `GetColorZones`, whose two possible reply types its own collector tells apart; commands with no reply packet (`SetReboot`, `Set64`, `SetUserPosition`) have nothing to declare. A `StateUnhandled` reply is filtered the same way: one naming a request type other than the command's own is ignored rather than rejecting the exchange.
 
 ### Custom Multi-Response Commands
 
-For commands whose result spans *multiple* response packets, provide `createDecoder` instead of `decode`. It is called once per `send()`, so every exchange gets its own accumulation state and the command object stays safe to reuse. This is how the built-in `GetColorZones`, `GetExtendedColorZones`, and `Get64` work.
+For commands whose result spans *multiple* response packets, provide `collect` instead of `decode`. It is called once per `send()` and returns a collector: `add(payload, type)` takes each packet and returns `true` once the result is complete, and `result()` hands it over. Every exchange gets its own collector, so the command object stays safe to reuse. This is how the built-in `GetColorZones`, `GetExtendedColorZones`, and `Get64` work.
 
 ```javascript
 function CustomMultiResponseCommand(expectedResponses) {
   return {
     type: 1234,
-    createDecoder() {
+    collect() {
       // Fresh state for each send()
-      const responses = [];
-      return (bytes, offsetRef, continuation, responseType) => {
-        responses.push({
-          responseType,
-          value: bytes[offsetRef.current++],
-        });
-        // Keep the exchange open until every packet has arrived
-        continuation.expectMore = responses.length < expectedResponses;
-        return responses;
+      const values = [];
+      return {
+        add(payload, type) {
+          values.push(payload[0]);
+          // Keep the exchange open until every packet has arrived
+          return values.length === expectedResponses;
+        },
+        result: () => values,
       };
     },
   };
 }
 
-const responses = await client.send(CustomMultiResponseCommand(2), device);
-console.log(responses.length); // 2
+const values = await client.send(CustomMultiResponseCommand(2), device);
+console.log(values.length); // 2
 ```
 
 ### Low-Level Protocol Access
 
-The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` and the `getHeader*` accessors take frames apart, and every payload has an `encode*`/`decode*` function (`encodeSetColor`, `decodeStateService`, …). Use it to drive a socket without Router/Client, or to build custom commands from the same primitives the built-in ones use:
+The `lifxlan/encoding` subpath exposes the wire format directly: `encode` builds a full protocol message, `decodeHeader`/`getPayload` take one apart, and every device-to-client message has a `decode*` function (`decodeStateService`, `decodeLightState`, …) that takes its payload. Request payloads come from the command factories — `SetColor({ ... }).payload` is the encoded bytes — so there is one place that builds (and validates) them. Use it to drive a socket without Router/Client:
 
 ```javascript
 import { Type, NO_TARGET } from 'lifxlan';
@@ -751,7 +762,7 @@ socket.on('message', (bytes) => {
   const header = decodeHeader(bytes);
   if (header.type === Type.StateService) {
     const payload = getPayload(bytes);
-    console.log(decodeStateService(payload, { current: 0 }));
+    console.log(decodeStateService(payload));
   }
 });
 ```
@@ -782,13 +793,13 @@ const router = Router({
 ```javascript
 // Router-level message callback (every decoded inbound message)
 const router = Router({
-  onMessage(header, payload, serialNumber) {
+  onMessage({ header, payload, serialNumber }) {
     console.log('Received:', header.type, 'from', serialNumber);
   },
 });
 ```
 
-To watch a single client's traffic, compare sources inside the tap: `header.source === client.source`.
+The tap receives one message object — the same one `router.receive()` returns — holding the decoded `header`, the raw `payload`, and the sender's `serialNumber`. To watch a single client's traffic, compare sources inside the tap: `header.source === client.source`.
 
 To turn tapped messages into typed data, switch on `header.type` and call the matching `decode*` function from `lifxlan/encoding` — every device-to-client message has one (`decodeStateService`, `decodeLightState`, `decodeStateGroup`, …), named after its `Type` constant:
 
@@ -797,15 +808,15 @@ import { Type } from 'lifxlan';
 import { decodeLightState, decodeStateGroup } from 'lifxlan/encoding';
 
 const router = Router({
-  onMessage(header, payload, serialNumber) {
+  onMessage({ header, payload, serialNumber }) {
     switch (header.type) {
       case Type.LightState: {
-        const state = decodeLightState(payload, { current: 0 });
+        const state = decodeLightState(payload);
         console.log(serialNumber, 'reports power', state.power);
         break;
       }
       case Type.StateGroup: {
-        const group = decodeStateGroup(payload, { current: 0 });
+        const group = decodeStateGroup(payload);
         console.log(serialNumber, 'is in group', group.label);
         break;
       }
@@ -814,9 +825,9 @@ const router = Router({
 });
 ```
 
-This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it, and payloads outside your `switch` are never decoded at all. The same pattern works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet results (`StateZone`, `StateMultiZone`, `State64`, `StateDeviceChain`) decode as their single-packet shape here — accumulating a full result across packets is what `client.send()` does for you.
+This is the building block for an event-driven state cache: every `State*` response that reaches your socket flows through one tap, whichever client's request produced it, and payloads outside your `switch` are never decoded at all. The same pattern works on `router.receive()`'s return value if you'd rather tap in your socket handler. Multi-packet replies (`StateZone`, `StateMultiZone`, `StateExtendedColorZones`, `State64`) decode one packet at a time here — assembling the full result across packets is what `client.send()` does for you.
 
-One deliberate redundancy to be aware of: a response that settles a `client.send()` promise is decoded twice on this path — once by the command's decoder for the awaiting caller, once by the tap. Sharing a single decode would couple every client to the tap's lifecycle, and at LAN message rates (bounded by the [rate limit](#rate-limits)) a second zero-copy decode of a ≤100-byte payload is noise.
+One deliberate redundancy to be aware of: a response that settles a `client.send()` promise is decoded twice on this path — once by the command's decoder for the awaiting caller, once by the tap. Sharing a single decode would couple every client to the tap's lifecycle, and at LAN message rates (bounded by the [rate limit](#rate-limits)) a second decode of a ≤100-byte payload is noise.
 
 ## Troubleshooting
 
@@ -824,6 +835,7 @@ One deliberate redundancy to be aware of: a response that settles a `client.send
 
 - **Broadcast isn't enabled on the socket.** With Node's `dgram`, call `socket.setBroadcast(true)` *after* the socket is listening (calling it earlier throws). Without it, the `GetService` broadcast to `255.255.255.255:56700` never leaves the machine. ([`openLan()`](#the-openlan-helper) handles this for you.)
 - **Discovery packets got lost.** UDP broadcasts are best-effort; a single `client.broadcast(GetService())` can simply vanish. Broadcast repeatedly (`discover()` starts at every 1 second, backing off to every minute) until you've found what you're looking for.
+- **The broadcast left through the wrong interface.** On a machine with more than one network interface (Wi-Fi and Ethernet, a VPN, Docker bridges), `255.255.255.255` goes out whichever one the OS picks. Broadcast to the lights' subnet instead: `discover(router, devices, { broadcastAddress: '192.168.1.255' })`.
 - **The devices are on a different subnet or VLAN.** The limited broadcast address `255.255.255.255` does not cross routers. Run on the same subnet as the lights, or skip discovery entirely and register devices by IP with `Device({ serialNumber, address })` (see [Use Without Device Discovery](#use-without-device-discovery)).
 - **A firewall is dropping the replies.** Devices reply unicast from port 56700 to your socket's ephemeral port; host firewalls that block unsolicited-looking inbound UDP will eat them.
 - **Replies arrive but nothing registers.** With manual socket wiring, registration is your code: the `'message'` handler must call `router.receive()` and pass the result to `devices.register(...)` as in the examples (`openLan()` attaches this handler for you). Verify packets are arriving with `Router({ onMessage })` (the `onMessage` option of `openLan()`) or a packet capture.
@@ -840,9 +852,17 @@ One deliberate redundancy to be aware of: a response that settles a `client.send
 
 The device received the command but doesn't support it — multizone, tile, HEV, infrared, relay, and button commands are all product-specific. Check capabilities first with [`lifxlan/products`](#product-capabilities).
 
-### Decoded values turn into garbage later
+### `send()` rejects with `DecodeError`
 
-Decoded results are views into the datagram's receive buffer rather than copies (see [Buffer Ownership](#buffer-ownership)). The built-in sockets in Node.js, Bun, and Deno allocate a fresh buffer for every datagram, so they are unaffected. But if your socket layer reads each datagram into one reusable buffer, the next datagram overwrites the memory your earlier results still point to, and values you already decoded silently change. Either pass a copy to `router.receive()` (e.g. `router.receive(new Uint8Array(message))`; on a Node `Buffer`, `slice()` returns a view, not a copy) or copy any decoded bytes you want to keep.
+A reply arrived but was shorter than its message type requires — a truncated or corrupted datagram, or something on the LAN that is not a LIFX device answering on the same source and sequence. It is always about what the network delivered, never about your input (that is `ValidationError`), so it is safe to retry like a lost packet.
+
+### `ValidationError` when building a command
+
+Every numeric field is checked against its width on the wire before it is encoded, because the alternative is silently sending something else: `brightness: -1` would wrap to full brightness and `startIndex: 256` to zone 0. HSBK components are unsigned 16-bit values (0–65535, not degrees or percentages), zone and tile indices are integers from 0 to 255, and durations are non-negative. Magnitudes may be fractional and are truncated; indices and counts must be integers.
+
+### Decoded byte arrays turn into garbage later
+
+The byte-array fields of decoded results (an echo payload, an effect's `parameters`, a button action's `target`), like `header.target` and the raw `payload`, are views into the datagram's receive buffer rather than copies (see [Buffer Ownership](#buffer-ownership)). The built-in sockets in Node.js, Bun, and Deno allocate a fresh buffer for every datagram, so they are unaffected. But if your socket layer reads each datagram into one reusable buffer, the next datagram overwrites the memory those views still point to. Either pass a copy to `router.receive()` (e.g. `router.receive(new Uint8Array(message))`; on a Node `Buffer`, `slice()` returns a view, not a copy) or copy the byte arrays you want to keep.
 
 ### `SourceExhaustionError` / `SequenceExhaustionError`
 
@@ -850,7 +870,7 @@ Creating clients in a loop without `client.dispose()` eventually exhausts the ro
 
 ## Versioning and Stability
 
-This package is pre-1.0, so any 0.0.x release may still include breaking changes. From version 1.0 onward it follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the semver surface being exactly:
+The current release line is a 1.0 release candidate; breaking changes can still land between candidates and are listed in the [changelog](CHANGELOG.md). From version 1.0 onward the package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the semver surface being exactly:
 
 - every export of the package root (`lifxlan`),
 - every export of `lifxlan/encoding`,
@@ -858,7 +878,7 @@ This package is pre-1.0, so any 0.0.x release may still include breaking changes
 - every export of `lifxlan/discovery`,
 - every export of `lifxlan/node`,
 - every export of `lifxlan/deno`,
-- documented runtime behavior: zero-copy buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
+- documented runtime behavior: buffer ownership, timeout/abort semantics, and `send()`'s never-throws-synchronously guarantee.
 
 Anything not reachable from those entry points — internal helpers, file layout under `dist/`, undocumented behavior — may change in any release. Specifically:
 
