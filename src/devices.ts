@@ -1,6 +1,6 @@
 import { PORT, Type } from './constants/index.js';
-import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers, MAX_TIMER_DELAY_MS } from './utils/index.js';
-import { AbortError, DeviceRemovedError, TimeoutError, ValidationError } from './errors.js';
+import { convertSerialNumberToTarget, convertTargetToSerialNumber, PromiseWithResolvers, MAX_TIMER_DELAY_MS, abortReason } from './utils/index.js';
+import { DeviceRemovedError, TimeoutError, ValidationError } from './errors.js';
 
 /**
  * The minimal decoded-message shape `register()` reads. `ReceivedMessage`
@@ -157,14 +157,14 @@ export interface DeviceEventHandlers {
 
 export interface DevicesOptions extends DeviceEventHandlers {
   /**
-   * How long get() waits for a device to be registered before rejecting with
-   * TimeoutError. Applies whether or not a per-call signal is provided; set 0
+   * How long waitFor() waits for a device to be registered before rejecting
+   * with TimeoutError. Applies whether or not a per-call signal is provided; set 0
    * to disable timeouts by default. Defaults to 3000ms.
    */
   defaultTimeoutMs?: number;
 }
 
-export interface GetDeviceOptions {
+export interface WaitForDeviceOptions {
   /**
    * Cancels the lookup when aborted; the promise rejects with the signal's
    * reason. The signal is additive to the timeout — passing a signal does not
@@ -179,14 +179,18 @@ export interface GetDeviceOptions {
   timeoutMs?: number;
 }
 
-export interface DevicesInstance {
+export interface Devices {
+  /** The number of registered devices. */
+  readonly size: number;
   /**
-   * A live, read-only view of the registry's internal map — not a snapshot.
-   * Entries appear, update, and disappear as devices are registered and
-   * removed; iterate defensively (or copy) if you mutate the registry while
-   * walking it.
+   * Looks up a registered device — synchronously, returning `undefined`
+   * when the serial number is not (yet) known. The serial number is matched
+   * case-insensitively. To wait for a device that has not been discovered
+   * yet, use {@link Devices.waitFor}.
    */
-  readonly registered: ReadonlyMap<string, Device>;
+  get(serialNumber: string): Device | undefined;
+  /** Whether a device is registered. The serial number is matched case-insensitively. */
+  has(serialNumber: string): boolean;
   /**
    * Registers (or updates the address of) the device that sent a message just
    * decoded by `router.receive()`. Pass that result straight through:
@@ -202,25 +206,24 @@ export interface DevicesInstance {
    */
   register(port: number, address: string, received: RegistrationMessage | undefined): Device | undefined;
   /**
-   * Forgets a device. Any `get()` still waiting on this serial number rejects
-   * with {@link DeviceRemovedError} — a removed device is one the caller no
-   * longer wants, so a lookup for it cannot be satisfied by a later
+   * Forgets a device. Any `waitFor()` still pending on this serial number
+   * rejects with {@link DeviceRemovedError} — a removed device is one the
+   * caller no longer wants, so waiting for it cannot be satisfied by a later
    * re-registration. Returns whether the device was known. The serial number
    * is matched case-insensitively.
    */
   remove(serialNumber: string): boolean;
   /**
-   * Waits for the device with this serial number to be registered — a
-   * discovery rendezvous, not a lookup. A known device resolves immediately;
-   * otherwise the promise settles on a future `register()`, the timeout, the
-   * signal, or a `remove()` of the same serial (rejecting with
+   * Waits for the device with this serial number to be registered — the
+   * discovery rendezvous. A known device resolves immediately; otherwise
+   * the promise settles on a future `register()`, the timeout, the signal,
+   * or a `remove()` of the same serial (rejecting with
    * {@link DeviceRemovedError}). The serial number is matched
    * case-insensitively; one that is not 12 hex digits, or is all zeros (the
    * broadcast address), rejects with ValidationError, since it could never
-   * match. For a synchronous check, use
-   * {@link DevicesInstance.registered}, which is keyed by lowercase serial.
+   * match. For a synchronous check, use {@link Devices.get}.
    */
-  get(serialNumber: string, options?: GetDeviceOptions): Promise<Device>;
+  waitFor(serialNumber: string, options?: WaitForDeviceOptions): Promise<Device>;
   /**
    * Adds observers of registry events alongside the callbacks fixed at
    * construction; returns a function that removes exactly the handlers this
@@ -232,14 +235,19 @@ export interface DevicesInstance {
    * once — a handler removed mid-dispatch is skipped if it has not run yet.
    */
   subscribe(handlers: DeviceEventHandlers): () => void;
-  [Symbol.iterator](): Iterator<Device>;
+  /**
+   * Iterates the registered devices, live: entries appear and disappear as
+   * devices are registered and removed, so copy (`[...devices]`) before
+   * mutating the registry while walking it.
+   */
+  [Symbol.iterator](): IterableIterator<Device>;
 }
 
 interface ListenerRecord {
   fn: (device: Device) => void;
 }
 
-export function Devices(options: DevicesOptions = {}): DevicesInstance {
+export function Devices(options: DevicesOptions = {}): Devices {
   const defaultTimeoutMs = options.defaultTimeoutMs ?? 3000;
   // NaN and negative values fail the `> 0` arming check exactly like the
   // documented 0, so they would silently disable the timeout and leave
@@ -349,15 +357,24 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
   }
 
   return {
-    get registered() {
-      return knownDevices;
+    get size() {
+      return knownDevices.size;
+    },
+    get(serialNumber: string): Device | undefined {
+      // Registry keys are the lowercase serials derived from the wire. A
+      // non-string (an unset environment variable from an untyped caller)
+      // is simply not registered.
+      return typeof serialNumber === 'string' ? knownDevices.get(serialNumber.toLowerCase()) : undefined;
+    },
+    has(serialNumber: string): boolean {
+      return typeof serialNumber === 'string' && knownDevices.has(serialNumber.toLowerCase());
     },
     register,
     remove(serialNumberInput: string): boolean {
       const serialNumber = serialNumberInput.toLowerCase();
       const device = knownDevices.get(serialNumber);
       const removed = knownDevices.delete(serialNumber);
-      // Pending get() promises for this serial must not be satisfied by a
+      // Pending waitFor() promises for this serial must not be satisfied by a
       // future re-registration of a device the caller just discarded — and
       // a call with no timeout would otherwise hang forever — so settle them
       // now. Each waiter's reject() also detaches its own timeout and abort
@@ -391,8 +408,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         if (removed) removedListeners.delete(removed);
       };
     },
-    get(serialNumberInput: string, options?: GetDeviceOptions): Promise<Device> {
-      // get() rejects rather than throws on bad input; a non-string (e.g. an
+    waitFor(serialNumberInput: string, options?: WaitForDeviceOptions): Promise<Device> {
+      // waitFor() rejects rather than throws on bad input; a non-string (e.g. an
       // unset environment variable) would otherwise throw out of toLowerCase().
       if (typeof serialNumberInput !== 'string') {
         return Promise.reject(new ValidationError('serialNumber', serialNumberInput, 'must be a string'));
@@ -413,7 +430,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
         // than rejecting it, and it matches platform abort semantics. (An
         // already-aborted signal also never fires another 'abort' event, so
         // the listener below would never run.)
-        return Promise.reject(signal.reason ?? new AbortError('device lookup'));
+        return Promise.reject(abortReason(signal));
       }
 
       // The registry is keyed by the 12-hex-digit serial derived from the
@@ -460,7 +477,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       function settleReject(reason: unknown) {
         cleanup();
         // Remove only this call's waiter, and only if the set still holds
-        // it: after a remove() settles and drops the set, a fresh get() for
+        // it: after a remove() settles and drops the set, a fresh waitFor() for
         // the same serial owns a new set, and blindly deleting the map entry
         // here would silently drop that newer waiter.
         const waiters = deviceResolvers.get(serialNumber);
@@ -471,7 +488,8 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
       }
 
       function onAbort() {
-        settleReject(signal?.reason ?? new AbortError('device lookup'));
+        // Only ever attached to a defined signal.
+        if (signal) settleReject(abortReason(signal));
       }
 
       const waiter: Waiter = {
@@ -508,7 +526,7 @@ export function Devices(options: DevicesOptions = {}): DevicesInstance {
 
       return promise;
     },
-    [Symbol.iterator](): Iterator<Device> {
+    [Symbol.iterator](): IterableIterator<Device> {
       return knownDevices.values();
     },
   };

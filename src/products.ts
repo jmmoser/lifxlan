@@ -12,8 +12,8 @@
  *
  * @example
  * ```javascript
- * import { PRODUCTS_URL, GetVersion, GetHostFirmware } from 'lifxlan';
- * import { Products } from 'lifxlan/products';
+ * import { GetVersion, GetHostFirmware } from 'lifxlan';
+ * import { Products, PRODUCTS_URL } from 'lifxlan/products';
  *
  * const products = Products(await (await fetch(PRODUCTS_URL)).json());
  *
@@ -25,6 +25,9 @@
  * }
  * ```
  */
+
+/** Where the official LIFX products list (products.json) is published. */
+export const PRODUCTS_URL = 'https://raw.githubusercontent.com/LIFX/products/master/products.json';
 
 /**
  * The capability flags published for a product. Matches the `defaults` and
@@ -87,7 +90,7 @@ export interface Product {
   name: string;
   /**
    * Features as built, without firmware upgrades applied. Use
-   * {@link ProductsInstance.features} to resolve against a firmware version.
+   * {@link Products.features} to resolve against a firmware version.
    */
   features: ProductFeatures;
   upgrades: readonly ProductUpgrade[];
@@ -102,7 +105,7 @@ export type FirmwareVersion =
   | { major: number; minor: number }
   | { versionMajor: number; versionMinor: number };
 
-export interface ProductsInstance {
+export interface Products {
   /** Looks up a product by the vendor/product ids from a StateVersion response. */
   get(vendorId: number, productId: number): Product | undefined;
   /**
@@ -130,7 +133,7 @@ const BASE_FEATURES: ProductFeatures = {
 
 const NO_UPGRADES: readonly ProductUpgrade[] = [];
 
-export function Products(vendors: readonly VendorDefinition[]): ProductsInstance {
+export function Products(vendors: readonly VendorDefinition[]): Products {
   const byVendor = new Map<number, Map<number, Product>>();
 
   for (const vendor of vendors) {

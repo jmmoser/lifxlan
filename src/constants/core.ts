@@ -1,6 +1,5 @@
 export const PORT = 56700;
 export const BROADCAST_ADDRESS = '255.255.255.255';
-export const PRODUCTS_URL = 'https://raw.githubusercontent.com/LIFX/products/master/products.json';
 export const NO_TARGET = new Uint8Array([0, 0, 0, 0, 0, 0]);
 
 export const ServiceType = {
@@ -12,10 +11,3 @@ export const ServiceType = {
 } as const;
 
 export type ServiceType = typeof ServiceType[keyof typeof ServiceType];
-
-export const Direction = {
-  RIGHT: 0,
-  LEFT: 1,
-} as const;
-
-export type Direction = typeof Direction[keyof typeof Direction];

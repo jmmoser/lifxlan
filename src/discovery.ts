@@ -13,9 +13,16 @@ import { ValidationError } from './errors.js';
 import { MAX_TIMER_DELAY_MS } from './utils/index.js';
 
 import type { ClientRouter } from './router.js';
-import type { Device, DevicesInstance } from './devices.js';
+import type { Device, Devices } from './devices.js';
 
 export interface DiscoveryOptions {
+  /**
+   * Where the GetService broadcast goes. Defaults to the limited broadcast
+   * address `255.255.255.255`. On a host with several network interfaces,
+   * pass the subnet-directed broadcast address of the network the devices
+   * are on (e.g. `'192.168.1.255'`) — see `BroadcastOptions.address`.
+   */
+  broadcastAddress?: string;
   /**
    * The delay before the first repeat broadcast. Each subsequent broadcast
    * quadruples the delay until it reaches
@@ -33,8 +40,8 @@ export interface DiscoveryOptions {
    */
   maxIntervalMs?: number;
   /**
-   * Ends iteration when aborted. Unlike devices.get() — where abort rejects
-   * because the awaited lookup never happened — stopping a discovery stream
+   * Ends iteration when aborted. Unlike devices.waitFor() — where abort
+   * rejects because the awaited device never appeared — stopping a discovery stream
    * is its expected ending, so the iterator completes normally instead of
    * throwing. Devices already queued are still yielded before it completes —
    * including when the signal is already aborted at the call, which drains the
@@ -44,14 +51,14 @@ export interface DiscoveryOptions {
   /**
    * Total discovery budget: iteration ends normally (like the signal, and
    * draining the queue the same way) once this elapses. Defaults to 0
-   * (disabled) — unlike the 3000ms default of devices.get(), because an
+   * (disabled) — unlike the 3000ms default of devices.waitFor(), because an
    * open-ended stream silently ending mid-loop would surprise more than a
    * single lookup timing out.
    */
   timeoutMs?: number;
 }
 
-export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefined>, Disposable {
+export interface Discovery extends AsyncIterableIterator<Device, undefined>, Disposable {
   /**
    * Stops discovery immediately: clears the broadcast timer, releases the
    * helper's source id, unsubscribes from the registry, discards any
@@ -96,14 +103,14 @@ export interface DiscoveryInstance extends AsyncIterableIterator<Device, undefin
  * // runtime and, to type-check, TypeScript >= 5.2 with esnext.disposable
  * // in lib (or @types/node). Otherwise call dispose() directly.
  * using discovery = discover(router, devices);
- * const device = await devices.get('d07123456789');
+ * const device = await devices.waitFor('d07123456789');
  * ```
  */
 export function discover(
   router: ClientRouter,
-  devices: DevicesInstance,
+  devices: Devices,
   options: DiscoveryOptions = {},
-): DiscoveryInstance {
+): Discovery {
   const signal = options.signal;
 
   // Validated before anything is subscribed or sent, and required to be
@@ -136,6 +143,14 @@ export function discover(
   if (signal !== undefined && signal !== null && typeof signal.addEventListener !== 'function') {
     throw new ValidationError('signal', signal, 'must be an AbortSignal');
   }
+  const broadcastAddress = options.broadcastAddress;
+  if (broadcastAddress !== undefined && (typeof broadcastAddress !== 'string' || broadcastAddress === '')) {
+    throw new ValidationError('broadcastAddress', broadcastAddress, 'must be a non-empty string');
+  }
+  // Built once: every broadcast of the stream sends the same command to the
+  // same place.
+  const getService = GetService();
+  const broadcastOptions = broadcastAddress === undefined ? undefined : { address: broadcastAddress };
 
   const queue: Device[] = [];
   // Every waiter is woken on every event (new device, completion); next()
@@ -180,7 +195,7 @@ export function discover(
     // creating a client, broadcasting, or arming a timer. Still seed the
     // already-registered snapshot so a pre-aborted signal drains it and then
     // ends — identical to aborting a moment later, with no timing surprise.
-    queue.push(...devices.registered.values());
+    queue.push(...devices);
     done = true;
   } else {
     // Created first: register() can throw (source exhaustion, a custom
@@ -190,7 +205,7 @@ export function discover(
 
     // Snapshot-then-subscribe runs synchronously, so a device registered
     // between the two cannot be missed (and none can be yielded twice).
-    queue.push(...devices.registered.values());
+    queue.push(...devices);
     const unsubscribe = devices.subscribe({
       onAdded(device) {
         queue.push(device);
@@ -214,7 +229,7 @@ export function discover(
     }
 
     try {
-      client.broadcast(GetService());
+      client.broadcast(getService, broadcastOptions);
     } catch (err) {
       finish();
       throw err;
@@ -235,7 +250,7 @@ export function discover(
     const scheduleBroadcast = () => {
       timer = setTimeout(() => {
         try {
-          client.broadcast(GetService());
+          client.broadcast(getService, broadcastOptions);
         } catch {
           // The transport refused the packet (socket closed, router onSend
           // threw). Inside a timer callback the throw would otherwise be an
@@ -262,7 +277,7 @@ export function discover(
     finish();
   }
 
-  const iterator: DiscoveryInstance = {
+  const iterator: Discovery = {
     dispose: disposeNow,
     // Enables `using discovery = discover(...)`: end of scope disposes the
     // stream. Requiring Node >= 22 (where Symbol.dispose exists natively)

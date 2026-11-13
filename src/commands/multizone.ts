@@ -1,10 +1,39 @@
-import * as Encoding from '../encoding.js';
+import * as Encoding from '../wire.js';
 import { Type, MultiZoneApplicationRequest, MultiZoneExtendedApplicationRequest } from '../constants/index.js';
 import type { MultiZoneEffectType } from '../constants/index.js';
 import { ValidationError } from '../errors.js';
-import type { Command, Decoder } from './index.js';
+import type { Collector, Command } from './index.js';
 
+/** A single packet of a GetColorZones reply, as `onResponse` observes it. */
 export type ColorZoneResponse = Encoding.StateZone | Encoding.StateMultiZone;
+
+/**
+ * The colors of a run of consecutive zones, assembled from however many
+ * packets the device answered with — what GetColorZones and
+ * GetExtendedColorZones resolve with.
+ */
+export interface ColorZones {
+  /** Total number of zones on the device. */
+  zonesCount: number;
+  /** The zone `colors[0]` belongs to. */
+  zoneIndex: number;
+  /** One color per zone, in zone order, starting at `zoneIndex`. */
+  colors: Encoding.Color[];
+}
+
+/**
+ * Cuts an assembled color list at its first gap. A completed exchange has
+ * none; one stopped early by `onResponse` may, and a list with holes would
+ * break the "colors[i] is zone zoneIndex + i" contract.
+ */
+function untilFirstGap(colors: Encoding.Color[]): Encoding.Color[] {
+  let length = 0;
+  while (length < colors.length && colors[length] !== undefined) {
+    length++;
+  }
+  colors.length = length;
+  return colors;
+}
 
 export interface GetColorZonesOptions {
   /** First zone to fetch (inclusive). */
@@ -18,8 +47,8 @@ export interface GetColorZonesOptions {
   endIndex: number;
   /**
    * Called once per StateZone/StateMultiZone packet as it arrives. Return
-   * false to stop waiting for further packets and resolve with what has
-   * accumulated.
+   * false to stop waiting for further packets; the exchange then resolves
+   * with the zones received so far, up to the first one still missing.
    */
   onResponse?: (response: ColorZoneResponse) => boolean | void;
 }
@@ -30,80 +59,92 @@ function assertZoneIndex(name: string, value: number) {
   }
 }
 
+/**
+ * Reads the colors of zones `startIndex..endIndex`. Resolves with the
+ * assembled {@link ColorZones} — every requested zone the device has, in
+ * zone order — however many packets the device split its answer across.
+ */
 export function GetColorZones(options: GetColorZonesOptions) {
   const { startIndex, endIndex, onResponse } = options;
 
   // The wire fields are uint8: an out-of-range index would wrap on encode
   // (256 becomes 0), asking the device for zones other than the ones the
-  // decoder below waits on — so the exchange timed out, or resolved with
+  // collector below waits on — so the exchange timed out, or resolved with
   // another zone's data.
   assertZoneIndex('startIndex', startIndex);
   assertZoneIndex('endIndex', endIndex);
 
-  // Accumulation state lives inside createDecoder so each send() gets a
-  // fresh decoder, making this command safe to reuse across concurrent
-  // sends and devices.
-  const createDecoder = (): Decoder<ColorZoneResponse[]> => {
-    const expectedZones = new Set<number>();
-    for (let i = startIndex; i <= endIndex; i++) {
-      expectedZones.add(i);
-    }
+  const requested = endIndex - startIndex + 1;
 
-    // A device only reports zones it has, so anything requested at or past
-    // its zonesCount will never arrive and must not hold the exchange open.
-    const dropZonesFrom = (zonesCount: number) => {
-      for (const zone of expectedZones) {
-        if (zone >= zonesCount) expectedZones.delete(zone);
-      }
-    };
+  // Accumulation state lives inside collect() so each send() gets a fresh
+  // collector, making this command safe to reuse across concurrent sends
+  // and devices.
+  const collect = (): Collector<ColorZones> => {
+    // Indexed by zone - startIndex. Track distinct zones rather than
+    // counting packets: UDP can deliver a packet twice, and a duplicate
+    // must not complete the exchange before every zone has reported.
+    const colors: Encoding.Color[] = [];
+    let received = 0;
+    let zonesCount = 0;
 
-    const responses: ColorZoneResponse[] = [];
+    return {
+      add(payload, type) {
+        let packet: ColorZoneResponse;
 
-    return (bytes, offsetRef, continuation, responseType) => {
-      let response: ColorZoneResponse | undefined;
-
-      if (responseType === Type.StateZone) {
-        response = Encoding.decodeStateZone(bytes, offsetRef);
-        dropZonesFrom(response.zonesCount);
-        expectedZones.delete(response.zoneIndex);
-      } else if (responseType === Type.StateMultiZone) {
-        response = Encoding.decodeStateMultiZone(bytes, offsetRef);
-        dropZonesFrom(response.zonesCount);
-        // Remove all zones covered by this response
-        for (let i = 0; i < response.colors.length; i++) {
-          expectedZones.delete(response.zoneIndex + i);
-        }
-      }
-
-      // Update continuation to indicate if more responses are expected
-      if (continuation) {
-        if (response) {
-          responses.push(response);
-
-          // Call user callback if provided
-          let shouldContinue = true;
-          if (onResponse) {
-            const result = onResponse(response);
-            shouldContinue = result !== false; // false = stop early
+        if (type === Type.StateMultiZone) {
+          const multi = Encoding.decodeStateMultiZone(payload);
+          const packetColors = multi.colors;
+          let slot = multi.zoneIndex - startIndex;
+          // Devices answer in 8-zone packets aligned to their own grid, so a
+          // packet may carry zones outside the requested range.
+          for (let i = 0; i < packetColors.length; i++, slot++) {
+            if (slot >= 0 && slot < requested && colors[slot] === undefined) {
+              colors[slot] = packetColors[i]!;
+              received++;
+            }
           }
-
-          continuation.expectMore = shouldContinue && expectedZones.size > 0;
+          packet = multi;
+        } else if (type === Type.StateZone) {
+          const zone = Encoding.decodeStateZone(payload);
+          const slot = zone.zoneIndex - startIndex;
+          if (slot >= 0 && slot < requested && zone.zoneIndex < zone.zonesCount && colors[slot] === undefined) {
+            colors[slot] = {
+              hue: zone.hue,
+              saturation: zone.saturation,
+              brightness: zone.brightness,
+              kelvin: zone.kelvin,
+            };
+            received++;
+          }
+          packet = zone;
         } else {
-          // Unknown response type - still expect more responses
-          continuation.expectMore = expectedZones.size > 0;
+          // Not part of this reply — keep waiting.
+          return false;
         }
-      }
 
-      return responses; // Always return the accumulated array
+        zonesCount = packet.zonesCount;
+
+        if (onResponse !== undefined && onResponse(packet) === false) {
+          return true; // stopped early by the caller
+        }
+
+        // A device only reports zones it has, so anything requested at or
+        // past its zonesCount will never arrive and must not hold the
+        // exchange open.
+        return received >= Math.min(requested, zonesCount - startIndex);
+      },
+      result() {
+        return { zonesCount, zoneIndex: startIndex, colors: untilFirstGap(colors) };
+      },
     };
   };
 
   return {
     type: Type.GetColorZones,
     payload: Encoding.encodeGetColorZones(startIndex, endIndex),
-    createDecoder,
+    collect,
     defaultResponseMode: 'response',
-  } satisfies Command<ColorZoneResponse[], 'response'>;
+  } satisfies Command<ColorZones, 'response'>;
 }
 
 export interface SetColorZonesOptions {
@@ -120,7 +161,7 @@ export interface SetColorZonesOptions {
   /** Color temperature in Kelvin (relevant when saturation is low). */
   kelvin: number;
   /** Transition time in milliseconds. Defaults to 0 (immediate). */
-  duration?: number;
+  durationMs?: number;
   /**
    * Whether the device applies the change immediately (APPLY, the default),
    * buffers it for a later APPLY (NO_APPLY), or applies the buffered changes
@@ -140,7 +181,7 @@ export function SetColorZones(options: SetColorZonesOptions) {
       options.saturation,
       options.brightness,
       options.kelvin,
-      options.duration ?? 0,
+      options.durationMs ?? 0,
       options.apply ?? MultiZoneApplicationRequest.APPLY,
     ),
     decode: Encoding.decodeStateMultiZone,
@@ -161,17 +202,19 @@ export interface SetMultiZoneEffectOptions {
   /** Caller-chosen identifier for this run of the effect. */
   instanceId: number;
   effectType: MultiZoneEffectType;
-  /** Time in milliseconds one cycle of the effect takes. */
-  speed: number;
+  /** Time one cycle of the effect takes, in milliseconds. */
+  speedMs: number;
   /** How long the effect runs, in nanoseconds. 0 means until changed. */
-  duration: bigint;
+  durationNs: bigint;
   /**
-   * The 32-byte effect parameter block; only the MOVE effect reads it (the
-   * direction field). Defaults to all zeros. Longer inputs are truncated to
-   * 32 bytes.
+   * The effect parameter block, at most 32 bytes (shorter input is
+   * zero-padded); only the MOVE effect reads it (the direction field).
+   * Defaults to all zeros.
    */
   parameters?: Uint8Array;
 }
+
+const NO_PARAMETERS = new Uint8Array(0);
 
 export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
   return {
@@ -180,83 +223,94 @@ export function SetMultiZoneEffect(options: SetMultiZoneEffectOptions) {
     payload: Encoding.encodeSetMultiZoneEffect(
       options.instanceId,
       options.effectType,
-      options.speed,
-      options.duration,
-      options.parameters ?? new Uint8Array(0),
+      options.speedMs,
+      options.durationNs,
+      options.parameters ?? NO_PARAMETERS,
     ),
     decode: Encoding.decodeStateMultiZoneEffect,
     defaultResponseMode: 'ack-only',
   } satisfies Command<Encoding.StateMultiZoneEffect, 'ack-only'>;
 }
 
+/** How many zones one StateExtendedColorZones packet carries. */
+const ZONES_PER_PACKET = 82;
+
 export interface GetExtendedColorZonesOptions {
   /**
    * Called once per StateExtendedColorZones packet as it arrives. Return
-   * false to stop waiting for further packets and resolve with what has
-   * accumulated.
+   * false to stop waiting for further packets; the exchange then resolves
+   * with the zones received so far, up to the first one still missing.
    */
   onResponse?: (response: Encoding.StateExtendedColorZones) => boolean | void;
 }
 
+/**
+ * Reads the colors of every zone. Resolves with the assembled
+ * {@link ColorZones} — all of the device's zones, in zone order — however
+ * many packets the device split its answer across (one per 82 zones).
+ */
 export function GetExtendedColorZones(options: GetExtendedColorZonesOptions = {}) {
   const onResponse = options.onResponse;
 
-  // Accumulation state lives inside createDecoder so each send() gets a
-  // fresh decoder, making this command safe to reuse across concurrent
-  // sends and devices.
-  const createDecoder = (): Decoder<Encoding.StateExtendedColorZones[]> => {
-    const expectedZoneIndexes = new Set<number>();
-    let firstResponse = true;
+  // Accumulation state lives inside collect() so each send() gets a fresh
+  // collector, making this command safe to reuse across concurrent sends
+  // and devices.
+  const collect = (): Collector<ColorZones> => {
+    // Indexed by zone. Distinct zones are counted (not packets) so a
+    // duplicated packet cannot complete the exchange early.
+    let colors: Encoding.Color[] = [];
+    let received = 0;
+    let zonesCount = 0;
 
-    const responses: Encoding.StateExtendedColorZones[] = [];
+    return {
+      add(payload, type) {
+        if (type !== Type.StateExtendedColorZones) {
+          return false;
+        }
+        const packet = Encoding.decodeStateExtendedColorZones(payload);
+        const packetColors = packet.colors;
+        zonesCount = packet.zonesCount;
 
-    return (bytes, offsetRef, continuation, responseType) => {
-      let response: Encoding.StateExtendedColorZones | undefined;
+        // A device with at most 82 zones answers with exactly one packet, so
+        // that packet is the complete reply whatever colors_count it carries
+        // — firmware that under-reports it must not leave the exchange
+        // waiting for a second packet that will never come.
+        const singlePacket = zonesCount <= ZONES_PER_PACKET;
 
-      if (responseType === Type.StateExtendedColorZones) {
-        response = Encoding.decodeStateExtendedColorZones(bytes, offsetRef);
+        if (singlePacket && received === 0 && packet.zoneIndex === 0 && onResponse === undefined) {
+          // The common case adopts the decoded colors as the result without
+          // copying.
+          colors = packetColors;
+          received = packetColors.length;
+          return true;
+        }
 
-        // On first response, calculate expected zone indexes based on total zones
-        if (firstResponse && response.zonesCount > 82) {
-          firstResponse = false;
-          // Each response can contain up to 82 zones
-          for (let i = 0; i < response.zonesCount; i += 82) {
-            expectedZoneIndexes.add(i);
+        let slot = packet.zoneIndex;
+        for (let i = 0; i < packetColors.length; i++, slot++) {
+          if (slot < zonesCount && colors[slot] === undefined) {
+            colors[slot] = packetColors[i]!;
+            received++;
           }
         }
 
-        expectedZoneIndexes.delete(response.zoneIndex);
-      }
-
-      // Update continuation to indicate if more responses are expected
-      if (continuation) {
-        if (response) {
-          responses.push(response);
-
-          // Call user callback if provided
-          let shouldContinue = true;
-          if (onResponse) {
-            const result = onResponse(response);
-            shouldContinue = result !== false; // false = stop early
-          }
-
-          continuation.expectMore = shouldContinue && expectedZoneIndexes.size > 0;
-        } else {
-          // Unknown response type - still expect more responses
-          continuation.expectMore = expectedZoneIndexes.size > 0;
+        if (onResponse !== undefined && onResponse(packet) === false) {
+          return true; // stopped early by the caller
         }
-      }
 
-      return responses; // Always return the accumulated array
+        return singlePacket || received >= zonesCount;
+      },
+      result() {
+        return { zonesCount, zoneIndex: 0, colors: untilFirstGap(colors) };
+      },
     };
   };
 
   return {
     type: Type.GetExtendedColorZones,
     responseType: Type.StateExtendedColorZones,
-    createDecoder,
+    collect,
     defaultResponseMode: 'response',
-  } satisfies Command<Encoding.StateExtendedColorZones[], 'response'>;
+  } satisfies Command<ColorZones, 'response'>;
 }
 
 export interface SetExtendedColorZonesOptions {
@@ -268,9 +322,9 @@ export interface SetExtendedColorZonesOptions {
    * array's length. To address more than 82 zones, send multiple commands
    * with NO_APPLY and finish with APPLY.
    */
-  colors: Encoding.Color[];
+  colors: readonly Encoding.Color[];
   /** Transition time in milliseconds. Defaults to 0 (immediate). */
-  duration?: number;
+  durationMs?: number;
   /**
    * Whether the device applies the change immediately (APPLY, the default),
    * buffers it for a later APPLY (NO_APPLY), or applies the buffered changes
@@ -280,17 +334,13 @@ export interface SetExtendedColorZonesOptions {
 }
 
 export function SetExtendedColorZones(options: SetExtendedColorZonesOptions) {
-  if (options.colors.length < 1 || options.colors.length > 82) {
-    throw new ValidationError('colors', options.colors.length, 'must contain between 1 and 82 colors');
-  }
   return {
     type: Type.SetExtendedColorZones,
     responseType: Type.StateExtendedColorZones,
     payload: Encoding.encodeSetExtendedColorZones(
-      options.duration ?? 0,
+      options.durationMs ?? 0,
       options.apply ?? MultiZoneExtendedApplicationRequest.APPLY,
       options.zoneIndex,
-      options.colors.length,
       options.colors,
     ),
     decode: Encoding.decodeStateExtendedColorZones,

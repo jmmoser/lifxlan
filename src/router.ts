@@ -1,27 +1,26 @@
-import { decodeHeader, getPayload, Header } from './encoding.js';
+import { decodeHeader, getPayload } from './wire.js';
+import type { Header } from './wire.js';
 import { convertTargetToSerialNumber } from './utils/index.js';
 import { SourceExhaustionError, ValidationError } from './errors.js';
 
 export type { Header };
 
 /**
- * The decoded message `receive()` returns: the parsed `header`, a zero-copy
- * `payload` view, and the `serialNumber` derived from `header.target`. It
+ * A decoded inbound message: the parsed `header`, a zero-copy `payload`
+ * view, and the `serialNumber` derived from `header.target`. It is what
+ * `receive()` returns and what every {@link MessageHandler} is called with
+ * — one object, shared by all of them, so treat it as read-only. It
  * satisfies the registry's `RegistrationMessage`, so it passes straight to
  * `devices.register(port, address, received)` to register the device that
  * sent it.
  */
 export interface ReceivedMessage {
-  header: Header;
-  payload: Uint8Array;
-  serialNumber: string;
+  readonly header: Header;
+  readonly payload: Uint8Array;
+  readonly serialNumber: string;
 }
 
-export type MessageHandler = (
-  header: Header,
-  payload: Uint8Array,
-  serialNumber: string,
-) => void;
+export type MessageHandler = (message: ReceivedMessage) => void;
 
 const MAX_SOURCE = 0xFFFFFFFF;
 
@@ -57,7 +56,7 @@ export interface RouterOptions {
 /**
  * The sending half of the router — all a {@link Client} requires, so a
  * custom router only has to implement these three methods to drive one;
- * {@link RouterInstance.receive} is only needed by the socket wiring.
+ * {@link Router.receive} is only needed by the socket wiring.
  *
  * The contract tying the methods together: the source id returned by
  * `register()` must be written into the header of every request passed to
@@ -86,26 +85,27 @@ export interface ClientRouter {
   send(message: Uint8Array, port: number, address: string, serialNumber?: string): void;
 }
 
-export interface RouterInstance extends ClientRouter {
+export interface Router extends ClientRouter {
   /**
    * Decodes an inbound message and dispatches it through three channels:
    *
    * 1. the per-source `handler` registered for `header.source` (the client
    *    that sent the originating request), if any;
    * 2. the router-wide `onMessage` tap, if configured;
-   * 3. the decoded `{ header, payload, serialNumber }` returned to the caller
-   *    for synchronous inspection.
+   * 3. the same decoded {@link ReceivedMessage} returned to the caller for
+   *    synchronous inspection.
    *
    * Returns `undefined` if the message could not be decoded. Never throws:
-   * decode failures and errors thrown by the handler or the tap are
-   * reported to {@link RouterOptions.onError}.
+   * decode failures (a `DecodeError`) and errors thrown by the handler or
+   * the tap are reported to {@link RouterOptions.onError}.
    *
    * Ownership: the buffer passed to `receive()` is consumed, not copied.
-   * Decoded values — `header.target`, `payload`, and the results that
-   * decoders deliver to awaiting `send()` calls — are zero-copy views into
-   * it. A socket layer that reuses its receive buffer must hand `receive()`
-   * a copy; otherwise the next datagram silently corrupts previously decoded
-   * results. (Node's dgram and Deno's listenDatagram allocate a fresh buffer
+   * `header.target`, `payload`, and the byte-array fields of decoded
+   * results (an echo payload, an effect's `parameters`, a button action's
+   * `target`) are zero-copy views into it; every other decoded value is
+   * copied out. A socket layer that reuses its receive buffer must hand
+   * `receive()` a copy; otherwise the next datagram silently corrupts those
+   * views. (Node's dgram and Deno's listenDatagram allocate a fresh buffer
    * per message, so no copy is needed there.)
    */
   receive(message: Uint8Array): ReceivedMessage | undefined;
@@ -118,7 +118,7 @@ export interface RouterInstance extends ClientRouter {
  * the handler whose source it echoes, decoding the header — including the
  * relatively expensive serial number conversion — once per packet.
  */
-export function Router(options: RouterOptions): RouterInstance {
+export function Router(options: RouterOptions): Router {
   const handlers = new Map<number, MessageHandler>();
 
   let sourceCounter = 2;
@@ -173,13 +173,14 @@ export function Router(options: RouterOptions): RouterInstance {
       options.onSend(message, port, address, serialNumber);
     },
     receive(message: Uint8Array) {
-      let header: Header;
-      let payload: Uint8Array;
-      let serialNumber: string;
+      let received: ReceivedMessage;
       try {
-        header = decodeHeader(message);
-        payload = getPayload(message, 0, header.size);
-        serialNumber = convertTargetToSerialNumber(header.target);
+        const header = decodeHeader(message);
+        received = {
+          header,
+          payload: getPayload(message, 0, header.size),
+          serialNumber: convertTargetToSerialNumber(header.target),
+        };
       } catch (err) {
         reportError(err, message);
         return undefined;
@@ -190,11 +191,11 @@ export function Router(options: RouterOptions): RouterInstance {
       // exception from the 'message' event, on Deno it ends the read loop and
       // with it all reception. Each callback is isolated so one failing
       // cannot starve the other; the error goes to onError.
-      const handler = handlers.get(header.source);
+      const handler = handlers.get(received.header.source);
 
       if (handler) {
         try {
-          handler(header, payload, serialNumber);
+          handler(received);
         } catch (err) {
           reportError(err, message);
         }
@@ -202,17 +203,13 @@ export function Router(options: RouterOptions): RouterInstance {
 
       if (options.onMessage) {
         try {
-          options.onMessage(header, payload, serialNumber);
+          options.onMessage(received);
         } catch (err) {
           reportError(err, message);
         }
       }
 
-      return {
-        header,
-        payload,
-        serialNumber,
-      };
+      return received;
     },
   };
 }

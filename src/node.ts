@@ -15,88 +15,21 @@
 
 import dgram from 'node:dgram';
 
-import { Client } from './client.js';
-import { Devices } from './devices.js';
-import { Router } from './router.js';
+import { wire } from './lan.js';
 
-import type { ClientInstance } from './client.js';
-import type { DeviceEventHandlers, DevicesInstance } from './devices.js';
-import type { MessageHandler, RouterInstance } from './router.js';
+import type { Lan as LanOf, OpenLanOptions } from './lan.js';
 
-export interface OpenLanOptions extends DeviceEventHandlers {
-  /**
-   * Local UDP port to bind. Defaults to 0 (an ephemeral port picked by the
-   * OS), which is what you want unless a firewall rule requires a fixed
-   * port — LIFX devices reply to whatever port the request came from.
-   */
-  port?: number;
-  /**
-   * Local address to bind. Defaults to all interfaces. Binding a specific
-   * interface address can prevent the limited broadcast (255.255.255.255)
-   * used by discovery from leaving the machine on some platforms; prefer
-   * the default unless you know you need this.
-   */
-  address?: string;
-  /**
-   * How long `client.send()` waits before rejecting with TimeoutError,
-   * forwarded to the {@link Client}. Defaults to 3000ms.
-   */
-  defaultTimeoutMs?: number;
-  /**
-   * Router-wide tap invoked for every successfully decoded inbound message,
-   * forwarded to {@link Router}.
-   */
-  onMessage?: MessageHandler;
-  /**
-   * Observes inbound datagrams that could not be decoded and errors thrown
-   * by the `onMessage` tap (or a client's handler) while processing one,
-   * forwarded to {@link Router}. When omitted they are discarded, so neither
-   * a malformed packet nor a buggy callback can crash the process or stop
-   * reception.
-   */
-  onError?: (error: unknown, message: Uint8Array) => void;
-  /**
-   * Observes socket-level errors: asynchronous send failures (e.g. a
-   * transiently unreachable host) and any 'error' the socket emits after
-   * binding. When omitted they are discarded, matching the library's
-   * UDP-is-best-effort semantics — a lost packet already surfaces as
-   * TimeoutError on acknowledged sends, and swallowing the event keeps a
-   * routine EHOSTUNREACH from crashing the process (an unobserved dgram
-   * 'error' event throws). Bind errors are not routed here; they reject the
-   * promise returned by {@link openLan}.
-   */
-  onSocketError?: (error: Error) => void;
-}
+export type { OpenLanOptions };
 
-export interface LanInstance extends AsyncDisposable {
-  readonly router: RouterInstance;
-  readonly devices: DevicesInstance;
-  readonly client: ClientInstance;
-  /**
-   * The underlying `node:dgram` socket — the escape hatch for anything the
-   * options don't cover (multicast membership, TTL, `address()` for the
-   * bound port). The socket's 'message' handler feeding the router is
-   * already attached; adding your own listeners is fine, replacing them is
-   * not.
-   */
-  readonly socket: dgram.Socket;
-  /**
-   * Disposes the client (pending sends reject with DisposedClientError
-   * instead of dangling until their timeouts) and closes the socket,
-   * resolving once the OS has released it — async because dgram teardown
-   * is; awaiting is optional (teardown starts synchronously), but is what
-   * makes an immediate rebind of the same port race-free. Idempotent —
-   * every call returns the same promise. An `await using` declaration does
-   * the same through `Symbol.asyncDispose` at end of scope. A freestanding
-   * closure (nothing on this instance relies on `this`), so destructuring
-   * it off the instance is safe.
-   */
-  close(): Promise<void>;
-}
+/**
+ * What {@link openLan} resolves to: a Router, Devices registry, and Client
+ * wired to one `node:dgram` socket, plus `close()`.
+ */
+export type Lan = LanOf<dgram.Socket>;
 
 /**
  * Opens a UDP socket via `node:dgram` and returns a ready-to-use
- * {@link Router}, {@link Devices} registry, and {@link Client} wired to it:
+ * `Router`, `Devices` registry, and `Client` wired to it:
  * outbound messages go out the socket, inbound datagrams flow through
  * `router.receive()` into `devices.register()`, the socket is bound (with
  * broadcast enabled, so discovery works) by the time the promise resolves.
@@ -113,18 +46,22 @@ export interface LanInstance extends AsyncDisposable {
  *
  * const { client, devices, router, close } = await openLan();
  * using discovery = discover(router, devices);
- * const device = await devices.get('d07123456789');
+ * const device = await devices.waitFor('d07123456789');
  * await client.send(SetPower(true), device);
  * await close();
  * ```
  */
-export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance> {
+export async function openLan(options: OpenLanOptions = {}): Promise<Lan> {
   const socket = dgram.createSocket('udp4');
 
   const onSocketError = options.onSocketError;
 
-  const router = Router({
-    onSend(message, port, address) {
+  // Created before the socket is bound, so a rejected option (a NaN
+  // defaultTimeoutMs) fails before the port is taken; the socket is closed
+  // on that path all the same.
+  let wired: ReturnType<typeof wire>;
+  try {
+    wired = wire(options, (message, port, address) => {
       // Without a callback, an async send failure is emitted as a socket
       // 'error' event; routing it through the callback keeps per-packet
       // failures observable (or deliberately discarded) without touching
@@ -132,29 +69,12 @@ export async function openLan(options: OpenLanOptions = {}): Promise<LanInstance
       socket.send(message, port, address, (err) => {
         if (err && onSocketError) onSocketError(err);
       });
-    },
-    ...(options.onMessage ? { onMessage: options.onMessage } : {}),
-    ...(options.onError ? { onError: options.onError } : {}),
-  });
-
-  const devices = Devices({
-    ...(options.onAdded ? { onAdded: options.onAdded } : {}),
-    ...(options.onChanged ? { onChanged: options.onChanged } : {}),
-    ...(options.onRemoved ? { onRemoved: options.onRemoved } : {}),
-  });
-
-  // Created before the socket is bound, so a rejected option (a NaN
-  // defaultTimeoutMs) fails before the port is taken; the socket is closed
-  // on that path all the same.
-  let client: ClientInstance;
-  try {
-    client = options.defaultTimeoutMs === undefined
-      ? Client({ router })
-      : Client({ router, defaultTimeoutMs: options.defaultTimeoutMs });
+    });
   } catch (err) {
     try { socket.close(); } catch { /* already closed */ }
     throw err;
   }
+  const { router, devices, client } = wired;
 
   socket.on('message', (message, remote) => {
     devices.register(remote.port, remote.address, router.receive(message));

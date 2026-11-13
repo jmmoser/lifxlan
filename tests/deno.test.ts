@@ -13,7 +13,7 @@ import { openLan, type DenoDatagramConn, type DenoNetAddr } from '../src/deno.js
 import { discover } from '../src/discovery.js';
 import { Device } from '../src/devices.js';
 import { Type } from '../src/constants/index.js';
-import { encode, decodeHeader } from '../src/encoding.js';
+import { encode, decodeHeader } from '../src/wire.js';
 import { GetPower } from '../src/commands/index.js';
 import { DisposedClientError, ValidationError } from '../src/errors.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
@@ -174,7 +174,7 @@ describe('openLan (deno)', () => {
     assert.equal(power, 0xffff);
     assert.deepEqual(conn.sent[0]?.addr, DEVICE_ADDR);
     // The reply flowed through the read loop, so the device registered too.
-    assert.equal(devices.registered.get(SERIAL)?.address, DEVICE_ADDR.hostname);
+    assert.equal(devices.get(SERIAL)?.address, DEVICE_ADDR.hostname);
 
     await close();
   });
@@ -191,7 +191,7 @@ describe('openLan (deno)', () => {
     conn.push(stateServiceFrom(SERIAL), { transport: 'unix', hostname: 'n/a', port: 0 });
     conn.push(stateServiceFrom(SERIAL), DEVICE_ADDR);
 
-    const device = await lan.devices.get(SERIAL, { timeoutMs: 1000 });
+    const device = await lan.devices.waitFor(SERIAL, { timeoutMs: 1000 });
     assert.equal(device.port, DEVICE_ADDR.port);
     assert.deepEqual(added, [SERIAL]); // the non-udp datagram registered nothing
 
@@ -209,10 +209,10 @@ describe('openLan (deno)', () => {
 
     const other = 'd073d5abcdef';
     conn.push(stateServiceFrom(SERIAL), DEVICE_ADDR);
-    await lan.devices.get(SERIAL, { timeoutMs: 1000 });
+    await lan.devices.waitFor(SERIAL, { timeoutMs: 1000 });
     // A second datagram still arrives: the throw did not kill the loop.
     conn.push(stateServiceFrom(other), DEVICE_ADDR);
-    await lan.devices.get(other, { timeoutMs: 1000 });
+    await lan.devices.waitFor(other, { timeoutMs: 1000 });
     assert.deepEqual(errors, [boom, boom]);
 
     await lan.close();

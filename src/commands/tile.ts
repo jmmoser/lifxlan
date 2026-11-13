@@ -1,8 +1,8 @@
-import * as Encoding from '../encoding.js';
+import * as Encoding from '../wire.js';
 import { Type, TileEffectSkyType } from '../constants/index.js';
 import { ValidationError } from '../errors.js';
 import type { TileEffectType } from '../constants/index.js';
-import type { Command, Decoder } from './index.js';
+import type { Collector, Command } from './index.js';
 
 /** The pixel-grid row width of every current LIFX tile device. */
 const TILE_WIDTH = 8;
@@ -22,9 +22,9 @@ export interface Get64Options {
   /**
    * How many tiles to fetch, starting at tileIndex — the protocol's `length`
    * field. Each tile answers with its own State64 packet. Defaults to 1.
-   * Keep `tileIndex + tileCount` within the chain (GetDeviceChain's
-   * `tileDevicesCount`): State64 carries no chain length, so a tile past the
-   * end never answers and the call waits for it until it times out.
+   * Keep `tileIndex + tileCount` within the chain (the length of
+   * GetDeviceChain's `devices`): State64 carries no chain length, so a tile
+   * past the end never answers and the call waits for it until it times out.
    */
   tileCount?: number;
   /** Leftmost pixel column to fetch. Defaults to 0 (use 0 with width 8). */
@@ -36,20 +36,25 @@ export interface Get64Options {
   /**
    * Called once per distinct requested tile as its State64 packet arrives
    * (duplicates and tiles outside the requested range are ignored). Return
-   * false to stop waiting for further packets and resolve with what has
-   * accumulated.
+   * false to stop waiting for further packets; the exchange then resolves
+   * with the tiles received so far.
    */
   onResponse?: (response: Encoding.State64) => boolean | void;
 }
 
+/**
+ * Reads one 64-pixel frame from each of `tileCount` tiles. Resolves with
+ * one {@link Encoding.State64} per tile, ordered by `tileIndex` whatever
+ * order the packets arrived in.
+ */
 export function Get64(options: Get64Options) {
   const tileCount = options.tileCount ?? 1;
   const firstTile = options.tileIndex;
-  // Both are uint8 on the wire, but the decoder below compares replies
+  // Both are uint8 on the wire, but the collector below compares replies
   // against these raw numbers, so the exchange could only time out: a
   // wrapped tileIndex (256 encodes as 0) or tileCount (256 as 0) asks for
-  // tiles the decoder never accepts, and a fractional tileCount (1.5 sends
-  // 1) leaves it waiting for a fraction of a tile. A count of 0 requests no
+  // tiles the collector never accepts, and a fractional tileCount (1.5
+  // sends 1) leaves it waiting for a fraction of a tile. A count of 0 requests no
   // tiles at all.
   if (!Number.isInteger(firstTile) || firstTile < 0 || firstTile > 255) {
     throw new ValidationError('tileIndex', firstTile, 'must be an integer between 0 and 255');
@@ -58,59 +63,50 @@ export function Get64(options: Get64Options) {
     throw new ValidationError('tileCount', tileCount, 'must be an integer between 1 and 255');
   }
   // Tile indices are uint8, so a range running past 255 names tiles that
-  // cannot exist and the decoder would wait for them until the timeout.
+  // cannot exist and the collector would wait for them until the timeout.
   if (firstTile + tileCount > 256) {
     throw new ValidationError('tileCount', tileCount, `tileIndex + tileCount must not exceed 256 (tileIndex is ${firstTile})`);
   }
-  const endTile = firstTile + tileCount;
   const onResponse = options.onResponse;
 
-  // Accumulation state lives inside createDecoder so each send() gets a
-  // fresh decoder, making this command safe to reuse across concurrent
-  // sends and devices.
-  const createDecoder = (): Decoder<Encoding.State64[]> => {
-    // Track distinct tile indices rather than counting packets: UDP can
-    // deliver a State64 twice, and a duplicate must neither complete the
-    // exchange before every tile has reported nor appear in the result.
-    // Devices report absolute tile indices, so one outside the requested
-    // range is a stray (e.g. a late reply on a reused sequence number) and
-    // must not fill a slot either.
-    const tilesSeen = new Set<number>();
+  // Accumulation state lives inside collect() so each send() gets a fresh
+  // collector, making this command safe to reuse across concurrent sends
+  // and devices.
+  const collect = (): Collector<Encoding.State64[]> => {
+    // Indexed by tileIndex - firstTile, which both orders the result and
+    // tracks distinct tiles rather than counting packets: UDP can deliver a
+    // State64 twice, and a duplicate must neither complete the exchange
+    // before every tile has reported nor appear in the result. Devices
+    // report absolute tile indices, so one outside the requested range is a
+    // stray (e.g. a late reply on a reused sequence number) and must not
+    // fill a slot either.
+    const tiles: Encoding.State64[] = [];
+    let seen = 0;
 
-    const responses: Encoding.State64[] = [];
-
-    return (bytes, offsetRef, continuation, responseType) => {
-      let response: Encoding.State64 | undefined;
-
-      if (responseType === Type.State64) {
-        const decoded = Encoding.decodeState64(bytes, offsetRef);
-        const { tileIndex } = decoded;
-        if (tileIndex >= firstTile && tileIndex < endTile && !tilesSeen.has(tileIndex)) {
-          tilesSeen.add(tileIndex);
-          response = decoded;
+    return {
+      add(payload, type) {
+        if (type !== Type.State64) {
+          return false;
         }
-      }
-
-      // Update continuation to indicate if more responses are expected
-      if (continuation) {
-        if (response) {
-          responses.push(response);
-
-          // Call user callback if provided
-          let shouldContinue = true;
-          if (onResponse) {
-            const result = onResponse(response);
-            shouldContinue = result !== false; // false = stop early
-          }
-
-          continuation.expectMore = shouldContinue && tilesSeen.size < tileCount;
-        } else {
-          // Unknown response type, duplicate, or out-of-range tile - still expect more
-          continuation.expectMore = tilesSeen.size < tileCount;
+        const tile = Encoding.decodeState64(payload);
+        const slot = tile.tileIndex - firstTile;
+        if (slot < 0 || slot >= tileCount || tiles[slot] !== undefined) {
+          return false; // stray or duplicate — keep waiting
         }
-      }
+        tiles[slot] = tile;
+        seen++;
 
-      return responses; // Always return the accumulated array
+        if (onResponse !== undefined && onResponse(tile) === false) {
+          return true; // stopped early by the caller
+        }
+
+        return seen === tileCount;
+      },
+      result() {
+        // Complete, the list has no gaps; stopped early it may, and the
+        // missing tiles are simply left out (each entry names its tile).
+        return seen === tileCount ? tiles : tiles.filter((tile) => tile !== undefined);
+      },
     };
   };
 
@@ -118,7 +114,7 @@ export function Get64(options: Get64Options) {
     type: Type.Get64,
     responseType: Type.State64,
     payload: Encoding.encodeGet64(options.tileIndex, tileCount, options.x ?? 0, options.y ?? 0, options.width ?? TILE_WIDTH),
-    createDecoder,
+    collect,
     defaultResponseMode: 'response',
   } satisfies Command<Encoding.State64[], 'response'>;
 }
@@ -151,9 +147,9 @@ export interface Set64Options {
   /** Pixel-grid row width. Defaults to 8, which every current LIFX tile device uses. */
   width?: number;
   /** Transition time in milliseconds. Defaults to 0 (immediate). */
-  duration?: number;
+  durationMs?: number;
   /** The frame: up to 64 colors in row-major order. Missing entries stay zero. */
-  colors: Encoding.Color[];
+  colors: readonly Encoding.Color[];
 }
 
 // The declared Command<void, ...> return type (rather than `satisfies`) is
@@ -161,9 +157,6 @@ export interface Set64Options {
 // with no decoder to infer from, only the annotation carries `void` to the
 // call site.
 export function Set64(options: Set64Options): Command<void, 'ack-only'> & { payload: Uint8Array } {
-  if (options.colors.length > 64) {
-    throw new ValidationError('colors', options.colors.length, 'must contain at most 64 colors');
-  }
   return {
     type: Type.Set64,
     payload: Encoding.encodeSet64(
@@ -172,7 +165,7 @@ export function Set64(options: Set64Options): Command<void, 'ack-only'> & { payl
       options.x ?? 0,
       options.y ?? 0,
       options.width ?? TILE_WIDTH,
-      options.duration ?? 0,
+      options.durationMs ?? 0,
       options.colors,
     ),
     defaultResponseMode: 'ack-only',
@@ -193,10 +186,10 @@ export interface SetTileEffectOptions {
   /** Caller-chosen identifier for this run of the effect. */
   instanceId: number;
   effectType: TileEffectType;
-  /** Time in milliseconds one cycle of the effect takes. */
-  speed: number;
+  /** Time one cycle of the effect takes, in milliseconds. */
+  speedMs: number;
   /** How long the effect runs, in nanoseconds. 0 means until changed. */
-  duration: bigint;
+  durationNs: bigint;
   /** SKY effect only; ignored by other effects. Defaults to SUNRISE. */
   skyType?: TileEffectSkyType;
   /** SKY (CLOUDS) effect only; ignored by other effects. Defaults to 0. */
@@ -207,25 +200,21 @@ export interface SetTileEffectOptions {
    * Up to 16 colors the effect draws from. The wire-level palette_count
    * field is derived from this array's length.
    */
-  palette: Encoding.Color[];
+  palette: readonly Encoding.Color[];
 }
 
 export function SetTileEffect(options: SetTileEffectOptions) {
-  if (options.palette.length > 16) {
-    throw new ValidationError('palette', options.palette.length, 'must contain at most 16 colors');
-  }
   return {
     type: Type.SetTileEffect,
     responseType: Type.StateTileEffect,
     payload: Encoding.encodeSetTileEffect(
       options.instanceId,
       options.effectType,
-      options.speed,
-      options.duration,
+      options.speedMs,
+      options.durationNs,
       options.skyType ?? TileEffectSkyType.SUNRISE,
       options.cloudSaturationMin ?? 0,
       options.cloudSaturationMax ?? 0,
-      options.palette.length,
       options.palette,
     ),
     decode: Encoding.decodeStateTileEffect,

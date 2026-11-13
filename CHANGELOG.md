@@ -8,6 +8,104 @@ upgrading is a matter of reading this file.
 
 ### Breaking
 
+The first group reshapes the public surface ahead of 1.0; nothing here
+changes what goes over the wire.
+
+- **Factories and their types share a name.** `ClientInstance`,
+  `RouterInstance`, `DevicesInstance` and `ProductsInstance` are now `Client`,
+  `Router`, `Devices` and `Products` — the same identifier as the factory, as
+  `Device` already was — and `LanInstance`/`DiscoveryInstance` are `Lan` and
+  `Discovery`. `function f(client: Client)` now type-checks.
+- **`devices.get()` is the synchronous lookup; the async wait is
+  `devices.waitFor()`.** `devices.waitFor(serialNumber, options?)` is the old
+  `get()` unchanged (`GetDeviceOptions` is `WaitForDeviceOptions`).
+  `devices.get(serialNumber)` now returns `Device | undefined` at once, and
+  `devices.registered` is gone: use `devices.get()`, `devices.has()`,
+  `devices.size`, or iterate the registry. Unlike `registered.get()`, these
+  match the serial number case-insensitively.
+- **Decoded arrays hold only real entries.** The wire messages pad their
+  arrays to a fixed size; decoders now stop at the count the device reports.
+  `StateExtendedColorZones.colors` (was always 82), `StateMultiZone.colors`
+  (8), `StateDeviceChain.devices` (16), `StateTileEffect.palette` (16),
+  `StateButton.buttons` (8) and each button's `actions` (5) have the length
+  that used to be a separate field, so `colorsCount`, `tileDevicesCount`,
+  `paletteCount`, `buttonsCount` and `actionsCount` are removed — use
+  `.length`.
+- **Multi-packet commands resolve with the assembled result, not the
+  packets.** `GetColorZones` and `GetExtendedColorZones` resolve with
+  `ColorZones` — `{ zonesCount, zoneIndex, colors }`, one color per zone in
+  zone order — instead of an array of `StateZone`/`StateMultiZone`/
+  `StateExtendedColorZones` packets in arrival order. `Get64` still resolves
+  with `State64[]`, now ordered by `tileIndex`. `onResponse` still sees each
+  packet; returning `false` resolves with the zones received up to the first
+  one missing (or the tiles that answered).
+- **Reserved fields are gone from decoded types.** `Header`, `LightState`,
+  `StateHostFirmware`, `StateWifiInfo`, `StateWifiFirmware`,
+  `StateMultiZoneEffect`, `StateTileEffect` and `DeviceChainDevice` lose
+  their `reserved*()` accessors; `Header.reserved3`, `State64.reserved6` and
+  `StateTileEffect.reserved0` are removed. The raw `payload` still carries
+  those bytes. Decoded results are plain objects that no longer reference
+  the datagram (only `header.target`, an echo payload, an effect's
+  `parameters` and a button action's `target` remain views).
+- **Custom commands: `decode(payload, type)` and `collect()`.** A `Decoder`
+  is now `(payload, type) => result` — no `offsetRef`, no `continuation`
+  out-parameter. Multi-packet commands replace `createDecoder` with
+  `collect()`, returning a `Collector`: `add(payload, type)` returns `true`
+  when the result is complete, `result()` returns it.
+- **`lifxlan/encoding` is curated.** It exports `encode`, `decodeHeader`,
+  `getPayload`, the `decodeState*` family (with `decodeLightState`,
+  `decodeEchoResponse`, `decodeSensorStateAmbientLight`) and the decoded
+  types. Every decoder takes just the payload: `decodeLightState(payload)`,
+  not `decodeLightState(payload, { current: 0 })`. Removed: the `encodeSet*`/
+  `encodeGet*` payload builders (a command's `payload` is those bytes:
+  `SetColor({ ... }).payload`), `encodeString`, `encodeStringTo`,
+  `encodeUuidTo`, `encodeTimestampTo`, the ten `getHeader*` accessors (use
+  `decodeHeader`), `decodeSetColor`/`SetColorPayload`, and `OffsetRef`.
+- **Units are in the name.** `duration` is `durationMs` on `SetColor`,
+  `SetColorZones`, `SetExtendedColorZones` and `Set64`, and `durationNs` (a
+  bigint of nanoseconds, as before) on `SetMultiZoneEffect` and
+  `SetTileEffect`; `period` is `periodMs` on `SetWaveform` and
+  `SetWaveformOptional`; `speed` is `speedMs` on both effects. The decoded
+  `StateMultiZoneEffect` and `StateTileEffect` use the same names
+  (`speedMs`, `durationNs`), and their `type` is `effectType`, matching the
+  option that sets it.
+- **Message handlers take one object.** `RouterOptions.onMessage`, the
+  `onMessage` option of `openLan()`, and handlers passed to
+  `router.register()` are called with the `ReceivedMessage`
+  `{ header, payload, serialNumber }` that `router.receive()` returns,
+  instead of three positional arguments: `onMessage({ header, payload })`.
+- **Errors.** `AbortError` is removed: an aborted signal has always rejected
+  with the signal's own reason (a `DOMException` named `AbortError` unless
+  you passed another), so the class was never the rejection.
+  A malformed inbound packet — a truncated datagram, a payload shorter than
+  its message — is a `DecodeError`, no longer a `ValidationError`, which now
+  only ever means invalid caller input. `UnhandledCommandError.deviceSerial`
+  is `serialNumber`, as on the other errors.
+- **`StateHevCycleConfiguration.indication` is a boolean**, like the argument
+  that sets it and like `StateHevCycle.lastPower`; it decoded as 0/1.
+- `PRODUCTS_URL` is exported from `lifxlan/products`, next to the `Products`
+  it feeds, not from the package root. `Direction` is no longer exported: no
+  API took it.
+- **Every numeric field is validated against its wire width.** Before, only
+  uint32 fields were checked; the rest wrapped silently, so
+  `SetColor({ hue: 70000, brightness: -1, kelvin: NaN })` sent hue 4464 at
+  full brightness with kelvin 0, and `SetColorZones({ startIndex: 300 })`
+  addressed zone 44. Now a `ValidationError`: HSBK components, power and
+  relay levels, infrared brightness, and button gestures/target types
+  outside 0–65535; zone, tile, relay and button indices, tile `x`/`y`/
+  `width`, and enum values (`waveform`, `apply`, `effectType`, `skyType`)
+  that are not integers in 0–255; `skewRatio` outside -32768–32767; cloud
+  saturation outside 0–255; a non-finite `cycles` or tile position; a
+  `SetExtendedColorZones` `zoneIndex` that is not an integer in 0–65535.
+  Lengths that were silently cut are rejected too: effect `parameters` over
+  32 bytes, a button action `target` over 16 bytes, more than 8 buttons or 5
+  actions. Fractional magnitudes are still accepted and truncated.
+- The published package is plain `tsc` output: unminified JavaScript without
+  source maps. Stack traces and `node_modules` now show readable code
+  directly, and the package is about half the size.
+
+The rest are behaviour changes.
+
 - `GetColorZones(startIndex, endIndex, onResponse?)` is now
   `GetColorZones({ startIndex, endIndex, onResponse? })`, and
   `GetExtendedColorZones(onResponse?)` is now
@@ -24,7 +122,7 @@ upgrading is a matter of reading this file.
   `send()` and skips sequence numbers held by in-flight exchanges. It throws
   `SequenceExhaustionError` when all 255 are in flight, where it previously
   could not fail.
-- `devices.remove()` rejects any pending `devices.get()` for that serial with
+- `devices.remove()` rejects any pending `devices.waitFor()` for that serial with
   the new `DeviceRemovedError`. Before, such a lookup was left to its timeout
   or signal, and one with neither hung forever.
 - `router.receive()` no longer throws when a registered handler or the
@@ -41,7 +139,7 @@ upgrading is a matter of reading this file.
 - `router.register(handler, source)` rejects a non-integer `source` with a
   `ValidationError`.
 - Input that used to be accepted, and silently misbehaved, now throws (or,
-  from `send()`/`devices.get()`, rejects) with `ValidationError`; see Fixed
+  from `send()`/`devices.waitFor()`, rejects) with `ValidationError`; see Fixed
   below for each case. In short: a `NaN`, negative, or non-number timeout;
   a non-positive or non-number discovery `intervalMs`, or a `NaN` or
   non-number `maxIntervalMs`; a `signal` that is not an `AbortSignal`;
@@ -50,7 +148,7 @@ upgrading is a matter of reading this file.
   untyped callers); `GetColorZones`/`Get64`
   indices past the uint8 wire range, a fractional `Get64` `tileCount`, and a
   `Get64` range past tile 255; a location/group byte id that is not 16 bytes and an echo
-  payload over 64 bytes; a `devices.get()` serial that is not 12 hex digits
+  payload over 64 bytes; a `devices.waitFor()` serial that is not 12 hex digits
   (or is all zeros); `send()` to an all-zero target; a `NaN` or fractional
   `Device()` port. `devices.register()` also now ignores request-type
   messages, invalid source ports, and message types missing from `Type`.
@@ -69,15 +167,25 @@ upgrading is a matter of reading this file.
   `send()` ignores a reply of any other type instead of handing it to `decode`,
   so a late packet on a reused sequence number cannot resolve an exchange with
   the wrong data. Every built-in command that decodes a reply declares it
-  (except `GetColorZones`, whose decoder tells its two reply types apart). A
+  (except `GetColorZones`, whose collector tells its two reply types apart). A
   `StateUnhandled` naming a request type other than the command's own is
   ignored the same way.
 - `Get64` and `Set64` default `width` to 8, the row width of every current
   LIFX tile device.
-- The decoded-message types (`Header`, `LightState`, `StateHostFirmware`,
-  `StateWifiInfo`, `StateWifiFirmware`, `StateMultiZoneEffect`,
-  `StateTileEffect`, `DeviceChainDevice`) are plain interfaces, so tests and
-  mocks can satisfy them with object literals.
+- `client.broadcast(command, { address, port })` and
+  `discover(router, devices, { broadcastAddress })` send the broadcast to a
+  chosen address instead of always `255.255.255.255`. On a host with several
+  network interfaces the limited broadcast leaves through whichever one the
+  OS picks; a subnet-directed address (`192.168.1.255`) reaches the right
+  network. There was no supported way to send a tagged broadcast anywhere
+  else.
+- `devices.get(serialNumber)`, `devices.has(serialNumber)` and `devices.size`:
+  synchronous, case-insensitive registry lookups.
+- `DecodeError`, for malformed inbound packets (see Breaking).
+- `SetRPower()` accepts a boolean like `SetPower()` and `SetLightPower()`.
+- Every decoded-message type is a documented interface of plain data, so
+  tests and mocks can satisfy them with object literals and results can be
+  logged, spread, and structured-cloned.
 
 ### Fixed
 
@@ -110,7 +218,7 @@ upgrading is a matter of reading this file.
 - Timeouts and discovery intervals above 2^31 - 1 ms (about 24.8 days),
   `Infinity` included, are clamped to that. Node and Bun run a larger
   `setTimeout` delay after ~1ms instead, so `timeoutMs: Infinity` on `send()`
-  or `devices.get()` rejected with `TimeoutError` at once, a large discovery
+  or `devices.waitFor()` rejected with `TimeoutError` at once, a large discovery
   `timeoutMs` ended discovery at once, and a large `intervalMs` (or a
   `maxIntervalMs` the backoff eventually reached) rebroadcast `GetService` to
   the whole LAN about once a millisecond until disposed. `discover()` now
@@ -130,7 +238,7 @@ upgrading is a matter of reading this file.
   cleared and held the process open for up to a full interval.
 - A `NaN` or negative timeout — `defaultTimeoutMs` on
   `Client()`/`Devices()`/`openLan()`, or `timeoutMs` on `send()`,
-  `devices.get()`, or `discover()` — is rejected with `ValidationError` (a
+  `devices.waitFor()`, or `discover()` — is rejected with `ValidationError` (a
   rejected promise from `send()`/`get()`). Before, it failed the `> 0` arming
   check exactly like the documented `0` and silently disabled the timeout, so
   e.g. `Number()` of an unset environment variable, or a spent
@@ -144,7 +252,7 @@ upgrading is a matter of reading this file.
   never accepted, and a fractional count (`1.5` sends 1) left it waiting for
   a fraction of a tile, so the call always timed out. It also rejects a range
   with `tileIndex + tileCount` past 256, which names tiles that cannot exist.
-- `devices.get()` rejects with `ValidationError` for a serial that is not 12
+- `devices.waitFor()` rejects with `ValidationError` for a serial that is not 12
   hex digits (e.g. the MAC-style `d0:73:d5:12:34:56`). Registry keys are
   derived from the wire, so such a lookup could never match and waited out
   its timeout, or forever with `timeoutMs: 0`. The all-zero serial (the
@@ -154,7 +262,7 @@ upgrading is a matter of reading this file.
   `sendUnacknowledged()` to such a device still works. A non-string serial
   (e.g. an unset environment variable) also rejects with `ValidationError`;
   before, `get()` threw a `TypeError` synchronously.
-- `send()`, `devices.get()` and `discover()` reject a `signal` that is not an
+- `send()`, `devices.waitFor()` and `discover()` reject a `signal` that is not an
   `AbortSignal` (e.g. an `AbortController` passed in place of its `.signal`)
   with `ValidationError`. Before, `get()` threw a `TypeError` synchronously,
   and `discover()` threw only after creating its client and subscribing to
@@ -164,13 +272,13 @@ upgrading is a matter of reading this file.
   its per-device state, and re-checks the signal after running caller code.
   A getter (e.g. `payload`) that re-entered `send()` on the same device could
   strand the outer exchange so its reply was dropped and it timed out, and an
-  abort raised from such code (or from `createDecoder()`) was ignored: the
+  abort raised from such code (or from `collect()`) was ignored: the
   packet went out and the call waited for its timeout, or forever with
   `timeoutMs: 0`.
 - `Device()` rejects a `NaN` or fractional `port`, which slipped past the
   range check. An untyped numeric string (e.g. `process.env.LIFX_PORT`),
   which worked before, is accepted and stored as a number.
-- `devices.get()` validates its `timeoutMs` even when the device is already
+- `devices.waitFor()` validates its `timeoutMs` even when the device is already
   registered, so a bad timeout surfaces at once rather than only once a
   device goes missing.
 - On `lifxlan/deno`, the router's transport throws synchronously once
@@ -210,10 +318,10 @@ upgrading is a matter of reading this file.
   controllers' `GetService` broadcasts) instead of registering a phantom device
   with serial `000000000000`.
 - Serial numbers are case-insensitive. `Device()` stores the serial in
-  lowercase, and `devices.get()` and `devices.remove()` accept either case.
+  lowercase, and `devices.waitFor()` and `devices.remove()` accept either case.
   Before, a serial written in uppercase (as printed on labels and in the LIFX
   app) never matched the lowercase serial derived from replies, so every
-  `send()` to that device timed out and `devices.get()` never resolved.
+  `send()` to that device timed out and `devices.waitFor()` never resolved.
 - `Get64` counts distinct tiles in the requested range instead of packets, so
   a duplicated `State64`, or a stray one for another tile, no longer finishes
   the exchange before every requested tile has replied. Such packets are left

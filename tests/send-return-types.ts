@@ -12,9 +12,9 @@
  * ack-only-default command was mistyped as resolving its decoder's payload
  * even though it resolves `undefined` at runtime.
  */
-import type { ClientInstance } from '../src/client.js';
+import type { Client } from '../src/client.js';
 import type { Device } from '../src/devices.js';
-import type { LightState } from '../src/encoding.js';
+import type { LightState } from '../src/wire.js';
 import { SetPower, GetColor } from '../src/commands/index.js';
 
 /** True iff X and Y are the exact same type. */
@@ -24,7 +24,7 @@ type Equal<X, Y> =
 /** Compiles only when the argument type is exactly `true`. */
 type Expect<T extends true> = T;
 
-declare const client: ClientInstance;
+declare const client: Client;
 declare const device: Device;
 
 // --- Command defaults ------------------------------------------------------
@@ -58,15 +58,20 @@ export type _setPowerOtherOptionsIsVoid = Expect<Equal<Awaited<ReturnType<typeof
 const setPowerUndefinedMode = () => client.send(SetPower(true), device, { responseMode: undefined });
 export type _setPowerUndefinedModeIsVoid = Expect<Equal<Awaited<ReturnType<typeof setPowerUndefinedMode>>, void>>;
 
-// --- Multi-response commands (createDecoder) --------------------------------
+// --- Multi-response commands (collect) ---------------------------------------
 
-// A createDecoder-based command infers its payload type the same way decode
-// does: GetColorZones resolves the accumulated response array.
+// A collect-based command infers its result type the same way decode does:
+// GetColorZones resolves the assembled zones, Get64 one frame per tile.
 import { GetColorZones } from '../src/commands/multizone.js';
-import type { ColorZoneResponse } from '../src/commands/multizone.js';
+import type { ColorZones } from '../src/commands/multizone.js';
+import { Get64 } from '../src/commands/tile.js';
+import type { State64 } from '../src/wire.js';
 
 const getZones = () => client.send(GetColorZones({ startIndex: 0, endIndex: 1 }), device);
-export type _getZonesIsResponseArray = Expect<Equal<Awaited<ReturnType<typeof getZones>>, ColorZoneResponse[]>>;
+export type _getZonesIsAssembled = Expect<Equal<Awaited<ReturnType<typeof getZones>>, ColorZones>>;
+
+const getTiles = () => client.send(Get64({ tileIndex: 0, tileCount: 2 }), device);
+export type _getTilesIsFrameArray = Expect<Equal<Awaited<ReturnType<typeof getTiles>>, State64[]>>;
 
 // --- Commands with no response packet ---------------------------------------
 

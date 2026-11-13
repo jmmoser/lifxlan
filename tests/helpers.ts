@@ -1,5 +1,5 @@
 import { Router, type ReceivedMessage } from '../src/router.js';
-import { encode } from '../src/encoding.js';
+import { encode } from '../src/wire.js';
 import { Type } from '../src/constants/index.js';
 import { convertSerialNumberToTarget } from '../src/utils/index.js';
 

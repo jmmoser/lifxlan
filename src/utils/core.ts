@@ -10,6 +10,16 @@ const HEX_CHARS = /^[0-9a-fA-F]+$/;
  */
 export const MAX_TIMER_DELAY_MS = 0x7FFFFFFF;
 
+/**
+ * The rejection reason for an aborted signal. A real AbortSignal always
+ * carries one (abort() without an argument supplies an AbortError
+ * DOMException), so the fallback only serves a duck-typed signal — and
+ * mirrors the platform's default rather than inventing a library error.
+ */
+export function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('This operation was aborted', 'AbortError');
+}
+
 export function PromiseWithResolvers<T>(): {
   resolve: (value: T) => void;
   reject: (reason?: unknown) => void;

@@ -51,12 +51,12 @@ export class TimeoutError extends LifxError {
  */
 export class UnhandledCommandError extends LifxError {
   public readonly commandType: number;
-  public readonly deviceSerial: string | undefined;
+  public readonly serialNumber: string | undefined;
 
-  constructor(commandType: number, deviceSerial?: string) {
-    super(`Device ${deviceSerial || 'unknown'} returned unhandled command type: ${commandType}`, { commandType, deviceSerial });
+  constructor(commandType: number, serialNumber?: string) {
+    super(`Device ${serialNumber || 'unknown'} returned unhandled command type: ${commandType}`, { commandType, serialNumber });
     this.commandType = commandType;
-    this.deviceSerial = deviceSerial;
+    this.serialNumber = serialNumber;
   }
 }
 
@@ -95,19 +95,7 @@ export class DisposedClientError extends LifxError {
 }
 
 /**
- * Thrown when an operation is aborted via AbortSignal.
- */
-export class AbortError extends LifxError {
-  public readonly operation: string;
-
-  constructor(operation = 'operation') {
-    super(`${operation} was aborted`, { operation });
-    this.operation = operation;
-  }
-}
-
-/**
- * Rejected by a pending `devices.get()` when the registry's `remove()` is
+ * Rejected by a pending `devices.waitFor()` when the registry's `remove()` is
  * called for the serial number it is waiting on: the caller explicitly
  * dropped the device, so the lookup can no longer be satisfied.
  */
@@ -121,7 +109,25 @@ export class DeviceRemovedError extends LifxError {
 }
 
 /**
- * Thrown when validation of input parameters fails.
+ * Thrown when an inbound message cannot be decoded: a datagram too short
+ * for its header, a header whose size field is out of range, or a payload
+ * shorter than its message type requires. This is about what arrived from
+ * the network — anyone on the LAN can send a packet — never about the
+ * caller's input, which is what {@link ValidationError} reports.
+ */
+export class DecodeError extends LifxError {
+  public readonly reason: string;
+
+  constructor(reason: string, context: Record<string, unknown> = {}) {
+    super(`Malformed message: ${reason}`, { reason, ...context });
+    this.reason = reason;
+  }
+}
+
+/**
+ * Thrown when the caller's input is invalid: an out-of-range field, a
+ * malformed serial number, a bad option. Malformed packets from the network
+ * are reported as {@link DecodeError} instead.
  */
 export class ValidationError extends LifxError {
   public readonly parameter: string;

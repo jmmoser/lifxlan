@@ -1,10 +1,10 @@
 import { describe, test, expect, jest } from 'bun:test';
 import { Router } from '../src/router.js';
-import type { RouterInstance, RouterOptions } from '../src/router.js';
-import { Devices, type DevicesInstance } from '../src/devices.js';
+import type { RouterOptions } from '../src/router.js';
+import { Devices } from '../src/devices.js';
 import { discover } from '../src/discovery.js';
 import { Type } from '../src/constants/index.js';
-import { decodeHeader } from '../src/encoding.js';
+import { decodeHeader } from '../src/wire.js';
 import { received } from './helpers.js';
 import { ValidationError } from '../src/errors.js';
 import { MAX_TIMER_DELAY_MS } from '../src/utils/index.js';
@@ -17,12 +17,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Wraps a real Router so tests can observe, through the public RouterInstance
+// Wraps a real Router so tests can observe, through the public Router
 // interface alone, how many source ids the code under test currently holds.
 function sourceCountingRouter(onSend: RouterOptions['onSend'] = () => {}) {
   const inner = Router({ onSend });
   let active = 0;
-  const router: RouterInstance = {
+  const router: Router = {
     register(handler, source) {
       const resolved = inner.register(handler, source);
       active += 1;
@@ -230,11 +230,13 @@ describe('discovery', () => {
     // can drain or dispose, since discover() never returned the iterator.
     const inner = Devices();
     let subscriptions = 0;
-    const devices: DevicesInstance = {
-      get registered() { return inner.registered; },
+    const devices: Devices = {
+      get size() { return inner.size; },
+      get: inner.get,
+      has: inner.has,
       register: inner.register,
       remove: inner.remove,
-      get: inner.get,
+      waitFor: inner.waitFor,
       subscribe(handlers) {
         subscriptions++;
         const unsubscribe = inner.subscribe(handlers);
@@ -246,12 +248,53 @@ describe('discovery', () => {
       [Symbol.iterator]: () => inner[Symbol.iterator](),
     };
     const failure = new Error('no sources');
-    const router: RouterInstance = {
+    const router: Router = {
       ...Router({ onSend() {} }),
       register() { throw failure; },
     };
     expect(() => discover(router, devices)).toThrow(failure);
     expect(subscriptions).toBe(0);
+  });
+
+  test('broadcasts to the limited broadcast address by default and to broadcastAddress when given', () => {
+    const destinations: string[] = [];
+    const router = Router({
+      onSend(_message, _port, address) {
+        destinations.push(address);
+      },
+    });
+
+    discover(router, Devices()).dispose();
+    discover(router, Devices(), { broadcastAddress: '192.168.1.255' }).dispose();
+
+    expect(destinations).toEqual(['255.255.255.255', '192.168.1.255']);
+  });
+
+  test('repeat broadcasts keep using broadcastAddress', async () => {
+    const destinations: string[] = [];
+    let resolveSecond: () => void = () => {};
+    const second = new Promise<void>((resolve) => { resolveSecond = resolve; });
+    const router = Router({
+      onSend(_message, _port, address) {
+        destinations.push(address);
+        if (destinations.length === 2) resolveSecond();
+      },
+    });
+
+    const discovery = discover(router, Devices(), { broadcastAddress: '10.1.2.255', intervalMs: 5 });
+    await second;
+    discovery.dispose();
+
+    expect(destinations).toEqual(['10.1.2.255', '10.1.2.255']);
+  });
+
+  test('rejects a broadcastAddress that is not a non-empty string', () => {
+    const { router, activeSources } = sourceCountingRouter();
+    expect(() => discover(router, Devices(), { broadcastAddress: '' })).toThrow(ValidationError);
+    // @ts-expect-error -- an untyped caller passing a number
+    expect(() => discover(router, Devices(), { broadcastAddress: 255 })).toThrow(ValidationError);
+    // Rejected before a client was created.
+    expect(activeSources()).toBe(0);
   });
 
   test('yields devices registered before the call first, then new registrations', async () => {

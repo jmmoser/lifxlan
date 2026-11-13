@@ -1,15 +1,42 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import * as Encoding from '../src/encoding.js';
+import * as Encoding from '../src/wire.js';
+import type { Color } from '../src/wire.js';
+import { DecodeError, ValidationError } from '../src/errors.js';
+
+/** Asserts `fn` throws a ValidationError naming `parameter`. */
+function assertInvalid(fn: () => unknown, parameter: string) {
+  assert.throws(
+    fn,
+    (err: unknown) => err instanceof ValidationError && err.parameter === parameter,
+    `expected a ValidationError for ${parameter}`,
+  );
+}
+
+const UUID = '550e8400e29b41d4a716446655440000';
+const DATE = new Date('2023-01-01T00:00:00.000Z');
+const COLOR: Color = { hue: 1, saturation: 2, brightness: 3, kelvin: 3500 };
+
+/** A 36-byte header-only message with every field zero except `size`. */
+function blankHeader(): Uint8Array {
+  const bytes = new Uint8Array(36);
+  bytes[0] = 36;
+  return bytes;
+}
 
 describe('encoding', () => {
   test('uuid', () => {
-    const bytes = new Uint8Array(16);
-    Encoding.encodeUuidTo(bytes, 0, '4e0352bf-1994-4ff2-b425-1c4455479f33');
-    assert.deepEqual(bytes, new Uint8Array([
+    // UUIDs are encoded by the SetLocation/SetGroup payload builders.
+    const payload = Encoding.encodeSetGroup('4e0352bf-1994-4ff2-b425-1c4455479f33', '', DATE);
+    assert.deepEqual(payload.subarray(0, 16), new Uint8Array([
       0x4e, 0x03, 0x52, 0xbf, 0x19, 0x94, 0x4f, 0xf2,
       0xb4, 0x25, 0x1c, 0x44, 0x55, 0x47, 0x9f, 0x33,
     ]));
+    // Dashes are optional and hex is case-insensitive.
+    assert.deepEqual(
+      Encoding.encodeSetGroup('4E0352BF19944FF2B4251C4455479F33', '', DATE).subarray(0, 16),
+      payload.subarray(0, 16),
+    );
   });
   test('encode string', () => {
     const bytes = Encoding.encodeString('abc', 32);
@@ -21,23 +48,19 @@ describe('encoding', () => {
     ]));
   });
 
-  test('encodeStringTo with offset', () => {
-    const bytes = new Uint8Array(20);
-    bytes.fill(0xff); // Fill with non-zero values to detect offset bug
-    
-    Encoding.encodeStringTo(bytes, 10, 'test', 8);
-    
-    // First 10 bytes should remain 0xff
-    assert.deepEqual(bytes.subarray(0, 10), new Uint8Array(10).fill(0xff));
-    
-    // Next 4 bytes should be 'test' (0x74, 0x65, 0x73, 0x74)
-    assert.deepEqual(bytes.subarray(10, 14), new Uint8Array([0x74, 0x65, 0x73, 0x74]));
-    
-    // Byte at offset 14 should be null terminator
-    assert.equal(bytes[14], 0);
-    
-    // Remaining bytes should be 0xff
-    assert.deepEqual(bytes.subarray(15), new Uint8Array(5).fill(0xff));
+  test('a label is written at its field offset without disturbing its neighbours', () => {
+    const id = new Uint8Array(16).fill(0xff);
+    const payload = Encoding.encodeSetLocation(id, 'test', DATE);
+
+    // The 16 id bytes before the label field are untouched.
+    assert.deepEqual(payload.subarray(0, 16), id);
+
+    // The label field (32 bytes at offset 16) holds 'test', zero-padded.
+    assert.deepEqual(payload.subarray(16, 20), new Uint8Array([0x74, 0x65, 0x73, 0x74]));
+    assert.deepEqual(payload.subarray(20, 48), new Uint8Array(28));
+
+    // The timestamp after it is intact.
+    assert.equal(new DataView(payload.buffer).getBigUint64(48, true), BigInt(DATE.getTime()) * 1000000n);
   });
 
   test('decode', () => {
@@ -60,7 +83,6 @@ describe('encoding', () => {
     assert.deepEqual(header.target, new Uint8Array([1, 2, 3, 4, 5, 6]));
     assert.equal(header.resRequired, true);
     assert.equal(header.ackRequired, false);
-    assert.equal(header.reserved3, 0);
     assert.equal(header.sequence, 5);
 
     const encodedBytes = Encoding.encode(
@@ -118,15 +140,17 @@ describe('encoding', () => {
     assert.equal(view.getUint16(32, true), 100); // type
   });
 
-  test('encodeTimestampTo', () => {
-    const bytes = new Uint8Array(16);
-    const view = new DataView(bytes.buffer);
-    const date = new Date('2023-01-01T00:00:00.000Z');
-    
-    Encoding.encodeTimestampTo(view, 8, date);
-    
-    const expectedMicroseconds = BigInt(date.getTime()) * 1000000n;
-    assert.equal(view.getBigUint64(8, true), expectedMicroseconds);
+  test('timestamps encode as nanoseconds since the epoch', () => {
+    const date = new Date('2023-01-01T00:00:00.123Z');
+    const payload = Encoding.encodeSetGroup(UUID, 'x', date);
+
+    const expectedNanoseconds = BigInt(date.getTime()) * 1000000n;
+    assert.equal(new DataView(payload.buffer).getBigUint64(48, true), expectedNanoseconds);
+
+    // And decode back to the same instant.
+    const state = new Uint8Array(56);
+    state.set(payload);
+    assert.equal(Encoding.decodeStateGroup(state).updatedAt.getTime(), date.getTime());
   });
 
   test('encodeSetColor', () => {
@@ -142,79 +166,122 @@ describe('encoding', () => {
     assert.equal(view.getUint32(9, true), 1000); // duration
   });
 
-  test('getHeaderSize', () => {
-    const bytes = new Uint8Array([0x24, 0x00]);
-    assert.equal(Encoding.getHeaderSize(bytes), 0x24);
+  test('decodeHeader reads the size field', () => {
+    const bytes = new Uint8Array(0x124);
+    bytes[0] = 0x24;
+    bytes[1] = 0x01;
+    assert.equal(Encoding.decodeHeader(bytes).size, 0x124);
   });
 
-  test('getHeaderFlags', () => {
-    const bytes = new Uint8Array([0x00, 0x00, 0x34, 0x20]);
-    assert.equal(Encoding.getHeaderFlags(bytes), 0x2034);
+  test('decodeHeader splits the flags field', () => {
+    const bytes = blankHeader();
+    bytes[2] = 0x34;
+    bytes[3] = 0x60; // origin = 1, tagged = 1, addressable = 0, protocol = 0x034
+    const header = Encoding.decodeHeader(bytes);
+    assert.equal(header.protocol, 0x034);
+    assert.equal(header.addressable, false);
+    assert.equal(header.tagged, true);
+    assert.equal(header.origin, 1);
+
+    const all = blankHeader();
+    all[2] = 0xff;
+    all[3] = 0xff;
+    const allSet = Encoding.decodeHeader(all);
+    assert.equal(allSet.protocol, 0xfff);
+    assert.equal(allSet.addressable, true);
+    assert.equal(allSet.tagged, true);
+    assert.equal(allSet.origin, 3);
   });
 
-  test('getHeaderTagged', () => {
-    const bytes1 = new Uint8Array([0x00, 0x00, 0x00, 0x20]); // tagged = 1 (bit 13 = 1, 0x2000)
-    assert.equal(Encoding.getHeaderTagged(bytes1), true);
+  test('decodeHeader reads the tagged bit', () => {
+    const bytes1 = blankHeader();
+    bytes1[3] = 0x20; // tagged = 1 (bit 13 = 1, 0x2000)
+    assert.equal(Encoding.decodeHeader(bytes1).tagged, true);
 
-    const bytes2 = new Uint8Array([0x00, 0x00, 0x00, 0x10]); // tagged = 0 (bit 13 = 0; bit 12 is addressable, not tagged)
-    assert.equal(Encoding.getHeaderTagged(bytes2), false);
+    const bytes2 = blankHeader();
+    bytes2[3] = 0x10; // tagged = 0 (bit 13 = 0; bit 12 is addressable, not tagged)
+    assert.equal(Encoding.decodeHeader(bytes2).tagged, false);
+    assert.equal(Encoding.decodeHeader(bytes2).addressable, true);
 
-    // Must agree with encode() and decodeHeader() on where the tagged bit lives.
+    // Must agree with encode() on where the tagged bit lives.
     const tagged = Encoding.encode(true, 2, new Uint8Array(6), false, false, 0, 2);
-    assert.equal(Encoding.getHeaderTagged(tagged), true);
     assert.equal(Encoding.decodeHeader(tagged).tagged, true);
     const untagged = Encoding.encode(false, 2, new Uint8Array(6), false, false, 0, 2);
-    assert.equal(Encoding.getHeaderTagged(untagged), false);
     assert.equal(Encoding.decodeHeader(untagged).tagged, false);
   });
 
-  test('getHeaderSource', () => {
-    const bytes = new Uint8Array(8);
+  test('decodeHeader reads the source as an unsigned 32-bit value', () => {
+    const bytes = blankHeader();
     const view = new DataView(bytes.buffer);
     view.setUint32(4, 0x12345678, true);
-    assert.equal(Encoding.getHeaderSource(bytes), 0x12345678);
+    assert.equal(Encoding.decodeHeader(bytes).source, 0x12345678);
+
+    // The top bit must not turn the source negative.
+    view.setUint32(4, 0xFFFFFFFF, true);
+    assert.equal(Encoding.decodeHeader(bytes).source, 0xFFFFFFFF);
   });
 
-  test('getHeaderTarget', () => {
-    const bytes = new Uint8Array(20);
-    bytes.set([0x01, 0x02, 0x03, 0x04, 0x05, 0x06], 8);
-    const target = Encoding.getHeaderTarget(bytes);
+  test('decodeHeader exposes the 6-byte target as a view', () => {
+    const bytes = blankHeader();
+    bytes.set([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xaa, 0xbb], 8);
+    const { target } = Encoding.decodeHeader(bytes);
+    // Only the serial: the two reserved bytes that follow are not part of it.
     assert.deepEqual(target, new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]));
+    assert.strictEqual(target.buffer, bytes.buffer, 'zero-copy view into the message');
   });
 
-  test('getHeaderResponseFlags', () => {
-    const bytes = new Uint8Array(25);
-    const view = new DataView(bytes.buffer);
-    view.setUint8(22, 0b11);
-    assert.equal(Encoding.getHeaderResponseFlags(bytes), 0b11);
+  test('decodeHeader reads the response flags', () => {
+    const flags = (value: number) => {
+      const bytes = blankHeader();
+      bytes[22] = value;
+      const header = Encoding.decodeHeader(bytes);
+      return [header.resRequired, header.ackRequired];
+    };
+    assert.deepEqual(flags(0b00), [false, false]);
+    assert.deepEqual(flags(0b01), [true, false]);
+    assert.deepEqual(flags(0b10), [false, true]);
+    assert.deepEqual(flags(0b11), [true, true]);
+    // The six reserved bits above them are ignored.
+    assert.deepEqual(flags(0b11111100), [false, false]);
   });
 
-  test('getHeaderResponseRequired', () => {
-    assert.equal(Encoding.getHeaderResponseRequired(0b01), true);
-    assert.equal(Encoding.getHeaderResponseRequired(0b10), false);
-    assert.equal(Encoding.getHeaderResponseRequired(0b11), true);
-    assert.equal(Encoding.getHeaderResponseRequired(0b00), false);
+  test('decodeHeader reads the type', () => {
+    const bytes = blankHeader();
+    new DataView(bytes.buffer).setUint16(32, 0x1234, true);
+    assert.equal(Encoding.decodeHeader(bytes).type, 0x1234);
   });
 
-  test('getHeaderAcknowledgeRequired', () => {
-    assert.equal(Encoding.getHeaderAcknowledgeRequired(0b01), false);
-    assert.equal(Encoding.getHeaderAcknowledgeRequired(0b10), true);
-    assert.equal(Encoding.getHeaderAcknowledgeRequired(0b11), true);
-    assert.equal(Encoding.getHeaderAcknowledgeRequired(0b00), false);
+  test('decodeHeader reads the sequence', () => {
+    const bytes = blankHeader();
+    bytes[23] = 42;
+    assert.equal(Encoding.decodeHeader(bytes).sequence, 42);
   });
 
-  test('getHeaderType', () => {
-    const bytes = new Uint8Array(40);
-    const view = new DataView(bytes.buffer);
-    view.setUint16(32, 0x1234, true);
-    assert.equal(Encoding.getHeaderType(bytes), 0x1234);
+  test('decodeHeader decodes a message at an offset', () => {
+    const message = Encoding.encode(true, 0xdeadbeef, new Uint8Array([1, 2, 3, 4, 5, 6]), true, true, 9, 0x1234, new Uint8Array([7, 8]));
+    const bytes = new Uint8Array(10 + message.length);
+    bytes.fill(0xff);
+    bytes.set(message, 10);
+
+    const header = Encoding.decodeHeader(bytes, 10);
+    assert.equal(header.size, 38);
+    assert.equal(header.tagged, true);
+    assert.equal(header.source, 0xdeadbeef);
+    assert.deepEqual(header.target, new Uint8Array([1, 2, 3, 4, 5, 6]));
+    assert.equal(header.resRequired, true);
+    assert.equal(header.ackRequired, true);
+    assert.equal(header.sequence, 9);
+    assert.equal(header.type, 0x1234);
+    assert.deepEqual(Encoding.getPayload(bytes, 10, header.size), new Uint8Array([7, 8]));
   });
 
-  test('getHeaderSequence', () => {
-    const bytes = new Uint8Array(30);
-    const view = new DataView(bytes.buffer);
-    view.setUint8(23, 42);
-    assert.equal(Encoding.getHeaderSequence(bytes), 42);
+  test('decodeHeader returns a plain object with no reserved fields', () => {
+    const header = Encoding.decodeHeader(blankHeader());
+    assert.deepStrictEqual(Object.keys(header), [
+      'size', 'protocol', 'addressable', 'tagged', 'origin', 'source',
+      'target', 'resRequired', 'ackRequired', 'sequence', 'type',
+    ]);
+    assert.strictEqual(Object.getPrototypeOf(header), Object.prototype);
   });
 
   test('getPayload', () => {
@@ -231,18 +298,23 @@ describe('encoding', () => {
     assert.deepEqual(payload, new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]));
   });
 
+  test('getPayload bounded by the header size ignores trailing bytes', () => {
+    const bytes = new Uint8Array(50);
+    bytes.set([0x01, 0x02, 0x03, 0x04, 0x05, 0x06], 36);
+    assert.deepEqual(Encoding.getPayload(bytes, 0, 40), new Uint8Array([0x01, 0x02, 0x03, 0x04]));
+    assert.strictEqual(Encoding.getPayload(bytes, 0, 40).buffer, bytes.buffer, 'zero-copy view');
+  });
+
   test('decodeStateService', () => {
     const bytes = new Uint8Array(5);
     const view = new DataView(bytes.buffer);
     view.setUint8(0, 1); // service
     view.setUint32(1, 56700, true); // port
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateService(bytes, offsetRef);
+    const result = Encoding.decodeStateService(bytes);
     
     assert.equal(result.service, 1);
     assert.equal(result.port, 56700);
-    assert.equal(offsetRef.current, 5);
   });
 
   test('decodeStatePower', () => {
@@ -250,11 +322,9 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     view.setUint16(0, 65535, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStatePower(bytes, offsetRef);
+    const result = Encoding.decodeStatePower(bytes);
     
     assert.equal(result, 65535);
-    assert.equal(offsetRef.current, 2);
   });
 
   test('decodeStateLabel', () => {
@@ -263,22 +333,21 @@ describe('encoding', () => {
     new TextEncoder().encodeInto(label, bytes);
     bytes[label.length] = 0; // null terminator
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateLabel(bytes, offsetRef);
+    const result = Encoding.decodeStateLabel(bytes);
     
     assert.equal(result, label);
-    assert.equal(offsetRef.current, 32);
   });
 
   test('decodeEchoResponse', () => {
     const bytes = new Uint8Array(64);
     bytes.set([1, 2, 3, 4, 5], 0);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeEchoResponse(bytes, offsetRef);
+    const result = Encoding.decodeEchoResponse(bytes);
     
     assert.deepEqual(result, bytes);
-    assert.equal(offsetRef.current, 64);
+    assert.strictEqual(result.buffer, bytes.buffer, 'zero-copy view into the payload');
+    // Bytes past the 64-byte echo are not part of it.
+    assert.equal(Encoding.decodeEchoResponse(new Uint8Array(70)).length, 64);
   });
 
   test('decodeStateUnhandled', () => {
@@ -286,11 +355,9 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     view.setUint16(0, 0x1234, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateUnhandled(bytes, offsetRef);
+    const result = Encoding.decodeStateUnhandled(bytes);
     
     assert.equal(result, 0x1234);
-    assert.equal(offsetRef.current, 2);
   });
 
   test('decodeStateHostFirmware', () => {
@@ -307,14 +374,12 @@ describe('encoding', () => {
     view.setUint16(16, 42, true); // versionMinor
     view.setUint16(18, 1, true);  // versionMajor
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateHostFirmware(bytes, offsetRef);
+    const result = Encoding.decodeStateHostFirmware(bytes);
     
     assert.equal(result.build.getTime(), Number(timestamp / 1000000n));
-    assert.equal(result.reserved().length, 8);
     assert.equal(result.versionMinor, 42);
     assert.equal(result.versionMajor, 1);
-    assert.equal(offsetRef.current, 20);
+    assert.deepStrictEqual(Object.keys(result), ['build', 'versionMinor', 'versionMajor']);
   });
 
   test('decodeStateWifiInfo', () => {
@@ -322,14 +387,10 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     view.setFloat32(0, -50.5, true); // signal
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateWifiInfo(bytes, offsetRef);
+    const result = Encoding.decodeStateWifiInfo(bytes);
     
     assert.equal(result.signal, -50.5);
-    assert.equal(result.reserved6().length, 4);
-    assert.equal(result.reserved7().length, 4);
-    assert.equal(result.reserved8().length, 2);
-    assert.equal(offsetRef.current, 14);
+    assert.deepStrictEqual(result, { signal: -50.5 });
   });
 
   test('decodeStateWifiFirmware', () => {
@@ -346,14 +407,12 @@ describe('encoding', () => {
     view.setUint16(16, 15, true); // versionMinor
     view.setUint16(18, 2, true);  // versionMajor
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateWifiFirmware(bytes, offsetRef);
+    const result = Encoding.decodeStateWifiFirmware(bytes);
     
     assert.equal(result.build.getTime(), Number(timestamp / 1000000n));
-    assert.equal(result.reserved6().length, 8);
     assert.equal(result.versionMinor, 15);
     assert.equal(result.versionMajor, 2);
-    assert.equal(offsetRef.current, 20);
+    assert.deepStrictEqual(Object.keys(result), ['build', 'versionMinor', 'versionMajor']);
   });
 
   test('decodeStateVersion', () => {
@@ -362,12 +421,10 @@ describe('encoding', () => {
     view.setUint32(0, 1, true);    // vendor
     view.setUint32(4, 22, true);   // product
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateVersion(bytes, offsetRef);
+    const result = Encoding.decodeStateVersion(bytes);
     
     assert.equal(result.vendor, 1);
     assert.equal(result.product, 22);
-    assert.equal(offsetRef.current, 8);
   });
 
   test('decodeStateInfo', () => {
@@ -382,14 +439,12 @@ describe('encoding', () => {
     view.setBigUint64(8, uptime, true);
     view.setBigUint64(16, downtime, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateInfo(bytes, offsetRef);
+    const result = Encoding.decodeStateInfo(bytes);
 
     assert.equal(result.time.getTime(), Number(time / 1000000n));
     // uptime/downtime are durations, decoded as raw nanosecond counts.
     assert.equal(result.uptimeNs, uptime);
     assert.equal(result.downtimeNs, downtime);
-    assert.equal(offsetRef.current, 24);
   });
 
   test('decodeStateLocation', () => {
@@ -412,14 +467,12 @@ describe('encoding', () => {
     const timestamp = BigInt(Date.now()) * 1000000n;
     view.setBigUint64(48, timestamp, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateLocation(bytes, offsetRef);
+    const result = Encoding.decodeStateLocation(bytes);
     
     // Same 32-hex-digit form as StateGroup.group.
     assert.equal(result.location, Array.from(locationBytes, (b) => b.toString(16).padStart(2, '0')).join(''));
     assert.equal(result.label, label);
     assert.equal(result.updatedAt.getTime(), Number(timestamp / 1000000n));
-    assert.equal(offsetRef.current, 56);
   });
 
   test('decodeStateGroup', () => {
@@ -442,36 +495,11 @@ describe('encoding', () => {
     const timestamp = 1640995200000;
     view.setBigUint64(48, 1000000n * BigInt(timestamp), true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateGroup(bytes, offsetRef);
+    const result = Encoding.decodeStateGroup(bytes);
     
     assert.equal(result.group, '4e0352bf19944ff2b4251c4455479f33');
     assert.equal(result.label, label);
     assert.equal(result.updatedAt.getTime(), timestamp);
-    assert.equal(offsetRef.current, 56);
-  });
-
-  test('decodeSetColor', () => {
-    const bytes = new Uint8Array(13);
-    const view = new DataView(bytes.buffer);
-    
-    bytes[0] = 0; // reserved
-    view.setUint16(1, 120, true);    // hue
-    view.setUint16(3, 65535, true);  // saturation
-    view.setUint16(5, 32768, true);  // brightness
-    view.setUint16(7, 3500, true);   // kelvin
-    view.setUint32(9, 1000, true);   // duration
-    
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeSetColor(bytes, offsetRef);
-    
-    assert.equal(result.reserved.length, 1);
-    assert.equal(result.hue, 120);
-    assert.equal(result.saturation, 65535);
-    assert.equal(result.brightness, 32768);
-    assert.equal(result.kelvin, 3500);
-    assert.equal(result.duration, 1000);
-    assert.equal(offsetRef.current, 13);
   });
 
   test('decodeLightState', () => {
@@ -492,8 +520,7 @@ describe('encoding', () => {
     
     // reserved8 (8 bytes) at offset 44
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeLightState(bytes, offsetRef);
+    const result = Encoding.decodeLightState(bytes);
     
     assert.equal(result.hue, 120);
     assert.equal(result.saturation, 65535);
@@ -501,9 +528,8 @@ describe('encoding', () => {
     assert.equal(result.kelvin, 3500);
     assert.equal(result.power, 65535);
     assert.equal(result.label, label);
-    assert.equal(result.reserved2().length, 2);
-    assert.equal(result.reserved8().length, 8);
-    assert.equal(offsetRef.current, 52);
+    assert.deepStrictEqual(Object.keys(result), ['hue', 'saturation', 'brightness', 'kelvin', 'power', 'label']);
+    assert.strictEqual(Object.getPrototypeOf(result), Object.prototype);
   });
 
   test('decodeStateLightPower', () => {
@@ -511,11 +537,9 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     view.setUint16(0, 32768, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateLightPower(bytes, offsetRef);
+    const result = Encoding.decodeStateLightPower(bytes);
     
     assert.equal(result, 32768);
-    assert.equal(offsetRef.current, 2);
   });
 
   test('decodeStateInfrared', () => {
@@ -523,11 +547,9 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     view.setUint16(0, 16384, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateInfrared(bytes, offsetRef);
+    const result = Encoding.decodeStateInfrared(bytes);
     
     assert.equal(result, 16384);
-    assert.equal(offsetRef.current, 2);
   });
 
   test('decodeStateHevCycle', () => {
@@ -537,13 +559,11 @@ describe('encoding', () => {
     view.setUint32(4, 1800, true);  // remainingSeconds
     view.setUint8(8, 1);            // lastPower
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateHevCycle(bytes, offsetRef);
+    const result = Encoding.decodeStateHevCycle(bytes);
     
     assert.equal(result.durationSeconds, 3600);
     assert.equal(result.remainingSeconds, 1800);
     assert.equal(result.lastPower, true);
-    assert.equal(offsetRef.current, 9);
   });
 
   test('decodeStateHevCycleConfiguration', () => {
@@ -552,23 +572,36 @@ describe('encoding', () => {
     view.setUint8(0, 1);           // indication
     view.setUint32(1, 7200, true); // durationSeconds
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateHevCycleConfiguration(bytes, offsetRef);
+    const result = Encoding.decodeStateHevCycleConfiguration(bytes);
     
-    assert.equal(result.indication, 1);
+    assert.equal(result.indication, true);
     assert.equal(result.durationSeconds, 7200);
-    assert.equal(offsetRef.current, 5);
+  });
+
+  test('decodeStateHevCycleConfiguration decodes indication as a boolean', () => {
+    assert.strictEqual(Encoding.decodeStateHevCycleConfiguration(new Uint8Array(5)).indication, false);
+    // Any non-zero byte is true, matching StateHevCycle.lastPower.
+    const bytes = new Uint8Array(5);
+    bytes[0] = 2;
+    assert.strictEqual(Encoding.decodeStateHevCycleConfiguration(bytes).indication, true);
+    bytes[0] = 255;
+    assert.strictEqual(Encoding.decodeStateHevCycleConfiguration(bytes).indication, true);
+  });
+
+  test('decodeStateHevCycle decodes lastPower as a boolean', () => {
+    assert.strictEqual(Encoding.decodeStateHevCycle(new Uint8Array(9)).lastPower, false);
+    const bytes = new Uint8Array(9);
+    bytes[8] = 2;
+    assert.strictEqual(Encoding.decodeStateHevCycle(bytes).lastPower, true);
   });
 
   test('decodeStateLastHevCycleResult', () => {
     const bytes = new Uint8Array(1);
     bytes[0] = 42;
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateLastHevCycleResult(bytes, offsetRef);
+    const result = Encoding.decodeStateLastHevCycleResult(bytes);
     
     assert.equal(result, 42);
-    assert.equal(offsetRef.current, 1);
   });
 
   test('decodeStateRPower', () => {
@@ -577,12 +610,10 @@ describe('encoding', () => {
     view.setUint8(0, 2);           // relayIndex
     view.setUint16(1, 32000, true); // level
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateRPower(bytes, offsetRef);
+    const result = Encoding.decodeStateRPower(bytes);
     
     assert.equal(result.relayIndex, 2);
     assert.equal(result.level, 32000);
-    assert.equal(offsetRef.current, 3);
   });
 
   test('decodeStateDeviceChain', () => {
@@ -620,12 +651,12 @@ describe('encoding', () => {
     // Set tileDevicesCount at the very end
     view.setUint8(totalSize - 1, 1); // tileDevicesCount
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateDeviceChain(bytes, offsetRef);
+    const result = Encoding.decodeStateDeviceChain(bytes);
     
     assert.equal(result.startIndex, 5);
-    assert.equal(result.devices.length, 16);
-    assert.equal(result.tileDevicesCount, 1);
+    // Only the one device the message reports, not the 16 wire slots.
+    assert.equal(result.devices.length, 1);
+    assert.deepStrictEqual(Object.keys(result), ['startIndex', 'devices']);
     
     const firstDevice = result.devices[0];
     assert.ok(firstDevice);
@@ -641,15 +672,39 @@ describe('encoding', () => {
     assert.equal(firstDevice.firmwareBuild.getTime(), Number(timestamp / 1000000n));
     assert.equal(firstDevice.firmwareVersionMinor, 42);
     assert.equal(firstDevice.firmwareVersionMajor, 3);
+    assert.deepStrictEqual(Object.keys(firstDevice), [
+      'accelMeasX', 'accelMeasY', 'accelMeasZ', 'userX', 'userY', 'width', 'height',
+      'deviceVersionVendor', 'deviceVersionProduct', 'firmwareBuild',
+      'firmwareVersionMinor', 'firmwareVersionMajor',
+    ]);
+  });
 
-    // Reserved fields are exposed as lazy accessors that slice the backing buffer.
-    assert.deepEqual(firstDevice.reserved6(), new Uint8Array([0xab, 0xcd]));
-    assert.equal(firstDevice.reserved7().length, 1);
-    assert.equal(firstDevice.reserved8().length, 4);
-    assert.equal(firstDevice.reserved9().length, 8);
-    assert.equal(firstDevice.reserved10().length, 4);
+  test('decodeStateDeviceChain trims devices to the reported count', () => {
+    const payload = (count: number) => {
+      const bytes = new Uint8Array(882);
+      for (let i = 0; i < 16; i++) {
+        bytes[1 + i * 55 + 16] = i + 1; // width identifies the slot
+      }
+      bytes[881] = count;
+      return bytes;
+    };
 
-    assert.equal(offsetRef.current, totalSize);
+    assert.deepStrictEqual(Encoding.decodeStateDeviceChain(payload(0)).devices, []);
+
+    const five = Encoding.decodeStateDeviceChain(payload(5)).devices;
+    assert.deepEqual(five.map((device) => device.width), [1, 2, 3, 4, 5]);
+
+    const full = Encoding.decodeStateDeviceChain(payload(16)).devices;
+    assert.equal(full.length, 16);
+    assert.equal(full[15]!.width, 16);
+
+    // A count past the 16 slots the message carries is clamped, never read
+    // past the payload.
+    const clamped = Encoding.decodeStateDeviceChain(payload(200)).devices;
+    assert.equal(clamped.length, 16);
+    assert.equal(clamped[15]!.width, 16);
+
+
   });
 
   test('decodeState64', () => {
@@ -669,11 +724,9 @@ describe('encoding', () => {
     view.setUint16(offset, 32768, true); offset += 2;  // brightness
     view.setUint16(offset, 3500, true); offset += 2;   // kelvin
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeState64(bytes, offsetRef);
+    const result = Encoding.decodeState64(bytes);
     
     assert.equal(result.tileIndex, 2);
-    assert.equal(result.reserved6.length, 1);
     assert.equal(result.x, 1);
     assert.equal(result.y, 2);
     assert.equal(result.width, 8);
@@ -685,8 +738,19 @@ describe('encoding', () => {
     assert.equal(firstColor.saturation, 65535);
     assert.equal(firstColor.brightness, 32768);
     assert.equal(firstColor.kelvin, 3500);
-    
-    assert.equal(offsetRef.current, 517);
+
+    assert.deepStrictEqual(Object.keys(result), ['tileIndex', 'x', 'y', 'width', 'colors']);
+  });
+
+  test('decodeState64 always decodes the full 64-color frame', () => {
+    const bytes = new Uint8Array(517);
+    const view = new DataView(bytes.buffer);
+    for (let i = 0; i < 64; i++) {
+      view.setUint16(5 + i * 8, i + 1, true); // hue identifies the pixel
+    }
+    const { colors } = Encoding.decodeState64(bytes);
+    assert.equal(colors.length, 64);
+    assert.deepEqual(colors.map((color) => color.hue), Array.from({ length: 64 }, (_, i) => i + 1));
   });
 
   test('decodeStateZone', () => {
@@ -700,8 +764,7 @@ describe('encoding', () => {
     view.setUint16(6, 40000, true); // brightness
     view.setUint16(8, 2700, true);  // kelvin
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateZone(bytes, offsetRef);
+    const result = Encoding.decodeStateZone(bytes);
     
     assert.equal(result.zonesCount, 16);
     assert.equal(result.zoneIndex, 5);
@@ -709,7 +772,6 @@ describe('encoding', () => {
     assert.equal(result.saturation, 65535);
     assert.equal(result.brightness, 40000);
     assert.equal(result.kelvin, 2700);
-    assert.equal(offsetRef.current, 10);
   });
 
   test('decodeStateMultiZone', () => {
@@ -726,8 +788,7 @@ describe('encoding', () => {
     view.setUint16(offset, 45000, true); offset += 2;  // brightness
     view.setUint16(offset, 4000, true); offset += 2;   // kelvin
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateMultiZone(bytes, offsetRef);
+    const result = Encoding.decodeStateMultiZone(bytes);
     
     assert.equal(result.zonesCount, 16);
     assert.equal(result.zoneIndex, 0);
@@ -739,8 +800,38 @@ describe('encoding', () => {
     assert.equal(firstColor.saturation, 50000);
     assert.equal(firstColor.brightness, 45000);
     assert.equal(firstColor.kelvin, 4000);
-    
-    assert.equal(offsetRef.current, 66);
+
+    assert.deepStrictEqual(Object.keys(result), ['zonesCount', 'zoneIndex', 'colors']);
+  });
+
+  test('decodeStateMultiZone trims colors to the zones the device has', () => {
+    const payload = (zonesCount: number, zoneIndex: number) => {
+      const bytes = new Uint8Array(66);
+      const view = new DataView(bytes.buffer);
+      bytes[0] = zonesCount;
+      bytes[1] = zoneIndex;
+      for (let i = 0; i < 8; i++) {
+        view.setUint16(2 + i * 8, zoneIndex + i + 1000, true); // hue identifies the zone
+      }
+      return bytes;
+    };
+    const hues = (zonesCount: number, zoneIndex: number) =>
+      Encoding.decodeStateMultiZone(payload(zonesCount, zoneIndex)).colors.map((color) => color.hue);
+
+    // A 12-zone strip: the first packet is full, the second carries 4.
+    assert.deepEqual(hues(12, 0), [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007]);
+    assert.deepEqual(hues(12, 8), [1008, 1009, 1010, 1011]);
+    // Exactly at the boundary.
+    assert.deepEqual(hues(8, 0).length, 8);
+    assert.deepEqual(hues(9, 8), [1008]);
+    assert.deepEqual(hues(1, 0), [1000]);
+    // Nothing to report: no zones, or a zoneIndex at or past the last zone
+    // (a hostile packet must not produce a negative length).
+    assert.deepEqual(hues(0, 0), []);
+    assert.deepEqual(hues(8, 8), []);
+    assert.deepEqual(hues(4, 200), []);
+    // The largest strip the uint8 fields can describe.
+    assert.deepEqual(hues(255, 248), [1248, 1249, 1250, 1251, 1252, 1253, 1254]);
   });
 
   test('decodeStateMultiZoneEffect', () => {
@@ -757,19 +848,16 @@ describe('encoding', () => {
     // parameters (32 bytes) at offset 27
     bytes.set([1, 2, 3, 4], 27); // First few parameter bytes
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateMultiZoneEffect(bytes, offsetRef);
+    const result = Encoding.decodeStateMultiZoneEffect(bytes);
     
     assert.equal(result.instanceId, 12345);
-    assert.equal(result.type, 2);
-    assert.equal(result.reserved6().length, 2);
-    assert.equal(result.speed, 1000);
-    assert.equal(result.duration, 5000n);
-    assert.equal(result.reserved7().length, 4);
-    assert.equal(result.reserved8().length, 4);
+    assert.equal(result.effectType, 2);
+    assert.equal(result.speedMs, 1000);
+    assert.equal(result.durationNs, 5000n);
     assert.equal(result.parameters.length, 32);
     assert.deepEqual(result.parameters.subarray(0, 4), new Uint8Array([1, 2, 3, 4]));
-    assert.equal(offsetRef.current, 59);
+    assert.strictEqual(result.parameters.buffer, bytes.buffer, 'zero-copy view into the payload');
+    assert.deepStrictEqual(Object.keys(result), ['instanceId', 'effectType', 'speedMs', 'durationNs', 'parameters']);
   });
 
   test('decodeStateExtendedColorZones', () => {
@@ -787,13 +875,13 @@ describe('encoding', () => {
     view.setUint16(offset, 50000, true); offset += 2;  // brightness
     view.setUint16(offset, 3200, true); offset += 2;   // kelvin
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateExtendedColorZones(bytes, offsetRef);
+    const result = Encoding.decodeStateExtendedColorZones(bytes);
     
     assert.equal(result.zonesCount, 82);
     assert.equal(result.zoneIndex, 0);
-    assert.equal(result.colorsCount, 10);
-    assert.equal(result.colors.length, 82);
+    // Only the 10 colors the packet reports as valid, not the 82 wire slots.
+    assert.equal(result.colors.length, 10);
+    assert.deepStrictEqual(Object.keys(result), ['zonesCount', 'zoneIndex', 'colors']);
     
     const firstColor = result.colors[0];
     assert.ok(firstColor);
@@ -801,8 +889,43 @@ describe('encoding', () => {
     assert.equal(firstColor.saturation, 40000);
     assert.equal(firstColor.brightness, 50000);
     assert.equal(firstColor.kelvin, 3200);
-    
-    assert.equal(offsetRef.current, 661);
+  });
+
+  test('decodeStateExtendedColorZones trims colors to colors_count', () => {
+    const payload = (zonesCount: number, zoneIndex: number, colorsCount: number) => {
+      const bytes = new Uint8Array(661);
+      const view = new DataView(bytes.buffer);
+      view.setUint16(0, zonesCount, true);
+      view.setUint16(2, zoneIndex, true);
+      bytes[4] = colorsCount;
+      for (let i = 0; i < 82; i++) {
+        view.setUint16(5 + i * 8, zoneIndex + i + 1, true); // hue identifies the zone
+      }
+      return bytes;
+    };
+
+    assert.deepStrictEqual(Encoding.decodeStateExtendedColorZones(payload(10, 0, 0)).colors, []);
+
+    const one = Encoding.decodeStateExtendedColorZones(payload(1, 0, 1));
+    assert.deepEqual(one.colors.map((color) => color.hue), [1]);
+
+    const full = Encoding.decodeStateExtendedColorZones(payload(82, 0, 82));
+    assert.equal(full.colors.length, 82);
+    assert.equal(full.colors[81]!.hue, 82);
+
+    // The second packet of a 120-zone device: 38 valid colors starting at 82.
+    const second = Encoding.decodeStateExtendedColorZones(payload(120, 82, 38));
+    assert.equal(second.zonesCount, 120);
+    assert.equal(second.zoneIndex, 82);
+    assert.equal(second.colors.length, 38);
+    assert.equal(second.colors[0]!.hue, 83);
+    assert.equal(second.colors[37]!.hue, 120);
+
+    // A count past the 82 slots the message carries is clamped, never read
+    // past the payload.
+    const clamped = Encoding.decodeStateExtendedColorZones(payload(500, 0, 255));
+    assert.equal(clamped.colors.length, 82);
+    assert.equal(clamped.colors[81]!.hue, 82);
   });
 
   test('decodeStateTileEffect', () => {
@@ -831,24 +954,21 @@ describe('encoding', () => {
     view.setUint16(offset, 35000, true); offset += 2;  // brightness
     view.setUint16(offset, 6500, true); offset += 2;   // kelvin
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeStateTileEffect(bytes, offsetRef);
+    const result = Encoding.decodeStateTileEffect(bytes);
     
-    assert.equal(result.reserved0, 0);
     assert.equal(result.instanceId, 98765);
-    assert.equal(result.type, 3);
-    assert.equal(result.speed, 2000);
-    assert.equal(result.duration, 10000n);
-    assert.equal(result.reserved1().length, 4);
-    assert.equal(result.reserved2().length, 4);
+    assert.equal(result.effectType, 3);
+    assert.equal(result.speedMs, 2000);
+    assert.equal(result.durationNs, 10000n);
     assert.equal(result.skyType, 1);
-    assert.equal(result.reserved3().length, 3);
     assert.equal(result.cloudSaturationMin, 50);
-    assert.equal(result.reserved4().length, 3);
     assert.equal(result.cloudSaturationMax, 80);
-    assert.equal(result.reserved5().length, 23);
-    assert.equal(result.paletteCount, 5);
-    assert.equal(result.palette.length, 16);
+    // Only the 5 palette entries in use, not the 16 wire slots.
+    assert.equal(result.palette.length, 5);
+    assert.deepStrictEqual(Object.keys(result), [
+      'instanceId', 'effectType', 'speedMs', 'durationNs', 'skyType',
+      'cloudSaturationMin', 'cloudSaturationMax', 'palette',
+    ]);
     
     const firstPaletteColor = result.palette[0];
     assert.ok(firstPaletteColor);
@@ -856,9 +976,26 @@ describe('encoding', () => {
     assert.equal(firstPaletteColor.saturation, 55000);
     assert.equal(firstPaletteColor.brightness, 35000);
     assert.equal(firstPaletteColor.kelvin, 6500);
-    
-    // The actual offset should be 187, not 188 based on the structure
-    assert.equal(offsetRef.current, 187);
+  });
+
+  test('decodeStateTileEffect trims the palette to palette_count', () => {
+    const payload = (paletteCount: number) => {
+      const bytes = new Uint8Array(187);
+      const view = new DataView(bytes.buffer);
+      bytes[58] = paletteCount;
+      for (let i = 0; i < 16; i++) {
+        view.setUint16(59 + i * 8, i + 1, true); // hue identifies the entry
+      }
+      return bytes;
+    };
+    const hues = (paletteCount: number) =>
+      Encoding.decodeStateTileEffect(payload(paletteCount)).palette.map((color) => color.hue);
+
+    assert.deepEqual(hues(0), []);
+    assert.deepEqual(hues(3), [1, 2, 3]);
+    assert.deepEqual(hues(16), Array.from({ length: 16 }, (_, i) => i + 1));
+    // A count past the 16 slots the message carries is clamped.
+    assert.deepEqual(hues(255), Array.from({ length: 16 }, (_, i) => i + 1));
   });
 
   test('decodeSensorStateAmbientLight', () => {
@@ -866,12 +1003,10 @@ describe('encoding', () => {
     const view = new DataView(bytes.buffer);
     view.setFloat32(0, 123.45, true);
     
-    const offsetRef = { current: 0 };
-    const result = Encoding.decodeSensorStateAmbientLight(bytes, offsetRef);
+    const result = Encoding.decodeSensorStateAmbientLight(bytes);
     
     // Use approximate comparison for float32 precision
     assert.ok(Math.abs(result.lux - 123.45) < 0.01);
-    assert.equal(offsetRef.current, 4);
   });
 
   // Test encoding functions that weren't fully covered
@@ -1003,17 +1138,17 @@ describe('encoding', () => {
 
   test('uint32 time fields reject values setUint32 would wrap', () => {
     // -1 would encode as 0xFFFFFFFF: a ~49.7 day transition, a ~136 year HEV cycle.
-    assert.throws(() => Encoding.encodeSetColor(0, 0, 0, 3500, -1), /Invalid duration: -1/);
-    assert.throws(() => Encoding.encodeSetLightPower(true, -1), /Invalid duration: -1/);
+    assert.throws(() => Encoding.encodeSetColor(0, 0, 0, 3500, -1), /Invalid durationMs: -1/);
+    assert.throws(() => Encoding.encodeSetLightPower(true, -1), /Invalid durationMs: -1/);
     assert.throws(() => Encoding.encodeSetHevCycle(true, -1), /Invalid durationSeconds: -1/);
     assert.throws(() => Encoding.encodeSetHevCycleConfiguration(true, 2 ** 32), /Invalid durationSeconds/);
-    assert.throws(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, -1, 1, 0, 0), /Invalid period: -1/);
-    assert.throws(() => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, Number.NaN, 1, 0, 0, true, true, true, true), /Invalid period: NaN/);
-    assert.throws(() => Encoding.encodeSetColorZones(0, 7, 0, 0, 0, 3500, -1, 1), /Invalid duration: -1/);
-    assert.throws(() => Encoding.encodeSetExtendedColorZones(-1, 1, 0, 0, []), /Invalid duration: -1/);
-    assert.throws(() => Encoding.encodeSet64(0, 1, 0, 0, 8, -1, []), /Invalid duration: -1/);
-    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, -1, 0n, new Uint8Array(0)), /Invalid speed: -1/);
-    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, -1, 0n, 0, 0, 0, 0, []), /Invalid speed: -1/);
+    assert.throws(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, -1, 1, 0, 0), /Invalid periodMs: -1/);
+    assert.throws(() => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, Number.NaN, 1, 0, 0, true, true, true, true), /Invalid periodMs: NaN/);
+    assert.throws(() => Encoding.encodeSetColorZones(0, 7, 0, 0, 0, 3500, -1, 1), /Invalid durationMs: -1/);
+    assert.throws(() => Encoding.encodeSetExtendedColorZones(-1, 1, 0, [COLOR]), /Invalid durationMs: -1/);
+    assert.throws(() => Encoding.encodeSet64(0, 1, 0, 0, 8, -1, []), /Invalid durationMs: -1/);
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, -1, 0n, new Uint8Array(0)), /Invalid speedMs: -1/);
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, -1, 0n, 0, 0, 0, []), /Invalid speedMs: -1/);
     // The ends of the range encode.
     assert.equal(new DataView(Encoding.encodeSetColor(0, 0, 0, 3500, 0xFFFFFFFF).buffer).getUint32(9, true), 0xFFFFFFFF);
     assert.equal(Encoding.encodeSetHevCycle(true, 0).length, 5);
@@ -1021,15 +1156,17 @@ describe('encoding', () => {
 
   test('effect encoders reject a duration outside the uint64 range', () => {
     // setBigUint64 would wrap -1n to 2^64 - 1 (an effect that never ends).
-    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, -1n, new Uint8Array(0)), /Invalid duration/);
-    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n, 0, 0, 0, 0, []), /Invalid duration/);
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, -1n, new Uint8Array(0)), /Invalid durationNs/);
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n, 0, 0, 0, []), /Invalid durationNs/);
     // Both ends of the uint64 range encode (0n means "run until stopped").
     assert.equal(new DataView(Encoding.encodeSetMultiZoneEffect(1, 1, 1000, 0n, new Uint8Array(0)).buffer).getBigUint64(11, true), 0n);
-    assert.equal(new DataView(Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n - 1n, 0, 0, 0, 0, []).buffer).getBigUint64(11, true), 2n ** 64n - 1n);
+    assert.equal(new DataView(Encoding.encodeSetTileEffect(1, 2, 1000, 2n ** 64n - 1n, 0, 0, 0, []).buffer).getBigUint64(11, true), 2n ** 64n - 1n);
     // An untyped omitted or number duration is a ValidationError too, not a
     // bare TypeError from setBigUint64.
     // @ts-expect-error -- an untyped caller omitting the bigint duration
-    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, undefined, new Uint8Array(0)), /Invalid duration/);
+    assert.throws(() => Encoding.encodeSetMultiZoneEffect(1, 1, 1000, undefined, new Uint8Array(0)), /Invalid durationNs/);
+    // @ts-expect-error -- an untyped caller passing a number where a bigint is required
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 1000, 5000, 0, 0, 0, []), /Invalid durationNs/);
   });
 
   test('encodeSetWaveform', () => {
@@ -1241,7 +1378,6 @@ describe('encoding', () => {
       2000,  // duration
       1,     // apply
       0,     // zoneIndex
-      2,     // colorsCount
       colors // colors
     );
     
@@ -1251,7 +1387,7 @@ describe('encoding', () => {
     assert.equal(view.getUint32(0, true), 2000);  // duration
     assert.equal(view.getUint8(4), 1);            // apply
     assert.equal(view.getUint16(5, true), 0);     // zoneIndex
-    assert.equal(view.getUint8(7), 2);            // colorsCount
+    assert.equal(view.getUint8(7), 2);            // colorsCount, derived from colors.length
     
     // Check first color
     assert.equal(view.getUint16(8, true), 120);    // hue
@@ -1340,7 +1476,6 @@ describe('encoding', () => {
       1,      // skyType
       50,     // cloudSaturationMin
       180,    // cloudSaturationMax
-      2,      // paletteCount
       palette // palette
     );
     
@@ -1358,7 +1493,7 @@ describe('encoding', () => {
     assert.equal(view.getUint8(27), 1);                // skyType
     assert.equal(view.getUint8(31), 50);               // cloudSaturationMin
     assert.equal(view.getUint8(35), 180);              // cloudSaturationMax
-    assert.equal(view.getUint8(59), 2);                // paletteCount
+    assert.equal(view.getUint8(59), 2);                // paletteCount, derived from palette.length
     
     // Check first palette color
     assert.equal(view.getUint16(60, true), 30);        // hue
@@ -1375,14 +1510,9 @@ describe('encoding', () => {
 
   // Test edge cases for string encoding
 
-  test('encodeStringTo without null terminator when string fills buffer', () => {
-    const bytes = new Uint8Array(4);
-    bytes.fill(0xff);
-    
-    Encoding.encodeStringTo(bytes, 0, 'test', 4); // Exactly fills the buffer
-    
-    // Should not add null terminator since string fills entire buffer
-    assert.deepEqual(bytes, new Uint8Array([0x74, 0x65, 0x73, 0x74])); // 'test'
+  test('encodeString without null terminator when string fills buffer', () => {
+    // Exactly fills the field: no room, and no need, for a terminator.
+    assert.deepEqual(Encoding.encodeString('test', 4), new Uint8Array([0x74, 0x65, 0x73, 0x74])); // 'test'
   });
 
   test('encodeString with exact length match', () => {
@@ -1402,29 +1532,66 @@ describe('encoding', () => {
 
   test('encodeString does not write past byteLength when input is too long', () => {
     // 'hello world' is 11 bytes; field is only 5 bytes
-    const bytes = new Uint8Array(10);
-    bytes.fill(0xff);
-    Encoding.encodeStringTo(bytes, 0, 'hello world', 5);
-    // First 5 bytes should be 'hello'; bytes 5+ should be untouched (still 0xff)
-    assert.deepEqual(bytes.subarray(0, 5), new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f]));
-    assert.deepEqual(bytes.subarray(5), new Uint8Array(5).fill(0xff));
+    const bytes = Encoding.encodeString('hello world', 5);
+    assert.deepEqual(bytes, new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f]));
   });
 
-  test('encodeUuidTo rejects malformed UUIDs', () => {
-    const bytes = new Uint8Array(16);
-    assert.throws(() => Encoding.encodeUuidTo(bytes, 0, '4e0352bf-XXXX-4ff2-b425-1c4455479f33'), /Invalid uuid/);
-    assert.throws(() => Encoding.encodeUuidTo(bytes, 0, 'too-short'), /Invalid uuid/);
+  test('an over-long label is truncated to its field and never spills into the next one', () => {
+    const label = 'x'.repeat(40); // the label field is 32 bytes
+    const payload = Encoding.encodeSetGroup(UUID, label, DATE);
+    assert.deepEqual(payload.subarray(16, 48), new Uint8Array(32).fill(0x78));
+    // The timestamp that follows is intact.
+    assert.equal(new DataView(payload.buffer).getBigUint64(48, true), BigInt(DATE.getTime()) * 1000000n);
+    // And it round-trips as the truncated label.
+    assert.equal(Encoding.decodeStateGroup(payload).label, 'x'.repeat(32));
+  });
+
+  test('encodeString never writes part of a multi-byte character', () => {
+    // 'café' needs 5 bytes; in a 4-byte field the 2-byte 'é' does not fit,
+    // so it is dropped whole and the freed byte is the terminator.
+    assert.deepEqual(Encoding.encodeString('café', 4), new Uint8Array([0x63, 0x61, 0x66, 0x00]));
+  });
+
+  test('SetLocation/SetGroup reject malformed UUIDs', () => {
+    assertInvalid(() => Encoding.encodeSetGroup('4e0352bf-XXXX-4ff2-b425-1c4455479f33', 'x', DATE), 'uuid');
+    assertInvalid(() => Encoding.encodeSetGroup('too-short', 'x', DATE), 'uuid');
+    assertInvalid(() => Encoding.encodeSetLocation('4e0352bf-XXXX-4ff2-b425-1c4455479f33', 'x', DATE), 'uuid');
+    assertInvalid(() => Encoding.encodeSetLocation(`${UUID}00`, 'x', DATE), 'uuid');
   });
 
   test('decodeHeader throws on packet shorter than 36 bytes', () => {
     const tooShort = new Uint8Array(20);
-    assert.throws(() => Encoding.decodeHeader(tooShort), /must be at least 36 bytes/);
+    assert.throws(() => Encoding.decodeHeader(tooShort), DecodeError);
+    assert.throws(() => Encoding.decodeHeader(tooShort), /at least 36 bytes for its header, got 20/);
+    // Also when the offset leaves fewer than 36 bytes, or is negative.
+    assert.throws(() => Encoding.decodeHeader(new Uint8Array(40), 5), DecodeError);
+    assert.throws(() => Encoding.decodeHeader(new Uint8Array(40), -1), DecodeError);
   });
 
   test('decodeHeader throws when declared size exceeds buffer', () => {
     const message = new Uint8Array(36);
     new DataView(message.buffer).setUint16(0, 1000, true);
-    assert.throws(() => Encoding.decodeHeader(message), /header size field is out of range/);
+    assert.throws(() => Encoding.decodeHeader(message), DecodeError);
+    assert.throws(() => Encoding.decodeHeader(message), /header size field 1000 is out of range/);
+  });
+
+  test('decodeHeader throws when declared size is smaller than a header', () => {
+    const message = new Uint8Array(36);
+    message[0] = 35;
+    assert.throws(() => Encoding.decodeHeader(message), DecodeError);
+    assert.throws(() => Encoding.decodeHeader(message), /header size field 35 is out of range/);
+  });
+
+  test('decodeHeader errors are DecodeError, not ValidationError', () => {
+    // A malformed datagram is network input, not the caller's bad argument.
+    try {
+      Encoding.decodeHeader(new Uint8Array(3));
+      assert.fail('expected decodeHeader to throw');
+    } catch (err) {
+      assert.ok(err instanceof DecodeError);
+      assert.ok(!(err instanceof ValidationError));
+      assert.equal(err.context['available'], 3);
+    }
   });
 
   test('decodeHeader rejects oversized declared size when bytes is a subarray of a larger buffer', () => {
@@ -1435,16 +1602,397 @@ describe('encoding', () => {
     const view = new DataView(big.buffer);
     view.setUint16(0, 500, true); // claim size = 500 bytes
     const subarray = big.subarray(0, 36);
-    assert.throws(() => Encoding.decodeHeader(subarray), /header size field is out of range/);
+    assert.throws(() => Encoding.decodeHeader(subarray), /header size field 500 is out of range/);
   });
 
-  test('encodeStringTo with multi-byte UTF-8 string that exactly fills byteLength does not write null terminator', () => {
-    const bytes = new Uint8Array(10);
-    bytes.fill(0xff);
+  test('encodeString with multi-byte UTF-8 string that exactly fills byteLength does not write null terminator', () => {
     // 'café' is 5 bytes in UTF-8 — exactly fills the 5-byte field
-    Encoding.encodeStringTo(bytes, 0, 'café', 5);
-    assert.deepEqual(bytes.subarray(0, 5), new Uint8Array([0x63, 0x61, 0x66, 0xc3, 0xa9]));
-    // Byte at index 5 must remain 0xff (no null terminator since written === byteLength)
-    assert.equal(bytes[5], 0xff);
+    assert.deepEqual(Encoding.encodeString('café', 5), new Uint8Array([0x63, 0x61, 0x66, 0xc3, 0xa9]));
+  });
+});
+
+/**
+ * Every numeric field an encoder writes is range-checked by its wire width.
+ * A typed-array store wraps out-of-range values instead of failing, so
+ * without the checks `brightness: -1` would encode as full brightness and
+ * `startIndex: 256` as zone 0.
+ */
+describe('encoder field validation', () => {
+  const u16 = (payload: Uint8Array, offset: number) => new DataView(payload.buffer).getUint16(offset, true);
+  const u32 = (payload: Uint8Array, offset: number) => new DataView(payload.buffer).getUint32(offset, true);
+
+  describe('uint16 magnitudes', () => {
+    const fields: Array<{ parameter: string; encode: (value: number) => Uint8Array; offset: number }> = [
+      { parameter: 'hue', encode: (v) => Encoding.encodeSetColor(v, 0, 0, 3500, 0), offset: 1 },
+      { parameter: 'saturation', encode: (v) => Encoding.encodeSetColor(0, v, 0, 3500, 0), offset: 3 },
+      { parameter: 'brightness', encode: (v) => Encoding.encodeSetColor(0, 0, v, 3500, 0), offset: 5 },
+      { parameter: 'kelvin', encode: (v) => Encoding.encodeSetColor(0, 0, 0, v, 0), offset: 7 },
+      { parameter: 'power', encode: (v) => Encoding.encodeSetPower(v), offset: 0 },
+      { parameter: 'level', encode: (v) => Encoding.encodeSetLightPower(v, 0), offset: 0 },
+      { parameter: 'level', encode: (v) => Encoding.encodeSetRPower(0, v), offset: 1 },
+      { parameter: 'brightness', encode: (v) => Encoding.encodeSetInfrared(v), offset: 0 },
+      { parameter: 'hue', encode: (v) => Encoding.encodeSetWaveform(false, v, 0, 0, 3500, 0, 1, 0, 0), offset: 2 },
+      { parameter: 'kelvin', encode: (v) => Encoding.encodeSetWaveform(false, 0, 0, 0, v, 0, 1, 0, 0), offset: 8 },
+      { parameter: 'saturation', encode: (v) => Encoding.encodeSetWaveformOptional(false, 0, v, 0, 3500, 0, 1, 0, 0, true, true, true, true), offset: 4 },
+      { parameter: 'brightness', encode: (v) => Encoding.encodeSetColorZones(0, 7, 0, 0, v, 3500, 0, 1), offset: 6 },
+      { parameter: 'hue', encode: (v) => Encoding.encodeSetExtendedColorZones(0, 1, 0, [{ ...COLOR, hue: v }]), offset: 8 },
+      { parameter: 'saturation', encode: (v) => Encoding.encodeSet64(0, 1, 0, 0, 8, 0, [{ ...COLOR, saturation: v }]), offset: 12 },
+      { parameter: 'kelvin', encode: (v) => Encoding.encodeSetTileEffect(1, 2, 0, 0n, 0, 0, 0, [{ ...COLOR, kelvin: v }]), offset: 66 },
+    ];
+
+    for (const [i, { parameter, encode, offset }] of fields.entries()) {
+      test(`#${i} ${parameter}: rejects out-of-range and NaN, accepts both ends`, () => {
+        for (const bad of [-1, -0.5, 65536, 65535.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+          assertInvalid(() => encode(bad), parameter);
+        }
+        assert.equal(u16(encode(0), offset), 0);
+        assert.equal(u16(encode(65535), offset), 65535);
+        assert.equal(u16(encode(0x1234), offset), 0x1234);
+      });
+
+      test(`#${i} ${parameter}: a fractional value truncates toward zero`, () => {
+        // A computed hue rarely lands on an integer; truncating matches
+        // what DataView.setUint16 does.
+        assert.equal(u16(encode(1.9), offset), 1);
+        assert.equal(u16(encode(65534.9), offset), 65534);
+        assert.equal(u16(encode(0.9), offset), 0);
+      });
+    }
+
+    test('the documented wrap cases now throw', () => {
+      // Before: hue wrapped to 4464, brightness to 65535, kelvin to 0.
+      assertInvalid(() => Encoding.encodeSetColor(70000, 0, 0, 3500, 0), 'hue');
+      assertInvalid(() => Encoding.encodeSetColor(0, 0, -1, 3500, 0), 'brightness');
+      assertInvalid(() => Encoding.encodeSetColor(0, 0, 0, Number.NaN, 0), 'kelvin');
+    });
+
+    test('a boolean power is the on/off pair on every power encoder', () => {
+      assert.equal(u16(Encoding.encodeSetPower(true), 0), 65535);
+      assert.equal(u16(Encoding.encodeSetLightPower(false, 0), 0), 0);
+      assert.equal(u16(Encoding.encodeSetRPower(3, true), 1), 65535);
+      assert.equal(u16(Encoding.encodeSetRPower(3, false), 1), 0);
+    });
+  });
+
+  describe('uint8 indices, counts, and enums', () => {
+    const fields: Array<{ parameter: string; encode: (value: number) => Uint8Array; offset: number }> = [
+      { parameter: 'relayIndex', encode: (v) => Encoding.encodeGetRPower(v), offset: 0 },
+      { parameter: 'relayIndex', encode: (v) => Encoding.encodeSetRPower(v, 0), offset: 0 },
+      { parameter: 'tileIndex', encode: (v) => Encoding.encodeGet64(v, 1, 0, 0, 8), offset: 0 },
+      { parameter: 'tileCount', encode: (v) => Encoding.encodeGet64(0, v, 0, 0, 8), offset: 1 },
+      { parameter: 'x', encode: (v) => Encoding.encodeGet64(0, 1, v, 0, 8), offset: 3 },
+      { parameter: 'y', encode: (v) => Encoding.encodeGet64(0, 1, 0, v, 8), offset: 4 },
+      { parameter: 'width', encode: (v) => Encoding.encodeGet64(0, 1, 0, 0, v), offset: 5 },
+      { parameter: 'startIndex', encode: (v) => Encoding.encodeGetColorZones(v, 0), offset: 0 },
+      { parameter: 'endIndex', encode: (v) => Encoding.encodeGetColorZones(0, v), offset: 1 },
+      { parameter: 'startIndex', encode: (v) => Encoding.encodeSetColorZones(v, 7, 0, 0, 0, 3500, 0, 1), offset: 0 },
+      { parameter: 'endIndex', encode: (v) => Encoding.encodeSetColorZones(0, v, 0, 0, 0, 3500, 0, 1), offset: 1 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'apply', encode: (v) => Encoding.encodeSetColorZones(0, 7, 0, 0, 0, 3500, 0, v), offset: 14 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'apply', encode: (v) => Encoding.encodeSetExtendedColorZones(0, v, 0, [COLOR]), offset: 4 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'waveform', encode: (v) => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, 0, 1, 0, v), offset: 20 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'waveform', encode: (v) => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, 0, 1, 0, v, true, true, true, true), offset: 20 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'effectType', encode: (v) => Encoding.encodeSetMultiZoneEffect(1, v, 0, 0n, new Uint8Array(0)), offset: 4 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'effectType', encode: (v) => Encoding.encodeSetTileEffect(1, v, 0, 0n, 0, 0, 0, []), offset: 6 },
+      // @ts-expect-error -- an untyped caller passing a number outside the enum
+      { parameter: 'skyType', encode: (v) => Encoding.encodeSetTileEffect(1, 2, 0, 0n, v, 0, 0, []), offset: 27 },
+      { parameter: 'tileIndex', encode: (v) => Encoding.encodeSetUserPosition(v, 0, 0), offset: 0 },
+      { parameter: 'tileIndex', encode: (v) => Encoding.encodeSet64(v, 1, 0, 0, 8, 0, []), offset: 0 },
+      { parameter: 'tileCount', encode: (v) => Encoding.encodeSet64(0, v, 0, 0, 8, 0, []), offset: 1 },
+      { parameter: 'x', encode: (v) => Encoding.encodeSet64(0, 1, v, 0, 8, 0, []), offset: 3 },
+      { parameter: 'y', encode: (v) => Encoding.encodeSet64(0, 1, 0, v, 8, 0, []), offset: 4 },
+      { parameter: 'width', encode: (v) => Encoding.encodeSet64(0, 1, 0, 0, v, 0, []), offset: 5 },
+    ];
+
+    for (const [i, { parameter, encode, offset }] of fields.entries()) {
+      test(`#${i} ${parameter}: must be an integer between 0 and 255`, () => {
+        // Unlike a magnitude, half an index is a bug, not a rounding matter.
+        for (const bad of [-1, 256, 1.5, 0.5, 254.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+          assertInvalid(() => encode(bad), parameter);
+        }
+        assert.equal(encode(0)[offset], 0);
+        assert.equal(encode(255)[offset], 255);
+        assert.equal(encode(7)[offset], 7);
+      });
+    }
+
+    test('the documented wrap case now throws', () => {
+      // Before: startIndex 300 encoded as zone 44.
+      assertInvalid(() => Encoding.encodeSetColorZones(300, 7, 0, 0, 0, 3500, 0, 1), 'startIndex');
+    });
+  });
+
+  describe('uint8 magnitudes', () => {
+    test('cloud saturation rejects out-of-range and NaN, truncates fractions', () => {
+      const min = (v: number) => Encoding.encodeSetTileEffect(1, 5, 0, 0n, 2, v, 0, []);
+      const max = (v: number) => Encoding.encodeSetTileEffect(1, 5, 0, 0n, 2, 0, v, []);
+      for (const bad of [-1, 256, 255.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+        assertInvalid(() => min(bad), 'cloudSaturationMin');
+        assertInvalid(() => max(bad), 'cloudSaturationMax');
+      }
+      assert.equal(min(255)[31], 255);
+      assert.equal(max(255)[35], 255);
+      assert.equal(min(50.9)[31], 50);
+      assert.equal(max(0.9)[35], 0);
+    });
+  });
+
+  describe('extended zone index (uint16 index)', () => {
+    const encode = (zoneIndex: number) => Encoding.encodeSetExtendedColorZones(0, 1, zoneIndex, [COLOR]);
+
+    test('must be an integer between 0 and 65535', () => {
+      for (const bad of [-1, 65536, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+        assertInvalid(() => encode(bad), 'zoneIndex');
+      }
+      assert.equal(u16(encode(0), 5), 0);
+      assert.equal(u16(encode(65535), 5), 65535);
+      assert.equal(u16(encode(300), 5), 300);
+    });
+  });
+
+  describe('int16', () => {
+    const encode = (skewRatio: number) => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, 0, 1, skewRatio, 0);
+    const i16 = (payload: Uint8Array) => new DataView(payload.buffer).getInt16(18, true);
+
+    test('skewRatio rejects out-of-range and NaN, accepts both ends', () => {
+      for (const bad of [-32769, 32768, 65535, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        assertInvalid(() => encode(bad), 'skewRatio');
+        assertInvalid(() => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, 0, 1, bad, 0, true, true, true, true), 'skewRatio');
+      }
+      assert.equal(i16(encode(-32768)), -32768);
+      assert.equal(i16(encode(32767)), 32767);
+      assert.equal(i16(encode(0)), 0);
+      assert.equal(i16(encode(-1)), -1);
+      assert.equal(i16(encode(-12345)), -12345);
+      assert.equal(i16(encode(12345)), 12345);
+    });
+
+    test('a fractional skewRatio truncates toward zero', () => {
+      assert.equal(i16(encode(-1.5)), -1);
+      assert.equal(i16(encode(1.9)), 1);
+      assert.equal(i16(encode(-0.5)), 0);
+      assert.equal(i16(encode(-300.7)), -300);
+    });
+  });
+
+  describe('uint32', () => {
+    const fields: Array<{ parameter: string; encode: (value: number) => Uint8Array; offset: number }> = [
+      { parameter: 'durationMs', encode: (v) => Encoding.encodeSetColor(0, 0, 0, 3500, v), offset: 9 },
+      { parameter: 'durationMs', encode: (v) => Encoding.encodeSetLightPower(true, v), offset: 2 },
+      { parameter: 'durationMs', encode: (v) => Encoding.encodeSetColorZones(0, 7, 0, 0, 0, 3500, v, 1), offset: 10 },
+      { parameter: 'durationMs', encode: (v) => Encoding.encodeSetExtendedColorZones(v, 1, 0, [COLOR]), offset: 0 },
+      { parameter: 'durationMs', encode: (v) => Encoding.encodeSet64(0, 1, 0, 0, 8, v, []), offset: 6 },
+      { parameter: 'periodMs', encode: (v) => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, v, 1, 0, 0), offset: 10 },
+      { parameter: 'periodMs', encode: (v) => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, v, 1, 0, 0, true, true, true, true), offset: 10 },
+      { parameter: 'durationSeconds', encode: (v) => Encoding.encodeSetHevCycle(true, v), offset: 1 },
+      { parameter: 'durationSeconds', encode: (v) => Encoding.encodeSetHevCycleConfiguration(true, v), offset: 1 },
+      { parameter: 'instanceId', encode: (v) => Encoding.encodeSetMultiZoneEffect(v, 1, 0, 0n, new Uint8Array(0)), offset: 0 },
+      { parameter: 'speedMs', encode: (v) => Encoding.encodeSetMultiZoneEffect(1, 1, v, 0n, new Uint8Array(0)), offset: 7 },
+      { parameter: 'instanceId', encode: (v) => Encoding.encodeSetTileEffect(v, 2, 0, 0n, 0, 0, 0, []), offset: 2 },
+      { parameter: 'speedMs', encode: (v) => Encoding.encodeSetTileEffect(1, 2, v, 0n, 0, 0, 0, []), offset: 7 },
+    ];
+
+    for (const [i, { parameter, encode, offset }] of fields.entries()) {
+      test(`#${i} ${parameter}: rejects out-of-range and NaN, accepts both ends`, () => {
+        for (const bad of [-1, 2 ** 32, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+          assertInvalid(() => encode(bad), parameter);
+        }
+        assert.equal(u32(encode(0), offset), 0);
+        assert.equal(u32(encode(0xFFFFFFFF), offset), 0xFFFFFFFF);
+        assert.equal(u32(encode(0x12345678), offset), 0x12345678);
+        // The top bit must survive the 32-bit shifts.
+        assert.equal(u32(encode(0x80000000), offset), 0x80000000);
+        // Fractions truncate toward zero.
+        assert.equal(u32(encode(1000.7), offset), 1000);
+      });
+    }
+  });
+
+  describe('uint64', () => {
+    test('durationNs must be a bigint in range', () => {
+      const multi = (v: bigint) => Encoding.encodeSetMultiZoneEffect(1, 1, 0, v, new Uint8Array(0));
+      const tile = (v: bigint) => Encoding.encodeSetTileEffect(1, 2, 0, v, 0, 0, 0, []);
+      for (const bad of [-1n, 2n ** 64n]) {
+        assertInvalid(() => multi(bad), 'durationNs');
+        assertInvalid(() => tile(bad), 'durationNs');
+      }
+      const value = 0x0102030405060708n;
+      assert.equal(new DataView(multi(value).buffer).getBigUint64(11, true), value);
+      assert.equal(new DataView(tile(value).buffer).getBigUint64(11, true), value);
+    });
+  });
+
+  describe('float32', () => {
+    test('cycles must be a finite number', () => {
+      const encode = (cycles: number) => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, 0, cycles, 0, 0);
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        assertInvalid(() => encode(bad), 'cycles');
+        assertInvalid(() => Encoding.encodeSetWaveformOptional(false, 0, 0, 0, 3500, 0, bad, 0, 0, true, true, true, true), 'cycles');
+      }
+      const view = (payload: Uint8Array) => new DataView(payload.buffer).getFloat32(14, true);
+      assert.equal(view(encode(2.5)), 2.5);
+      assert.equal(view(encode(0)), 0);
+      // Unlike the integer fields, a float may be negative or fractional.
+      assert.equal(view(encode(-0.25)), -0.25);
+    });
+
+    test('user position must be finite numbers', () => {
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        assertInvalid(() => Encoding.encodeSetUserPosition(0, bad, 0), 'userX');
+        assertInvalid(() => Encoding.encodeSetUserPosition(0, 0, bad), 'userY');
+      }
+      const payload = Encoding.encodeSetUserPosition(0, -1.5, 0.25);
+      const view = new DataView(payload.buffer);
+      assert.equal(view.getFloat32(3, true), -1.5);
+      assert.equal(view.getFloat32(7, true), 0.25);
+    });
+
+    test('an untyped non-number is rejected, not coerced', () => {
+      // @ts-expect-error -- an untyped caller passing a numeric string
+      assertInvalid(() => Encoding.encodeSetUserPosition(0, '1.5', 0), 'userX');
+      // @ts-expect-error -- an untyped caller omitting cycles
+      assertInvalid(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, 0, undefined, 0, 0), 'cycles');
+    });
+  });
+
+  describe('length limits', () => {
+    test('effect parameters hold at most 32 bytes and are zero-padded', () => {
+      const full = Encoding.encodeSetMultiZoneEffect(1, 1, 0, 0n, new Uint8Array(32).fill(0xaa));
+      assert.equal(full.length, 59);
+      assert.deepEqual(full.subarray(27, 59), new Uint8Array(32).fill(0xaa));
+
+      const short = Encoding.encodeSetMultiZoneEffect(1, 1, 0, 0n, new Uint8Array([1, 2, 3]));
+      assert.deepEqual(short.subarray(27, 30), new Uint8Array([1, 2, 3]));
+      assert.deepEqual(short.subarray(30, 59), new Uint8Array(29));
+
+      const none = Encoding.encodeSetMultiZoneEffect(1, 1, 0, 0n, new Uint8Array(0));
+      assert.deepEqual(none.subarray(27, 59), new Uint8Array(32));
+
+      // Before, a longer block was silently truncated.
+      assert.throws(
+        () => Encoding.encodeSetMultiZoneEffect(1, 1, 0, 0n, new Uint8Array(33)),
+        (err: unknown) => err instanceof ValidationError && err.parameter === 'parameters' && err.value === 33,
+      );
+    });
+
+    test('SetExtendedColorZones carries between 1 and 82 colors', () => {
+      const colors = (n: number) => Array.from({ length: n }, () => COLOR);
+      assert.throws(
+        () => Encoding.encodeSetExtendedColorZones(0, 1, 0, []),
+        (err: unknown) => err instanceof ValidationError && err.parameter === 'colors' && err.value === 0,
+      );
+      assert.throws(
+        () => Encoding.encodeSetExtendedColorZones(0, 1, 0, colors(83)),
+        (err: unknown) => err instanceof ValidationError && err.parameter === 'colors' && err.value === 83,
+      );
+
+      const one = Encoding.encodeSetExtendedColorZones(0, 1, 0, colors(1));
+      assert.equal(one.length, 664);
+      assert.equal(one[7], 1, 'colors_count');
+
+      const full = Encoding.encodeSetExtendedColorZones(0, 1, 0, colors(82));
+      assert.equal(full.length, 664);
+      assert.equal(full[7], 82, 'colors_count');
+      // The last color lands in the last slot.
+      assert.equal(new DataView(full.buffer).getUint16(8 + 81 * 8 + 6, true), 3500);
+    });
+
+    test('Set64 carries at most 64 colors', () => {
+      const colors = (n: number) => Array.from({ length: n }, () => COLOR);
+      assert.throws(
+        () => Encoding.encodeSet64(0, 1, 0, 0, 8, 0, colors(65)),
+        (err: unknown) => err instanceof ValidationError && err.parameter === 'colors' && err.value === 65,
+      );
+
+      const full = Encoding.encodeSet64(0, 1, 0, 0, 8, 0, colors(64));
+      assert.equal(full.length, 522);
+      assert.equal(new DataView(full.buffer).getUint16(10 + 63 * 8 + 6, true), 3500);
+
+      // Fewer colors leave the remaining pixels zero.
+      const partial = Encoding.encodeSet64(0, 1, 0, 0, 8, 0, colors(1));
+      assert.deepEqual(partial.subarray(18), new Uint8Array(504));
+      assert.deepEqual(Encoding.encodeSet64(0, 1, 0, 0, 8, 0, []).subarray(10), new Uint8Array(512));
+    });
+
+    test('SetTileEffect carries at most 16 palette colors', () => {
+      const colors = (n: number) => Array.from({ length: n }, () => COLOR);
+      assert.throws(
+        () => Encoding.encodeSetTileEffect(1, 2, 0, 0n, 0, 0, 0, colors(17)),
+        (err: unknown) => err instanceof ValidationError && err.parameter === 'palette' && err.value === 17,
+      );
+
+      const full = Encoding.encodeSetTileEffect(1, 2, 0, 0n, 0, 0, 0, colors(16));
+      assert.equal(full.length, 188);
+      assert.equal(full[59], 16, 'palette_count');
+      assert.equal(new DataView(full.buffer).getUint16(60 + 15 * 8 + 6, true), 3500);
+
+      const empty = Encoding.encodeSetTileEffect(1, 2, 0, 0n, 0, 0, 0, []);
+      assert.equal(empty[59], 0, 'palette_count');
+      assert.deepEqual(empty.subarray(60), new Uint8Array(128));
+    });
+
+    test('a missing entry in a color list stays zero', () => {
+      const sparse: Color[] = [];
+      sparse[1] = COLOR; // index 0 is a hole
+      const payload = Encoding.encodeSet64(0, 1, 0, 0, 8, 0, sparse);
+      assert.deepEqual(payload.subarray(10, 18), new Uint8Array(8));
+      assert.equal(new DataView(payload.buffer).getUint16(18, true), COLOR.hue);
+    });
+
+    test('an invalid component anywhere in a color list is rejected', () => {
+      const colors = Array.from({ length: 10 }, () => COLOR);
+      colors[9] = { ...COLOR, brightness: 65536 };
+      assertInvalid(() => Encoding.encodeSetExtendedColorZones(0, 1, 0, colors), 'brightness');
+      assertInvalid(() => Encoding.encodeSet64(0, 1, 0, 0, 8, 0, colors), 'brightness');
+      assertInvalid(() => Encoding.encodeSetTileEffect(1, 2, 0, 0n, 0, 0, 0, colors), 'brightness');
+    });
+  });
+
+  test('a float32 field rejects a finite double that overflows to Infinity', () => {
+    // 1e40 is finite as a double but past the float32 range.
+    assert.throws(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, 0, 1e40, 0, 0), ValidationError);
+    assert.throws(() => Encoding.encodeSetUserPosition(0, -1e40, 0), ValidationError);
+    assert.throws(() => Encoding.encodeSetUserPosition(0, 0, 1e40), ValidationError);
+    // The largest float32 itself still encodes.
+    assert.doesNotThrow(() => Encoding.encodeSetUserPosition(0, 3.4028234663852886e38, 0));
+  });
+
+  test('numeric fields reject non-numbers from untyped callers instead of coercing them', () => {
+    // A bigint would throw a bare TypeError from the typed-array store, and
+    // a string or boolean would be silently coerced ('300' to 300, true to 1).
+    // @ts-expect-error -- untyped caller passing a bigint
+    assert.throws(() => Encoding.encodeSetColor(5n, 0, 0, 3500, 0), ValidationError);
+    // @ts-expect-error -- untyped caller passing a string
+    assert.throws(() => Encoding.encodeSetColor('300', 0, 0, 3500, 0), ValidationError);
+    // @ts-expect-error -- untyped caller passing a boolean
+    assert.throws(() => Encoding.encodeSetColor(0, true, 0, 3500, 0), ValidationError);
+    // @ts-expect-error -- untyped caller passing a string duration
+    assert.throws(() => Encoding.encodeSetColor(0, 0, 0, 3500, '1000'), ValidationError);
+    // @ts-expect-error -- untyped caller passing a string index
+    assert.throws(() => Encoding.encodeGetColorZones('0', 7), ValidationError);
+    // @ts-expect-error -- untyped caller passing a string skew
+    assert.throws(() => Encoding.encodeSetWaveform(false, 0, 0, 0, 3500, 0, 1, '0', 0), ValidationError);
+    // @ts-expect-error -- untyped caller passing a string saturation
+    assert.throws(() => Encoding.encodeSetTileEffect(1, 2, 0, 0n, 0, '5', 0, []), ValidationError);
+    // Booleans remain valid where the API documents them.
+    assert.doesNotThrow(() => Encoding.encodeSetPower(true));
+    assert.doesNotThrow(() => Encoding.encodeSetRPower(0, false));
+  });
+
+  test('validation failures are ValidationError, not DecodeError', () => {
+    try {
+      Encoding.encodeSetColor(-1, 0, 0, 3500, 0);
+      assert.fail('expected encodeSetColor to throw');
+    } catch (err) {
+      assert.ok(err instanceof ValidationError);
+      assert.ok(!(err instanceof DecodeError));
+      assert.equal(err.parameter, 'hue');
+      assert.equal(err.value, -1);
+    }
   });
 });

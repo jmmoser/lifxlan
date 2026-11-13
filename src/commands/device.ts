@@ -1,4 +1,4 @@
-import * as Encoding from '../encoding.js';
+import * as Encoding from '../wire.js';
 import { Type } from '../constants/index.js';
 import type { Command } from './index.js';
 
@@ -47,6 +47,7 @@ export function GetPower() {
   } satisfies Command<number, 'response'>;
 }
 
+/** @param power A boolean (on/off) or an unsigned 16-bit power level. */
 export function SetPower(power: number | boolean) {
   return {
     type: Type.SetPower,

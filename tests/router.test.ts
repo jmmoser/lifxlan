@@ -1,9 +1,11 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import { Router } from '../src/router.js';
-import { encode, Header } from '../src/encoding.js';
+import type { ReceivedMessage } from '../src/router.js';
+import { encode } from '../src/wire.js';
+import type { Header } from '../src/wire.js';
 import { Type } from '../src/constants/index.js';
-import { ValidationError } from '../src/errors.js';
+import { DecodeError, ValidationError } from '../src/errors.js';
 
 describe('router', () => {
   test('register allocates a distinct source on each call', () => {
@@ -122,7 +124,7 @@ describe('router', () => {
       onSend() {},
     });
     
-    const handler = (header: Header, payload: Uint8Array, serialNumber: string) => {
+    const handler = ({ header, payload, serialNumber }: ReceivedMessage) => {
       receivedHeader = header;
       receivedPayload = payload;
       receivedSerialNumber = serialNumber;
@@ -158,11 +160,13 @@ describe('router', () => {
   });
 
   test('receive calls onMessage when provided', () => {
-    let onMessageHeader: any, onMessagePayload: Uint8Array | undefined, onMessageSerialNumber: string | undefined;
+    let onMessageHeader: Header | undefined;
+    let onMessagePayload: Uint8Array | undefined;
+    let onMessageSerialNumber: string | undefined;
     
     const router = Router({
       onSend() {},
-      onMessage(header, payload, serialNumber) {
+      onMessage({ header, payload, serialNumber }) {
         onMessageHeader = header;
         onMessagePayload = payload;
         onMessageSerialNumber = serialNumber;
@@ -418,5 +422,40 @@ describe('router', () => {
 
     const source = router.register(() => {});
     assert.ok(source >= 1000, 'allocated source should be outside the filled range');
+  });
+
+  test('the handler, the tap, and the caller all see the same message object', () => {
+    const seen: ReceivedMessage[] = [];
+    const router = Router({
+      onSend() {},
+      onMessage(message) {
+        seen.push(message);
+      },
+    });
+    router.register((message) => { seen.push(message); }, 4242);
+
+    const result = router.receive(
+      encode(false, 4242, new Uint8Array([1, 2, 3, 4, 5, 6]), false, false, 1, Type.StatePower, new Uint8Array([0, 0])),
+    );
+
+    assert.ok(result);
+    assert.equal(seen.length, 2);
+    assert.strictEqual(seen[0], result);
+    assert.strictEqual(seen[1], result);
+    assert.equal(result.serialNumber, '010203040506');
+  });
+
+  test('a datagram that cannot be decoded is reported to onError as a DecodeError', () => {
+    const errors: unknown[] = [];
+    const router = Router({
+      onSend() {},
+      onError(error) {
+        errors.push(error);
+      },
+    });
+
+    assert.equal(router.receive(new Uint8Array(10)), undefined);
+    assert.equal(errors.length, 1);
+    assert.ok(errors[0] instanceof DecodeError);
   });
 });

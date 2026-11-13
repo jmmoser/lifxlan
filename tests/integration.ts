@@ -350,7 +350,7 @@ describe('LIFX Integration Tests', () => {
           const testKelvin = 3500;       // Neutral white
           const duration = 1000;         // 1 second transition
           
-          await client.send(SetColor({ hue: testHue, saturation: testSaturation, brightness: testBrightness, kelvin: testKelvin, duration }), selectedDevice!);
+          await client.send(SetColor({ hue: testHue, saturation: testSaturation, brightness: testBrightness, kelvin: testKelvin, durationMs: duration }), selectedDevice!);
           
           // Wait for transition to complete
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -422,7 +422,7 @@ describe('LIFX Integration Tests', () => {
               saturation: originalColorState.saturation,
               brightness: originalColorState.brightness,
               kelvin: originalColorState.kelvin,
-              duration,
+              durationMs: duration,
             }
           ), selectedDevice!);
           
@@ -459,11 +459,11 @@ describe('LIFX Integration Tests', () => {
           // Get tile device chain information
           console.log('  Getting tile device chain...');
           const deviceChain = await client.send(GetDeviceChain(), selectedTileDevice!);
-          console.log(`  Device chain: ${deviceChain.tileDevicesCount} tiles`);
+          console.log(`  Device chain: ${deviceChain.devices.length} tiles`);
 
           // Get current tile state for restoration
           console.log('  Capturing original tile state...');
-          const tileStates = await client.send(Get64({ tileIndex: 0, tileCount: deviceChain.tileDevicesCount, width: 8 }), selectedTileDevice!);
+          const tileStates = await client.send(Get64({ tileIndex: 0, tileCount: deviceChain.devices.length, width: 8 }), selectedTileDevice!);
           originalTileStates = tileStates;
           console.log(`  Captured state for ${tileStates.length} tiles`);
           
@@ -471,7 +471,7 @@ describe('LIFX Integration Tests', () => {
           console.log('  Getting current tile effect...');
           originalTileEffect = await client.send(GetTileEffect(), selectedTileDevice!);
           assert.ok(originalTileEffect, 'Should receive tile effect state');
-          console.log(`  Original effect type: ${originalTileEffect.type}`);
+          console.log(`  Original effect type: ${originalTileEffect.effectType}`);
           
           // Test setting colors on tiles
           console.log('  Testing tile color setting...');
@@ -488,7 +488,7 @@ describe('LIFX Integration Tests', () => {
             fullColors.push(testColors[i % testColors.length]!);
           }
           
-          await client.send(Set64({ tileIndex: 0, tileCount: deviceChain.tileDevicesCount, width: 8, duration: 1000, colors: fullColors }), selectedTileDevice!);
+          await client.send(Set64({ tileIndex: 0, tileCount: deviceChain.devices.length, width: 8, durationMs: 1000, colors: fullColors }), selectedTileDevice!);
           console.log('  Applied test colors to tiles');
           
           // Wait for color change
@@ -504,8 +504,8 @@ describe('LIFX Integration Tests', () => {
           await client.send(SetTileEffect({
             instanceId: 1,
             effectType: TileEffectType.MORPH,
-            speed: 50,
-            duration: BigInt(5000),
+            speedMs: 50,
+            durationNs: BigInt(5000),
             skyType: TileEffectSkyType.SUNRISE,
             cloudSaturationMin: 50,
             cloudSaturationMax: 180,
@@ -523,8 +523,8 @@ describe('LIFX Integration Tests', () => {
           await client.send(SetTileEffect({
             instanceId: originalTileEffect.instanceId || 0,
             effectType: TileEffectType.OFF,
-            speed: 0,
-            duration: BigInt(0),
+            speedMs: 0,
+            durationNs: BigInt(0),
             skyType: TileEffectSkyType.SUNRISE,
             cloudSaturationMin: 0,
             cloudSaturationMax: 0,
@@ -538,7 +538,7 @@ describe('LIFX Integration Tests', () => {
           if (originalTileStates && originalTileStates.length > 0) {
             const originalColors = originalTileStates.flatMap((tile: State64) => tile.colors || []);
             if (originalColors.length > 0) {
-              await client.send(Set64({ tileIndex: 0, tileCount: deviceChain.tileDevicesCount, width: 8, duration: 1000, colors: originalColors }), selectedTileDevice!);
+              await client.send(Set64({ tileIndex: 0, tileCount: deviceChain.devices.length, width: 8, durationMs: 1000, colors: originalColors }), selectedTileDevice!);
               console.log('  Restored original tile colors');
               
               // Wait for restoration to complete
@@ -547,8 +547,8 @@ describe('LIFX Integration Tests', () => {
           }
           
           // Restore original effect if it wasn't OFF
-          if (originalTileEffect && originalTileEffect.type !== TileEffectType.OFF) {
-            const effectType = isTileEffectType(originalTileEffect.type) ? originalTileEffect.type : TileEffectType.OFF;
+          if (originalTileEffect && originalTileEffect.effectType !== TileEffectType.OFF) {
+            const effectType = isTileEffectType(originalTileEffect.effectType) ? originalTileEffect.effectType : TileEffectType.OFF;
             const skyType = (originalTileEffect.skyType !== undefined && isTileEffectSkyType(originalTileEffect.skyType)) 
               ? originalTileEffect.skyType 
               : TileEffectSkyType.SUNRISE;
@@ -556,8 +556,8 @@ describe('LIFX Integration Tests', () => {
             await client.send(SetTileEffect({
               instanceId: originalTileEffect.instanceId || 0,
               effectType,
-              speed: originalTileEffect.speed || 50,
-              duration: BigInt(originalTileEffect.duration || 0),
+              speedMs: originalTileEffect.speedMs || 50,
+              durationNs: originalTileEffect.durationNs,
               skyType,
               cloudSaturationMin: originalTileEffect.cloudSaturationMin || 50,
               cloudSaturationMax: originalTileEffect.cloudSaturationMax || 180,
