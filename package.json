@@ -13,7 +13,8 @@
     "prepack": "bun run test && bun run build",
     "lint": "oxlint",
     "docs": "typedoc",
-    "bench": "bun run benchmarks/performance.ts"
+    "bench": "bun run benchmarks/performance.ts",
+    "demo": "bun demo/build.ts"
   },
   "keywords": [
     "lifx",

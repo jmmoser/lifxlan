@@ -15,6 +15,7 @@ Run `bun install` before anything else — tests, lint, and typecheck all need i
 - **Build**: `bun run build` (plain `tsc` output into `dist/` — ESM-only, unminified, no source maps; CommonJS consumers rely on Node's require(esm) interop)
 - **Docs**: `bun run docs` (typedoc — broken `{@link}` references fail CI)
 - **Benchmarks**: `bun run bench`
+- **Browser demo**: `bun run demo` (bundles `demo/` into the single file `demo/dist/index.html`); typecheck it with `npx tsc -p demo`
 
 Do NOT run `bun run test:integration` — it sends UDP traffic to real LIFX devices on the local network and will hang or fail in a sandbox.
 
@@ -26,7 +27,7 @@ Before committing, this must pass:
 bun run lint && npx tsc && bun run test
 ```
 
-CI (`.github/workflows/ci.yml`) additionally builds the typedoc site and runs smoke tests (`scripts/smoke.mjs` for ESM import, `scripts/smoke.cjs` for CommonJS require(esm) interop, `scripts/smoke-node.mjs` and `scripts/smoke-deno.mjs` for the `lifxlan/node` / `lifxlan/deno` helpers over loopback UDP) against the built package on Node 22/24 and Deno.
+CI (`.github/workflows/ci.yml`) additionally typechecks and builds the browser demo, builds the typedoc site, and runs smoke tests (`scripts/smoke.mjs` for ESM import, `scripts/smoke.cjs` for CommonJS require(esm) interop, `scripts/smoke-node.mjs` and `scripts/smoke-deno.mjs` for the `lifxlan/node` / `lifxlan/deno` helpers over loopback UDP) against the built package on Node 22/24 and Deno.
 
 ## Project Architecture
 
@@ -76,6 +77,7 @@ Device discovery works by broadcasting `GetService()` and registering responses 
 - `examples/` — self-contained runnable scripts (see `examples/README.md`); they import `lifxlan` by self-reference, so `bun run build` first
 - `docs/` — hand-written protocol guides (field types, querying, changing device state)
 - `scripts/` — the Node/Deno smoke tests CI runs against `dist/`
+- `demo/` — the browser demo (see `demo/README.md`): the library bundled from `src/` and driven against simulated devices (`demo/src/sim`) over an in-memory network. It has its own `tsconfig.json` (DOM lib), so the root `npx tsc` does not cover its UI code; `tests/demo-sim.test.ts` runs the real client against the simulator
 
 ## TypeScript Support
 
