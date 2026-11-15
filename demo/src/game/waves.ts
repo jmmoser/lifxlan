@@ -35,13 +35,13 @@ export interface EnemyType {
 }
 
 export const ENEMIES: Readonly<Record<EnemyKind, EnemyType>> = {
-  shade: { name: 'Shade', hp: 100, speed: 54, size: 19, bite: 1, score: 10, jam: 0, lag: 0, shift: 0, about: 'Burns only in light of its own colour.' },
-  runner: { name: 'Flicker', hp: 46, speed: 122, size: 13, bite: 1, score: 15, jam: 0, lag: 0, shift: 0, about: 'Fast and fragile. Have its colour waiting.' },
-  brute: { name: 'Gloom', hp: 300, speed: 31, size: 30, bite: 2, score: 40, jam: 0, lag: 0, shift: 0, about: 'Slow, and takes a long burn. Costs two bars.' },
-  jammer: { name: 'Static', hp: 170, speed: 40, size: 21, bite: 1, score: 35, jam: 0.2, lag: 0, shift: 0, about: 'Jams the air: while it lives, packets get lost.' },
-  leech: { name: 'Lag', hp: 150, speed: 44, size: 21, bite: 1, score: 35, jam: 0, lag: 170, shift: 0, about: 'Slows the network: every packet takes longer to arrive.' },
-  prism: { name: 'Prism', hp: 230, speed: 46, size: 22, bite: 1, score: 45, jam: 0, lag: 0, shift: 4.5, about: 'Changes colour every few seconds.' },
-  outage: { name: 'The Outage', hp: 2300, speed: 23, size: 54, bite: 3, score: 1000, jam: 0.06, lag: 40, shift: 7, about: 'Cuts power to lights and knocks them onto new addresses.' },
+  shade: { name: 'Shade', hp: 100, speed: 54, size: 27, bite: 1, score: 10, jam: 0, lag: 0, shift: 0, about: 'Burns only in light of its own colour.' },
+  runner: { name: 'Flicker', hp: 46, speed: 116, size: 19, bite: 1, score: 15, jam: 0, lag: 0, shift: 0, about: 'Fast and fragile. Have its colour waiting.' },
+  brute: { name: 'Gloom', hp: 300, speed: 31, size: 40, bite: 2, score: 40, jam: 0, lag: 0, shift: 0, about: 'Slow, and takes a long burn. Costs two bars.' },
+  jammer: { name: 'Static', hp: 170, speed: 40, size: 28, bite: 1, score: 35, jam: 0.2, lag: 0, shift: 0, about: 'Jams the air: while it lives, packets get lost.' },
+  leech: { name: 'Lag', hp: 150, speed: 44, size: 28, bite: 1, score: 35, jam: 0, lag: 170, shift: 0, about: 'Slows the network: every packet takes longer to arrive.' },
+  prism: { name: 'Prism', hp: 230, speed: 46, size: 29, bite: 1, score: 45, jam: 0, lag: 0, shift: 4.5, about: 'Changes colour every few seconds.' },
+  outage: { name: 'The Outage', hp: 2300, speed: 23, size: 62, bite: 3, score: 1000, jam: 0.06, lag: 40, shift: 7, about: 'Cuts power to lights and knocks them onto new addresses.' },
 };
 
 export interface Spawn {
@@ -62,8 +62,10 @@ export interface Night {
   readonly plugIn: readonly string[];
   /** Whether the new devices must be found with a manual scan before the attack starts. */
   readonly scan: boolean;
-  /** What the briefing card teaches. */
-  readonly lesson: readonly string[];
+  /** What is new tonight, in terms of what to do. */
+  readonly brief: string;
+  /** The part of the protocol behind it, for whoever wants to know. */
+  readonly hood: string;
   /** A line of library code the night revolves around. */
   readonly code: string;
   /** New ways in or new enemies, named on the card. */
@@ -82,28 +84,25 @@ export const NIGHTS: readonly Night[] = [
     title: 'First light',
     plugIn: ['Entry Light'],
     scan: false,
-    lesson: [
-      'Shades are coming for the router. Light burns them, but only light of their own colour.',
-      'Load a colour, then click a light. Each click is one SetColor message: 36 bytes of header and 13 of payload, sent over the network to the bulb. The bulb changes when the packet arrives, and answers with an Acknowledgement.',
-    ],
+    brief: 'Shades are heading for the router. Click a shade and the light over it turns its colour. That burns it.',
+    hood: 'Each click is one SetColor message: 49 bytes sent to the bulb, which answers with an Acknowledgement.',
     code: 'await client.send(SetColor({ hue: 21845, saturation: 65535, brightness: 65535, kelvin: 3500 }), entryLight)',
     news: ['Shade — burns only in its own colour'],
     heat: 0.25,
     spawns: [
-      group(1, 'door', 'shade', [R], 2, 3.2),
-      group(10, 'door', 'shade', [G], 2, 3),
-      group(19, 'door', 'shade', [B, R], 3, 2.6),
-      group(30, 'door', 'shade', [G, B, R, G], 5, 2.3),
+      group(1, 'door', 'shade', [R], 1),
+      group(8, 'door', 'shade', [G], 1),
+      group(15, 'door', 'shade', [B, R], 2, 1.4),
+      group(26, 'door', 'shade', [G, B, R], 3, 2.4),
+      group(38, 'door', 'shade', [R, G, B, G], 4, 2.2),
     ],
   },
   {
     title: 'Discovery',
     plugIn: ['Kitchen Pendant'],
     scan: true,
-    lesson: [
-      'A new bulb is plugged in, but the library has never heard of it. Devices are found by asking the whole network at once.',
-      'Scan broadcasts one GetService to 255.255.255.255. Every device answers with StateService, and the registry records who answered and from where. The library then asks the newcomer for its label, product and firmware.',
-    ],
+    brief: 'Someone plugged in a kitchen light. Click it to find it: you cannot use a light the network has not met.',
+    hood: 'Finding devices is one broadcast: GetService to every address. Each device answers StateService, and the library records who answered and from where.',
     code: 'client.broadcast(GetService())',
     news: ['The kitchen window is open'],
     heat: 0.35,
@@ -120,10 +119,8 @@ export const NIGHTS: readonly Night[] = [
     title: 'One packet, many flashes',
     plugIn: ['Bedroom Lamp', 'Landing Light'],
     scan: true,
-    lesson: [
-      'Some jobs are too fast to do packet by packet. SetWaveform hands the bulb a whole animation — colour, period, cycles, shape — and the bulb runs it by itself.',
-      'Right-click a bulb (or press Space over it) to strobe it white. White at that strength burns every colour and staggers whatever it touches. It needs time to recharge.',
-    ],
+    brief: 'Bulbs can strobe. When the ring around a light is full, click the light itself. The flash burns every colour and staggers whatever it touches.',
+    hood: 'SetWaveform hands the bulb a whole animation in one packet: colour, period, cycles, shape. The bulb runs it by itself.',
     code: 'await client.send(SetWaveform({ waveform: Waveform.PULSE, periodMs: 260, cycles: 9, … }), bedroomLamp)',
     news: ['Two more ways in', 'Cyan shades'],
     heat: 0.45,
@@ -142,10 +139,8 @@ export const NIGHTS: readonly Night[] = [
     title: 'Thirty-two zones',
     plugIn: ['Hallway Strip'],
     scan: true,
-    lesson: [
-      'The hallway strip is one device with one address and 32 separately coloured zones. SetColorZones names a start and end zone, so each click colours eight of them.',
-      'Its ability sets a rainbow and starts the MOVE effect with a duration: the strip scrolls its own zones for seven seconds, so every colour sweeps the hall, and not one more packet is sent.',
-    ],
+    brief: 'A light strip now lines the hallway. Click shades as before. Click the strip itself for a rainbow sweep.',
+    hood: 'The strip is one device with 32 separately coloured zones. SetColorZones colours a range of them, and the MOVE effect scrolls them on the device for a set time.',
     code: 'await client.send(SetColorZones({ startIndex: 8, endIndex: 15, hue: 43690, … }), hallwayStrip)',
     news: ['Flicker — fast and fragile', 'All six colours'],
     heat: 0.55,
@@ -165,10 +160,8 @@ export const NIGHTS: readonly Night[] = [
     title: 'Lost in the air',
     plugIn: [],
     scan: false,
-    lesson: [
-      'UDP promises nothing. A Static jams the air, and while it lives a share of every packet simply vanishes — yours on the way out, or the reply on the way back.',
-      'The library cannot tell which: the call just rejects with TimeoutError. The game tries again, up to three times, the retry recipe from the README. Kill Statics first.',
-    ],
+    brief: 'Statics jam the air. While one lives, some of your clicks get lost and have to be sent again. Burn Statics first.',
+    hood: 'UDP promises nothing. A lost packet, or a lost reply, surfaces as TimeoutError, and the game sends it again, up to three times.',
     code: 'try { await client.send(SetColor(red), lamp) } catch (e) { if (e instanceof TimeoutError) /* send it again */ }',
     news: ['Static — packets get lost while it lives'],
     heat: 0.65,
@@ -191,10 +184,8 @@ export const NIGHTS: readonly Night[] = [
     title: 'Sixty-four pixels',
     plugIn: ['Ceiling Tiles'],
     scan: true,
-    lesson: [
-      'Five tiles ring the router, chained as a single device. Each is an 8 × 8 grid, and one Set64 message carries all 64 colours of one tile: 558 bytes, the biggest packet you will send.',
-      'Their ability starts the FLAME effect for six seconds. The tiles animate themselves, and fire burns every colour.',
-    ],
+    brief: 'Five light tiles now ring the router: your last line. Click the tiles themselves to set them on fire.',
+    hood: 'Each tile is 8 × 8 pixels, and one Set64 message carries all 64 colours of a tile: 558 bytes. FLAME is an effect the tiles run by themselves.',
     code: 'await client.send(Set64({ tileIndex: 2, colors, durationMs: 80 }), ceilingTiles)',
     news: ['Gloom — slow, tough, costs two bars', 'The balcony door is open'],
     heat: 0.75,
@@ -217,10 +208,8 @@ export const NIGHTS: readonly Night[] = [
     title: 'Everyone at once',
     plugIn: [],
     scan: false,
-    lesson: [
-      'A message addressed to all zeros with the tagged bit set is for every device. Sent to the broadcast address, one packet reaches the whole house.',
-      'Acknowledgements and kills charge the Broadcast. When it is full, press B: a single tagged SetWaveform, and every light you own strobes at once.',
-    ],
+    brief: 'Clicks and kills charge the Broadcast. When it is full, press it: every light in the house strobes at once.',
+    hood: 'A message addressed to all zeros with the tagged bit set is for every device. Sent to 255.255.255.255, one packet reaches the whole house.',
     code: 'client.broadcast(SetWaveform({ waveform: Waveform.PULSE, cycles: 12, … }))',
     news: ['Lag — slows every packet', 'Prism — changes colour'],
     heat: 0.88,
@@ -246,10 +235,8 @@ export const NIGHTS: readonly Night[] = [
     title: 'The Outage',
     plugIn: [],
     scan: false,
-    lesson: [
-      'The last one walks through every room. It cuts power to the nearest light: sends to a dead device time out until it boots again, with its settings intact.',
-      'It also knocks lights onto new IP addresses. Packets to the old address reach nothing. Scan, and the registry updates the same device object in place — nothing else in your code has to change.',
-    ],
+    brief: 'The Outage cuts power to lights and knocks them onto new addresses. A light marked ? has moved: click it to find it again.',
+    hood: 'Sends to a dead address time out. After a scan, the registry updates the same device object in place, so nothing else has to change.',
     code: 'Devices({ onChanged: (device) => console.log(device.serialNumber, "moved to", device.address) })',
     news: ['The Outage'],
     heat: 1,

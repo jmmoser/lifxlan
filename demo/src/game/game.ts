@@ -56,6 +56,21 @@ export interface Enemy {
   age: number;
 }
 
+/** The light that would burn something at a given spot hardest. */
+export interface Aim {
+  readonly target: Target;
+  readonly fixture: Fixture;
+  /** Damage per second it could do there in the right colour. */
+  readonly strength: number;
+}
+
+/** What the game is asking the player to do right now, and where to look. */
+export interface Coach {
+  readonly key: string;
+  readonly text: string;
+  readonly at: Vec | undefined;
+}
+
 export interface NightStats {
   shots: number;
   confirmed: number;
@@ -78,7 +93,6 @@ export type GameEvent =
   | { readonly kind: 'ability'; readonly fixture: Fixture }
   | { readonly kind: 'broadcast' }
   | { readonly kind: 'scan' }
-  | { readonly kind: 'load'; readonly hue: number }
   | { readonly kind: 'brownout'; readonly fixture: Fixture }
   | { readonly kind: 'restored'; readonly fixture: Fixture }
   | { readonly kind: 'shuffle'; readonly fixture: Fixture; readonly address: string }
@@ -113,8 +127,10 @@ export class Game {
   combo = 0;
   /** 0..1 */
   charge = 0;
-  /** Index into HUES of the colour the next click sends. */
-  loaded = 0;
+  /** The prompt on screen, if the game is teaching something. */
+  coach: Coach | undefined;
+  /** Whether the game stops to teach each new thing the first time it comes up. */
+  lessons = true;
   stats: NightStats = { shots: 0, confirmed: 0, retries: 0, failed: 0, kills: 0, leaks: 0 };
 
   readonly fixtures: readonly Fixture[];
@@ -136,6 +152,13 @@ export class Game {
   private bossShuffles = 0;
   private idleAt = 0;
   private scoreAtNightStart = 0;
+  private readonly learned = new Set<string>();
+  /** A lesson that slows the game while it waits for the player, and when (real ms) it began. */
+  private slowFor = '';
+  private slowSince = 0;
+  private note: { text: string; until: number } | undefined;
+  private kills = 0;
+  private mark = 0;
   private random: () => number;
 
   constructor(session: Session, lan: VirtualLan, fleet: readonly VirtualDevice[], fixtures: readonly Fixture[], random: () => number = Math.random) {
@@ -156,7 +179,7 @@ export class Game {
         if (!fixture || !this.running) return;
         this.stats.retries++;
         this.emit({ kind: 'retry', at: fixture.at, attempt, of, gaveUp });
-        this.sayOnce('retry', 'TimeoutError: the packet or its reply was lost. The game sends it again, up to three times.');
+        this.sayOnce('retry', 'A packet got lost on the way. The game is sending it again.');
       },
     });
   }
@@ -242,8 +265,11 @@ export class Game {
 
   /** Whether the device has power, and whether the library has discovered it. */
   status(serial: string): 'unplugged' | 'unknown' | 'ready' {
-    if (!this.deviceOf(serial)?.online) return 'unplugged';
-    return this.lampOf(serial) ? 'ready' : 'unknown';
+    const device = this.deviceOf(serial);
+    if (!device?.online) return 'unplugged';
+    const lamp = this.lampOf(serial);
+    // A light that has moved to an address the library does not know is a stranger again.
+    return lamp && lamp.device.address === device.endpoint.address ? 'ready' : 'unknown';
   }
 
   /** 0 when the device's ability is ready, up to 1 just after use. */
@@ -304,8 +330,9 @@ export class Game {
     this.score = 0;
     this.combo = 0;
     this.charge = 0;
-    this.loaded = 0;
     this.said.clear();
+    this.learned.clear();
+    this.kills = 0;
     this.setPhase('briefing');
   }
 
@@ -320,7 +347,9 @@ export class Game {
     this.scoreAtNightStart = this.score;
     this.bossCutAt = 14;
     this.bossShuffles = 0;
-    if (!this.palette.includes(this.loaded)) this.loaded = this.palette[0] ?? 0;
+    this.coach = undefined;
+    this.note = undefined;
+    this.slowFor = '';
 
     const due = new Set(NIGHTS.slice(0, this.night + 1).flatMap((n) => n.plugIn));
     for (const device of this.fleet) {
@@ -340,7 +369,7 @@ export class Game {
 
     this.setPhase('setup');
     if (night.scan) {
-      this.say(`${night.plugIn.join(' and ')} ${night.plugIn.length > 1 ? 'are' : 'is'} plugged in but undiscovered. Press R to scan.`);
+      // The player finds the new light themselves; update() points at it.
     } else if (this.undiscovered().length > 0) {
       this.session.startDiscovery();
     }
@@ -378,33 +407,70 @@ export class Game {
   /* Player actions — each one a library call                          */
   /* ---------------------------------------------------------------- */
 
-  load(hue: number): void {
-    if (!this.palette.includes(hue) || hue === this.loaded) return;
-    this.loaded = hue;
-    this.emit({ kind: 'load', hue });
+  /** How hard `emitter` could burn something standing at `at`, in damage per second at a perfect match. */
+  private strength(emitter: Emitter, at: Vec): number {
+    const dx = at.x - emitter.at.x;
+    const dy = at.y - emitter.at.y;
+    if (dx * dx + dy * dy > emitter.radius * emitter.radius * 1.3) return 0;
+    if (!inside(at, emitter.reach)) return 0;
+    const falloff = emitter.kind === 'zone'
+      ? 1 - 0.55 * clamp01(Math.abs(dy) / emitter.radius)
+      : clamp01(1 - Math.hypot(dx, dy) / emitter.radius) ** (emitter.kind === 'bulb' ? 0.9 : 0.6);
+    return BASE_DPS[emitter.kind] * falloff;
   }
 
-  /** Steps the loaded colour through tonight's palette. */
-  cycle(step: number): void {
-    const palette = this.palette;
-    const at = palette.indexOf(this.loaded);
-    this.load(palette[(at + step + palette.length) % palette.length] ?? this.loaded);
+  /** The emitters a click on `target` changes: a bulb, the eight zones of a strip section, one tile. */
+  private emittersOf(fixture: Fixture, target: Target): readonly Emitter[] {
+    if (target.kind !== 'section') return fixture.emitters.filter((emitter) => emitter.index === target.index);
+    return fixture.emitters.filter((emitter) => Math.floor(emitter.index / 8) === target.index);
   }
 
-  /** Sends the loaded colour to whatever was aimed at. */
-  fire(target: Target): void {
+  /**
+   * Which light reaches `at` best. When the only lights that reach it cannot
+   * be used, `why` says what is wrong with the nearest of them.
+   */
+  aimAt(at: Vec): { aim: Aim | undefined; why: string } {
+    let best: Aim | undefined;
+    let blocked: Aim | undefined;
+    for (const fixture of this.fixtures) {
+      if (!this.introduced(fixture.serial)) continue;
+      const usable = this.status(fixture.serial) === 'ready';
+      for (const target of fixture.targets) {
+        let strength = 0;
+        for (const emitter of this.emittersOf(fixture, target)) strength += this.strength(emitter, at);
+        if (strength < 1.5) continue;
+        if (usable) {
+          if (!best || strength > best.strength) best = { target, fixture, strength };
+        } else if (!blocked || strength > blocked.strength) {
+          blocked = { target, fixture, strength };
+        }
+      }
+    }
+    if (best) return { aim: best, why: '' };
+    if (!blocked) return { aim: undefined, why: 'no light reaches it here' };
+    return { aim: undefined, why: this.status(blocked.fixture.serial) === 'unplugged' ? `${blocked.fixture.label} has no power` : `${blocked.fixture.label} is not found yet: click it` };
+  }
+
+  /** The player clicked a shade: turn the light over it the shade's colour. */
+  zap(enemy: Enemy): void {
     if (!this.running || this.paused) return;
-    const lamp = this.lampOf(target.serial);
-    if (!lamp) {
-      const unplugged = this.status(target.serial) === 'unplugged';
-      this.emit({ kind: 'denied', at: target.at, why: unplugged ? 'no power' : 'not discovered — scan' });
+    const { aim, why } = this.aimAt(enemy.at);
+    if (!aim) {
+      this.emit({ kind: 'denied', at: enemy.at, why });
       return;
     }
+    this.shoot(aim.target, enemy.hue);
+  }
+
+  /** Sends colour `hue` (an index into HUES) to a bulb, a strip section or a tile. */
+  shoot(target: Target, hue: number): void {
+    if (!this.running || this.paused) return;
+    const lamp = this.status(target.serial) === 'ready' ? this.lampOf(target.serial) : undefined;
+    if (!lamp) return;
     const now = performance.now();
-    if (now - (this.lastShot.get(target.id) ?? -1e9) < 110) return;
+    if (now - (this.lastShot.get(target.id) ?? -1e9) < 90) return;
     this.lastShot.set(target.id, now);
 
-    const hue = this.loaded;
     this.stats.shots++;
     this.emit({ kind: 'shot', target, hue });
     this.session.shoot(lamp, target.index, hsbk(HUES[hue]?.degrees ?? 0, 1, 1), 70).then(() => {
@@ -416,18 +482,30 @@ export class Game {
     });
   }
 
+  /** The player clicked a light itself: find it if it is a stranger, otherwise set off its own effect. */
+  press(target: Target): void {
+    if (!this.running || this.paused) return;
+    const status = this.status(target.serial);
+    if (!this.introduced(target.serial)) return;
+    if (status === 'unknown') {
+      this.scan();
+    } else if (status === 'unplugged') {
+      this.emit({ kind: 'denied', at: target.at, why: 'no power' });
+    } else if (this.abilitiesUnlocked) {
+      this.ability(target);
+    } else {
+      this.emit({ kind: 'denied', at: target.at, why: 'click a shade, not the light' });
+    }
+  }
+
   /** Triggers the device's own animation: a strobe, a rainbow chase, or fire. */
   ability(target: Target): void {
     if (!this.running || this.paused || !this.abilitiesUnlocked) return;
     const fixture = this.fixtureOf(target.serial);
-    const lamp = this.lampOf(target.serial);
-    if (!fixture) return;
-    if (!lamp) {
-      this.emit({ kind: 'denied', at: target.at, why: this.status(target.serial) === 'unplugged' ? 'no power' : 'not discovered — scan' });
-      return;
-    }
+    const lamp = this.status(target.serial) === 'ready' ? this.lampOf(target.serial) : undefined;
+    if (!fixture || !lamp) return;
     if (this.cooldown(fixture.serial) > 0) {
-      this.emit({ kind: 'denied', at: target.at, why: 'recharging' });
+      this.emit({ kind: 'denied', at: target.at, why: 'still recharging' });
       return;
     }
     this.cooldowns.set(fixture.serial, this.clock + COOLDOWNS[fixture.kind]);
@@ -508,18 +586,12 @@ export class Game {
     let stagger = false;
     for (const light of this.lights) {
       if (light.level < 0.02) continue;
-      const { emitter } = light;
-      const dx = at.x - emitter.at.x;
-      const dy = at.y - emitter.at.y;
-      if (dx * dx + dy * dy > emitter.radius * emitter.radius * 1.3) continue;
-      if (!inside(at, emitter.reach)) continue;
-      const falloff = emitter.kind === 'zone'
-        ? 1 - 0.55 * clamp01(Math.abs(dy) / emitter.radius)
-        : clamp01(1 - Math.hypot(dx, dy) / emitter.radius) ** (emitter.kind === 'bulb' ? 0.9 : 0.6);
+      const reach = this.strength(light.emitter, at);
+      if (reach <= 0) continue;
       const all = light.strobe || light.fire;
       const match = all ? 1 : light.saturation * hueMatch(light.hue, hue) + (1 - light.saturation) * WHITE_SHARE;
-      dps += BASE_DPS[emitter.kind] * light.level * falloff * match * (light.strobe ? 1.7 : 1);
-      if (light.strobe && falloff > 0.05) stagger = true;
+      dps += reach * light.level * match * (light.strobe ? 1.7 : 1);
+      if (light.strobe) stagger = true;
     }
     return { dps, stagger };
   }
@@ -548,7 +620,7 @@ export class Game {
     this.stats.kills++;
     if (this.broadcastUnlocked) this.charge = clamp01(this.charge + 0.035);
     this.emit({ kind: 'kill', enemy, points, combo: this.combo });
-    if (this.night === 0) this.sayOnce('firstKill', 'That was one SetColor packet. Pause (P) and click any row of the wire log to take it apart.');
+    this.kills++;
   }
 
   /** The Outage's tricks: cut the nearest light's power, or knock a bulb onto a new address. */
@@ -563,7 +635,7 @@ export class Game {
         device.unplug();
         this.restores.push({ at: this.clock + 5, device, fixture: victim });
         this.emit({ kind: 'brownout', fixture: victim });
-        this.sayOnce('brownout', `Brownout: ${victim.label} has no power. Sends to it will time out until it boots again.`);
+        this.sayOnce('brownout', `The Outage cut the power to ${victim.label}. It will boot again in a few seconds.`);
       }
     }
     const lost = 1 - boss.hp / boss.type.hp;
@@ -576,7 +648,7 @@ export class Game {
         const address = `192.168.1.${80 + this.bossShuffles * 7 + Math.floor(this.random() * 6)}`;
         device.plugIn(address);
         this.emit({ kind: 'shuffle', fixture: victim, address });
-        this.say(`${victim.label} rebooted at ${address}. Its old address is dead: press R to scan and the registry will follow it.`);
+        void address; // update() keeps pointing at the light until it is found again
       }
     }
   }
@@ -587,6 +659,10 @@ export class Game {
     if (this.phase === 'title') this.idle(now);
     if (!this.running || this.paused) return;
 
+    this.teach(now);
+    if (this.coach?.key !== this.slowFor) this.slowFor = '';
+    // While a lesson waits for the player, the shades all but stop.
+    dt *= this.slowFor && now - this.slowSince < 12000 ? 0.05 : 1;
     this.clock += dt;
     for (let i = this.restores.length - 1; i >= 0; i--) {
       const pending = this.restores[i]!;
@@ -600,11 +676,6 @@ export class Game {
     if (this.phase === 'setup') {
       if (this.undiscovered().length === 0) {
         this.setPhase('wave');
-        const first = ['Press 1, 2 or 3 (or scroll) to load a colour, then click the Entry Light.',
-          '', 'Right-click a bulb, or hover and press Space, to strobe it.',
-          'Click a section of the strip to colour eight zones. Right-click it for the rainbow chase.',
-          '', 'Click a tile to colour it. Right-click the tiles for fire.', '', ''][this.night];
-        if (first) this.say(first);
       }
       return;
     }
@@ -673,7 +744,6 @@ export class Game {
     this.lan.latencyMs = Math.min(650, 25 + lag);
     this.lan.jitterMs = Math.min(40, this.lan.latencyMs * 0.4);
 
-    if (this.broadcastUnlocked && this.charge >= 1) this.sayOnce('charged', 'Broadcast charged. Press B: one tagged packet, every light strobes.');
 
     if (this.health <= 0) {
       this.health = 0;
@@ -686,6 +756,111 @@ export class Game {
       this.restoreNetwork();
       this.setPhase('clear');
     }
+  }
+
+  private remind(text: string, seconds: number): void {
+    this.note = { text, until: performance.now() + seconds * 1000 };
+  }
+
+  /** Holds the game nearly still on a prompt until the player does what it asks. */
+  private ask(key: string, text: string, at: Vec | undefined, now: number): void {
+    if (this.slowFor !== key) {
+      this.slowFor = key;
+      this.slowSince = now;
+      this.note = undefined;
+    }
+    this.coach = { key, text, at };
+  }
+
+  private learn(key: string): void {
+    this.learned.add(key);
+    if (this.slowFor === key) this.slowFor = '';
+  }
+
+  /**
+   * Decides what, if anything, to prompt the player with. Each lesson is
+   * shown when the situation it is about is actually on screen, waits for
+   * the player to do it once, and never comes back.
+   */
+  private teach(now: number): void {
+    this.coach = undefined;
+    const { learned } = this;
+
+    // A light the library has not met, or has lost track of, has to be found before it can be used.
+    const stranger = this.fixtures.find((fixture) => this.introduced(fixture.serial) && this.status(fixture.serial) === 'unknown');
+    if (stranger) {
+      const lamp = this.session.lamps.find((candidate) => candidate.device.serialNumber === stranger.serial);
+      const moved = lamp?.ready === true;
+      // Mid-identification the library is already asking it questions: nothing for the player to do.
+      if (moved || (!lamp && this.current.scan)) {
+        this.coach = {
+          key: 'find',
+          text: moved ? `${stranger.label} was knocked onto a new address. Click it to find it again.` : 'A new light is plugged in. Click it to find it.',
+          at: stranger.at,
+        };
+        return;
+      }
+    }
+    if (this.phase !== 'wave' || !this.lessons) return;
+
+    const lit = this.enemies.map((enemy) => ({ enemy, aim: this.aimAt(enemy.at).aim })).filter((entry) => entry.aim !== undefined && entry.aim.strength > 27);
+
+    if (this.night === 0) {
+      if (!learned.has('click')) {
+        if (this.stats.shots > 0) {
+          this.learn('click');
+          this.remind('Sent. Watch the light.', 2.5);
+        } else if (lit[0]) {
+          this.ask('click', 'Click the shade.', lit[0].enemy.at, now);
+          return;
+        }
+      } else if (!learned.has('burn') && this.kills > 0) {
+        this.learn('burn');
+        this.remind('The light turned its colour, and that burned it. One click, one message to the light.', 6);
+      } else if (learned.has('burn') && !learned.has('again')) {
+        if (this.stats.shots > 1) this.learn('again');
+        else if (lit[0]) {
+          this.ask('again', 'This one is a different colour. Click it.', lit[0].enemy.at, now);
+          return;
+        }
+      } else if (learned.has('again') && !learned.has('choose')) {
+        const pair = lit.find((a) => lit.some((b) => b.aim?.target === a.aim?.target && b.enemy.hue !== a.enemy.hue));
+        if (pair && !learned.has('choose-seen')) {
+          learned.add('choose-seen');
+          this.mark = this.stats.shots;
+        }
+        if (learned.has('choose-seen')) {
+          if (this.stats.shots > this.mark) {
+            this.learn('choose');
+            this.remind('A light can only be one colour at a time. When this one is gone, click the other.', 6);
+          } else if (pair) {
+            this.ask('choose', 'Two colours, one light. Click the one to burn first.', pair.enemy.at, now);
+            return;
+          }
+        }
+      }
+    }
+
+    if (this.abilitiesUnlocked && !learned.has('strobe')) {
+      const charged = this.fixtures.find((fixture) => fixture.kind === 'bulb' && this.status(fixture.serial) === 'ready' && this.cooldown(fixture.serial) === 0
+        && lit.filter((entry) => entry.aim?.fixture === fixture).length >= 2);
+      if (this.cooldowns.size > 0) this.learn('strobe');
+      else if (charged) {
+        this.ask('strobe', 'Now click the light itself to strobe it. A strobe burns every colour.', charged.at, now);
+        return;
+      }
+    }
+
+    if (this.broadcastUnlocked && !learned.has('broadcast')) {
+      if (this.charge < 1 && learned.has('broadcast-seen')) this.learn('broadcast');
+      else if (this.charge >= 1 && this.enemies.length >= 3) {
+        learned.add('broadcast-seen');
+        this.ask('broadcast', 'Broadcast is charged. Press the Broadcast button: every light strobes at once.', undefined, now);
+        return;
+      }
+    }
+
+    if (this.note && now < this.note.until) this.coach = { key: 'note', text: this.note.text, at: undefined };
   }
 
   /** On the title screen the house idles through colours — real sends, so the wire log is alive. */

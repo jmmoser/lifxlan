@@ -169,23 +169,33 @@ describe('demo game rules', () => {
     const shade = game.enemies[0]!;
     const target = game.fixtures[0]!.targets[0]!;
 
-    // Walk it into the light. The bulb is still white: barely a scratch.
+    // Before it reaches the light there is nothing to click it with.
+    expect(game.aimAt(shade.at).aim).toBeUndefined();
+
+    // As soon as the light can burn it, the game holds the moment and asks for a first click.
+    await run(6, () => game.coach !== undefined);
+    expect(game.coach).toMatchObject({ key: 'click', text: 'Click the shade.' });
+    expect(Math.hypot((game.coach?.at?.x ?? 0) - shade.at.x, (game.coach?.at?.y ?? 0) - shade.at.y)).toBeLessThan(3);
+    game.lessons = false;
+
+    // Walk it further into the light. The bulb is still white: barely a scratch.
     await run(4, () => shade.at.x > 200);
     expect(shade.hp).toBeGreaterThan(80);
+    expect(game.aimAt(shade.at).aim?.target).toBe(target);
 
     // Green light on a red shade: nothing.
-    game.load(2);
-    game.fire(target);
+    game.shoot(target, 2);
     await sleep(150);
     game.update(0.02, performance.now());
     const before = shade.hp;
     await run(0.4);
     expect(shade.hp).toBe(before);
 
-    // Red light: it burns away.
-    game.load(0);
-    game.fire(target);
-    await run(4, () => !game.enemies.includes(shade));
+    // Clicking the shade turns the light over it the shade's own colour, and it burns away.
+    game.zap(shade);
+    await sleep(150);
+    expect(fleet[0]!.frame().colors[0]).toMatchObject({ hue: 0, saturation: 65535 });
+    await run(6, () => !game.enemies.includes(shade));
     expect(game.enemies.includes(shade)).toBe(false);
     expect(events.some((event) => event.kind === 'kill')).toBe(true);
     expect(game.score).toBeGreaterThan(0);
@@ -195,12 +205,12 @@ describe('demo game rules', () => {
     await firstNight();
     await run(1.2, () => game.enemies.length > 0);
     const shade = game.enemies[0]!;
+    game.lessons = false;
     await run(4, () => shade.at.x > 200);
     const hp = shade.hp;
 
     lan.loss = 1;
-    game.load(0);
-    game.fire(game.fixtures[0]!.targets[0]!);
+    game.zap(shade);
     // The game keeps its own network settings each frame; hold the loss in place by hand.
     for (let i = 0; i < 10; i++) {
       await sleep(20);
@@ -219,6 +229,22 @@ describe('demo game rules', () => {
     expect(game.health).toBe(game.maxHealth - 1);
     expect(events.some((event) => event.kind === 'routerHit')).toBe(true);
   }, 10000);
+
+  test('a light the library has not met is found by clicking it, and only then can be used', async () => {
+    await firstNight();
+    game.night = 1;
+    game.startNight();
+    await run(0.2);
+    const kitchen = game.fixtures[1]!;
+    expect(game.status(kitchen.serial)).toBe('unknown');
+    expect(game.coach).toMatchObject({ key: 'find', at: kitchen.at });
+    expect(game.phase).toBe('setup');
+
+    game.press(kitchen.targets[0]!);
+    await run(12, () => game.phase === 'wave');
+    expect(game.status(kitchen.serial)).toBe('ready');
+    expect(events.some((event) => event.kind === 'scan')).toBe(true);
+  }, 15000);
 
   test('a jammer raises packet loss for as long as it lives', async () => {
     await firstNight();

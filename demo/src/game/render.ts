@@ -93,6 +93,8 @@ export class Renderer {
   /** What the pointer is over, in house coordinates. */
   pointer: Vec | undefined;
   hover: Target | undefined;
+  /** The shade under the pointer. */
+  hoverEnemy: Enemy | undefined;
   /** The device outlined in the sandbox. */
   selected: string | undefined;
 
@@ -189,7 +191,7 @@ export class Renderer {
     let bestDistance = Infinity;
     for (const enemy of this.game.enemies) {
       const d = Math.hypot(enemy.at.x - p.x, enemy.at.y - p.y);
-      if (d < enemy.type.size + 14 && d < bestDistance) {
+      if (d < enemy.type.size * 1.3 + 16 && d < bestDistance) {
         best = enemy;
         bestDistance = d;
       }
@@ -612,8 +614,10 @@ export class Renderer {
     this.drawParticles(frozen ? 0 : dt);
     this.drawBolts(now);
     this.drawFlights(now);
+    this.drawLabels();
     this.drawFloaters(frozen ? 0 : dt);
     this.drawAim(now);
+    this.drawCoach(now);
 
     // Post: vignette, and the router's pain.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -861,14 +865,14 @@ export class Renderer {
       ctx.rotate(now / 900);
       ctx.setLineDash([7, 6]);
       ctx.strokeStyle = rgba(AMBER, 0.95);
-      ctx.beginPath(); ctx.arc(0, 0, radius + 4, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, radius + 6, 0, TAU); ctx.stroke();
       ctx.rotate(-now / 900);
       ctx.setLineDash([]);
       ctx.fillStyle = rgba(AMBER, 1);
-      ctx.font = `700 ${13 * this.unit}px "IBM Plex Mono", ui-monospace, monospace`;
+      ctx.font = `700 ${18 * this.unit}px "IBM Plex Sans", system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('?', radius + 14 * this.unit, -radius);
+      ctx.fillText('?', 0, 1 * this.unit);
     } else {
       ctx.strokeStyle = 'rgba(150,160,190,0.7)';
       ctx.beginPath(); ctx.arc(0, 0, radius + 4, 0, TAU); ctx.moveTo(-radius, radius); ctx.lineTo(radius, -radius); ctx.stroke();
@@ -912,41 +916,49 @@ export class Renderer {
       }
     }
 
-    // The body: a knot of darkness.
-    ctx.fillStyle = 'rgba(3,4,10,0.92)';
+    // The body: a knot of darkness soaked in its colour.
+    const flesh: Rgb = [rgb[0] * 0.3 + 4, rgb[1] * 0.3 + 4, rgb[2] * 0.3 + 8];
     const lobes = enemy.kind === 'outage' ? 11 : enemy.kind === 'brute' ? 8 : 6;
+    ctx.fillStyle = 'rgba(3,4,10,0.9)';
     ctx.beginPath();
-    ctx.arc(at.x, at.y, r * 0.86, 0, TAU);
-    ctx.fill();
     for (let k = 0; k < lobes; k++) {
       const angle = enemy.seed + k * (TAU / lobes) + Math.sin(t * 1.7 + k) * 0.5;
-      const reach = r * (0.5 + 0.16 * Math.sin(t * 2.3 + k * 1.7));
-      ctx.beginPath();
-      ctx.arc(at.x + Math.cos(angle) * reach, at.y + Math.sin(angle) * reach, r * 0.52, 0, TAU);
-      ctx.fill();
+      const reach = r * (0.52 + 0.16 * Math.sin(t * 2.3 + k * 1.7));
+      ctx.moveTo(at.x + Math.cos(angle) * reach + r * 0.56, at.y + Math.sin(angle) * reach);
+      ctx.arc(at.x + Math.cos(angle) * reach, at.y + Math.sin(angle) * reach, r * 0.56, 0, TAU);
     }
+    ctx.fill();
+    const body = ctx.createRadialGradient(at.x, at.y - r * 0.2, r * 0.1, at.x, at.y, r);
+    body.addColorStop(0, rgba(shifting ? [255, 255, 255] : [rgb[0] * 0.75, rgb[1] * 0.75, rgb[2] * 0.75], 1));
+    body.addColorStop(1, rgba(flesh, 1));
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.arc(at.x, at.y, r * 0.9, 0, TAU); ctx.fill();
+    ctx.strokeStyle = rgba(shifting ? [255, 255, 255] : rgb, 1);
+    ctx.lineWidth = 2.2 * this.unit;
+    ctx.beginPath(); ctx.arc(at.x, at.y, r * 0.9, 0, TAU); ctx.stroke();
 
-    // A faint rim so it can be made out in the dark, and its colour burning in the core.
+    // Its colour spills out as a glow, hotter as it burns.
     ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = rgba(shifting ? [255, 255, 255] : rgb, 0.3 + 0.5 * enemy.burn);
-    ctx.lineWidth = 1.6 * this.unit;
-    ctx.beginPath(); ctx.arc(at.x, at.y, r * 1.04, 0, TAU); ctx.stroke();
-    const core = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, r * (1.5 + enemy.burn));
-    core.addColorStop(0, rgba(rgb, 0.5 + 0.4 * enemy.burn));
-    core.addColorStop(0.5, rgba(rgb, 0.12 + 0.3 * enemy.burn));
+    const core = ctx.createRadialGradient(at.x, at.y, r * 0.6, at.x, at.y, r * (1.7 + enemy.burn));
+    core.addColorStop(0, rgba(rgb, 0.3 + 0.5 * enemy.burn));
     core.addColorStop(1, rgba(rgb, 0));
     ctx.fillStyle = core;
     ctx.fillRect(at.x - r * 3, at.y - r * 3, r * 6, r * 6);
+    ctx.globalCompositeOperation = 'source-over';
 
     // Eyes, looking where it is going.
     const hx = enemy.heading.x, hy = enemy.heading.y;
     const eyes = enemy.kind === 'brute' || enemy.kind === 'outage' ? [-0.42, 0, 0.42] : [-0.3, 0.3];
     for (const side of eyes) {
-      const ex = at.x + hx * r * 0.34 - hy * r * side;
-      const ey = at.y + hy * r * 0.34 + hx * r * side;
-      ctx.fillStyle = rgba(shifting ? [255, 255, 255] : rgb, 1);
-      ctx.beginPath(); ctx.arc(ex, ey, Math.max(1.6 * this.unit, r * 0.15), 0, TAU); ctx.fill();
+      const ex = at.x + hx * r * 0.3 - hy * r * side;
+      const ey = at.y + hy * r * 0.3 + hx * r * side;
+      const size = Math.max(2 * this.unit, r * 0.19);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(ex, ey, size, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#05060a';
+      ctx.beginPath(); ctx.arc(ex + hx * size * 0.35, ey + hy * size * 0.35, size * 0.5, 0, TAU); ctx.fill();
     }
+    ctx.globalCompositeOperation = 'lighter';
 
     if (enemy.kind === 'jammer') {
       // Static: broken arcs of noise.
@@ -992,19 +1004,6 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(at.x, at.y, r * 1.2 + 3 * this.unit, -Math.PI / 2, -Math.PI / 2 + TAU * hp); ctx.stroke();
     }
     ctx.globalCompositeOperation = 'source-over';
-
-    // The key that loads its colour.
-    const key = this.game.palette.indexOf(enemy.hue) + 1;
-    if (key > 0 && enemy.kind !== 'outage') {
-      ctx.font = `700 ${10.5 * this.unit}px "IBM Plex Mono", ui-monospace, monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const ly = at.y - r * 1.25 - 9 * this.unit;
-      ctx.fillStyle = rgba(rgb, 1);
-      ctx.beginPath(); ctx.arc(at.x, ly, 7.5 * this.unit, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(5,6,10,0.92)';
-      ctx.fillText(String(key), at.x, ly + 0.5 * this.unit);
-    }
 
     if (!frozen && enemy.stun <= 0 && Math.random() < dt * 14) {
       // Shreds of darkness left behind as it moves.
@@ -1149,48 +1148,121 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** What the pointer is aiming at, and the colour loaded. */
+  private caption(text: string, x: number, y: number, size: number, color: string, weight = 500): void {
+    const { ctx } = this;
+    ctx.font = `${weight} ${size * this.unit}px "IBM Plex Sans", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3.5 * this.unit;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(4,5,10,0.88)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+  }
+
+  /** Names on things, so the house reads at a glance. */
+  private drawLabels(): void {
+    const { ctx, game } = this;
+    ctx.globalAlpha = 0.5;
+    for (const room of ROOMS) {
+      ctx.font = `600 ${10 * this.unit}px "IBM Plex Sans", system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(232,236,246,0.8)';
+      ctx.fillText(room.name.toUpperCase(), room.area.x + 10, room.area.y + (room.name === 'Hallway' ? room.area.h - 44 : 10) + (room.name === 'Hallway' ? 0 : 0));
+    }
+    ctx.globalAlpha = 1;
+    this.caption('ROUTER', ROUTER.x, ROUTER.y + 30, 9.5, 'rgba(232,236,246,0.92)', 600);
+    if (!game.running) return;
+    for (const fixture of game.fixtures) {
+      if (!game.introduced(fixture.serial) || fixture.kind !== 'bulb') continue;
+      const device = this.fleet.find((candidate) => candidate.spec.serial === fixture.serial);
+      if (device) this.caption(device.currentLabel, fixture.at.x, fixture.at.y + 34, 9.5, 'rgba(232,236,246,0.75)');
+    }
+  }
+
+  /** A ring and a bouncing arrow on whatever the game is asking the player to click. */
+  private drawCoach(now: number): void {
+    const { ctx, game } = this;
+    const at = game.coach?.at;
+    if (!at || game.paused) return;
+    const beat = (now % 900) / 900;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 3 * this.unit;
+    for (const phase of [beat, (beat + 0.5) % 1]) {
+      ctx.strokeStyle = `rgba(255,255,255,${(0.9 * (1 - phase)).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(at.x, at.y, 26 + phase * 46, 0, TAU); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // The arrow comes from above, or from below when there is no room above.
+    const down = at.y > 150;
+    const bounce = Math.abs(Math.sin(now / 260)) * 12;
+    const tip = at.y + (down ? -1 : 1) * (40 + bounce);
+    const k = 13 * this.unit;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(4,5,10,0.9)';
+    ctx.lineWidth = 2.5 * this.unit;
+    ctx.beginPath();
+    ctx.moveTo(at.x, tip);
+    ctx.lineTo(at.x - k, tip + (down ? -1 : 1) * k * 1.3);
+    ctx.lineTo(at.x - k * 0.4, tip + (down ? -1 : 1) * k * 1.3);
+    ctx.lineTo(at.x - k * 0.4, tip + (down ? -1 : 1) * k * 2.6);
+    ctx.lineTo(at.x + k * 0.4, tip + (down ? -1 : 1) * k * 2.6);
+    ctx.lineTo(at.x + k * 0.4, tip + (down ? -1 : 1) * k * 1.3);
+    ctx.lineTo(at.x + k, tip + (down ? -1 : 1) * k * 1.3);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fill();
+  }
+
+  /** Shows what a click would do: which light answers for the shade under the pointer, or what a light itself does. */
   private drawAim(now: number): void {
     const { ctx, game } = this;
-    const loaded = HUE_RGB[game.loaded] ?? AMBER;
+    const playing = game.running && !game.paused;
+    const enemy = playing ? this.hoverEnemy : undefined;
     const target = this.hover;
-    const aiming = game.running && !game.paused;
-    if (target && (aiming || game.phase === 'sandbox')) {
-      const { x, y, w, h } = target.area;
-      ctx.strokeStyle = rgba(aiming ? loaded : AMBER, 0.75 + 0.25 * Math.sin(now / 130));
-      ctx.lineWidth = 2 * this.unit;
-      ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
-      const device = this.fleet.find((candidate) => candidate.spec.serial === target.serial);
-      if (device) {
-        ctx.font = `500 ${10.5 * this.unit}px "IBM Plex Mono", ui-monospace, monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        const label = `${target.kind === 'bulb' ? device.currentLabel : target.name.replace(device.spec.label, device.currentLabel)} · ${device.endpoint.address}`;
-        ctx.lineWidth = 3 * this.unit;
-        ctx.strokeStyle = 'rgba(4,5,10,0.85)';
-        const ly = Math.max(60, y - 6 * this.unit);
-        ctx.strokeText(label, target.at.x, ly);
-        ctx.fillStyle = 'rgba(232,236,246,0.95)';
-        ctx.fillText(label, target.at.x, ly);
+
+    if (enemy && game.enemies.includes(enemy)) {
+      const rgb = HUE_RGB[enemy.hue] ?? AMBER;
+      const { aim, why } = game.aimAt(enemy.at);
+      const r = enemy.type.size * 1.25 + 6 * this.unit;
+      ctx.strokeStyle = rgba([255, 255, 255], 0.95);
+      ctx.lineWidth = 2.4 * this.unit;
+      ctx.beginPath(); ctx.arc(enemy.at.x, enemy.at.y, r, 0, TAU); ctx.stroke();
+      if (aim) {
+        // A line from the light that will answer to the shade it will burn.
+        ctx.setLineDash([6 * this.unit, 6 * this.unit]);
+        ctx.lineDashOffset = -now / 30;
+        ctx.strokeStyle = rgba(rgb, 0.95);
+        ctx.beginPath(); ctx.moveTo(aim.target.at.x, aim.target.at.y); ctx.lineTo(enemy.at.x, enemy.at.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(aim.target.at.x, aim.target.at.y, 22, 0, TAU); ctx.stroke();
+      } else {
+        this.caption(why, enemy.at.x, enemy.at.y - r - 12 * this.unit, 11, 'rgba(232,236,246,0.95)');
       }
+      return;
     }
-    const p = this.pointer;
-    if (!p || !aiming) return;
-    const prey = target ? undefined : this.enemyAt(p);
-    const rgb = prey ? HUE_RGB[prey.hue] ?? loaded : loaded;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = rgba(rgb, 0.95);
-    ctx.lineWidth = 2.2 * this.unit;
-    const r = (prey ? 17 : 12) * this.unit;
-    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
-    ctx.fillStyle = rgba(rgb, 1);
-    ctx.beginPath(); ctx.arc(p.x, p.y, 2.4 * this.unit, 0, TAU); ctx.fill();
-    ctx.beginPath();
-    for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-      ctx.moveTo(p.x + Math.cos(a) * (r + 3 * this.unit), p.y + Math.sin(a) * (r + 3 * this.unit));
-      ctx.lineTo(p.x + Math.cos(a) * (r + 8 * this.unit), p.y + Math.sin(a) * (r + 8 * this.unit));
+
+    if (!target || !(playing || game.phase === 'sandbox')) return;
+    if (playing && !game.introduced(target.serial)) return;
+    const { x, y, w, h } = target.area;
+    ctx.strokeStyle = rgba(AMBER, 0.75 + 0.25 * Math.sin(now / 130));
+    ctx.lineWidth = 2 * this.unit;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
+    const device = this.fleet.find((candidate) => candidate.spec.serial === target.serial);
+    if (!device) return;
+    let label = `${device.currentLabel} · ${device.endpoint.address}`;
+    if (playing) {
+      const status = game.status(target.serial);
+      const fixture = game.fixtureOf(target.serial);
+      const effect = fixture?.kind === 'bulb' ? 'strobe' : fixture?.kind === 'strip' ? 'rainbow sweep' : 'fire';
+      label = status === 'unknown' ? 'Find this light'
+        : status === 'unplugged' ? `${device.currentLabel} has no power`
+          : !game.abilitiesUnlocked ? device.currentLabel
+            : game.cooldown(target.serial) > 0 ? `${device.currentLabel}: ${effect} recharging`
+              : `${effect[0]?.toUpperCase()}${effect.slice(1)} ready`;
     }
-    ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
+    this.caption(label, target.at.x, Math.max(64, y - 10 * this.unit), 11, 'rgba(232,236,246,0.96)');
   }
 }
