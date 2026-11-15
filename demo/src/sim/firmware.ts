@@ -16,7 +16,7 @@ import { decodeHeader, encode, getPayload } from '../../../src/encoding.js';
 import type { Color, Header } from '../../../src/index.js';
 import { LAYOUTS, deviceChainLayout, packStruct, readStruct } from '../protocol/layouts.js';
 import type { Field, Struct, Value } from '../protocol/layouts.js';
-import type { Endpoint, VirtualLan } from './lan.js';
+import type { Endpoint, VirtualLan, VirtualSocket } from './lan.js';
 
 export type DeviceKind = 'bulb' | 'strip' | 'tiles';
 
@@ -218,14 +218,15 @@ const toNs = (ms: number): bigint => BigInt(Math.round(ms)) * 1_000_000n;
 
 export class VirtualDevice {
   readonly spec: DeviceSpec;
-  readonly endpoint: Endpoint;
   /** How many datagrams this device has accepted. */
   received = 0;
 
   private readonly target: Uint8Array;
   private readonly clock: () => number;
   private readonly bootedAt: number;
-  private readonly send: (bytes: Uint8Array, port: number, address: string) => void;
+  private readonly lan: VirtualLan;
+  private socket: VirtualSocket | undefined;
+  private address: string;
 
   private label: string;
   private power: PowerFade;
@@ -239,28 +240,79 @@ export class VirtualDevice {
   private group: { id: Uint8Array; label: string; updatedAt: bigint };
   private location: { id: Uint8Array; label: string; updatedAt: bigint };
 
-  constructor(spec: DeviceSpec, lan: VirtualLan, clock: () => number = () => performance.now()) {
+  constructor(spec: DeviceSpec, lan: VirtualLan, clock: () => number = () => performance.now(), online = true) {
     this.spec = spec;
+    this.lan = lan;
     this.clock = clock;
     this.bootedAt = clock();
     this.target = serialToTarget(spec.serial);
-    this.endpoint = { address: spec.address, port: PORT };
-    this.label = spec.label;
-    const level = spec.power ? 65535 : 0;
-    this.power = { from: level, to: level, start: 0, duration: 0 };
+    this.address = spec.address;
     this.tilePositions = [...(spec.tiles ?? [])];
 
     const count = spec.kind === 'strip' ? (spec.zones ?? 16)
       : spec.kind === 'tiles' ? this.tilePositions.length * TILE_PIXELS
         : 1;
     this.pixels = Array.from({ length: count }, () => ({ from: spec.color, to: spec.color, start: 0, duration: 0 }));
-
+    this.label = spec.label;
+    this.power = { from: 0, to: 0, start: 0, duration: 0 };
     const stamp = toNs(Date.now());
     this.group = { id: uuidBytes(spec.group.id), label: spec.group.label, updatedAt: stamp };
     this.location = { id: uuidBytes(spec.location.id), label: spec.location.label, updatedAt: stamp };
+    this.reset();
 
-    const socket = lan.bind(this.endpoint, (bytes, remote) => this.receive(bytes, remote));
-    this.send = socket.send;
+    if (online) this.plugIn();
+  }
+
+  /** Where the device is on the network right now. */
+  get endpoint(): Endpoint {
+    return { address: this.address, port: PORT };
+  }
+
+  /** Whether the device has mains power and is on the network. */
+  get online(): boolean {
+    return this.socket !== undefined;
+  }
+
+  /** Gives the device mains power: it joins the network, at `address` if given. */
+  plugIn(address?: string): void {
+    this.unplug();
+    if (address !== undefined) this.address = address;
+    this.socket = this.lan.bind(this.endpoint, (bytes, remote) => this.receive(bytes, remote));
+  }
+
+  /** Cuts mains power: the device goes dark and stops answering. It keeps its settings, as a real one does. */
+  unplug(): void {
+    this.socket?.close();
+    this.socket = undefined;
+  }
+
+  /** Restores the state the device shipped with. */
+  reset(): void {
+    const { spec } = this;
+    this.label = spec.label;
+    const level = spec.power ? 65535 : 0;
+    this.power = { from: level, to: level, start: 0, duration: 0 };
+    for (const pixel of this.pixels) {
+      pixel.from = spec.color;
+      pixel.to = spec.color;
+      pixel.start = 0;
+      pixel.duration = 0;
+    }
+    this.waveform = undefined;
+    this.zoneEffect = undefined;
+    this.tileEffect = undefined;
+    this.staged = [];
+    this.tilePositions = [...(spec.tiles ?? [])];
+  }
+
+  /** Which self-running animations the device is in the middle of. */
+  running(now: number = this.clock()): { readonly waveform: boolean; readonly zoneEffect: boolean; readonly tileEffect: number } {
+    this.settle(now);
+    return {
+      waveform: this.waveform !== undefined,
+      zoneEffect: this.zoneEffect !== undefined,
+      tileEffect: this.tileEffect?.type ?? TileEffectType.OFF,
+    };
   }
 
   get pixelCount(): number {
@@ -316,7 +368,7 @@ export class VirtualDevice {
     // A reply echoes the request's source and sequence — that is the whole
     // of how a client tells which request it answers.
     const bytes = encode(false, request.source, this.target, false, false, request.sequence, reply.type, reply.payload);
-    this.send(bytes, remote.port, remote.address);
+    this.socket?.send(bytes, remote.port, remote.address);
   }
 
   /* ---------------------------------------------------------------- */
@@ -829,6 +881,7 @@ export class VirtualDevice {
     this.settle(now);
     const list: Color[] = [];
     for (let i = 0; i < this.pixels.length; i++) list.push(this.shown(i, now));
-    return { power: this.powerLevel(now) / 65535, colors: list };
+    // Without mains power nothing shines, whatever the device remembers.
+    return { power: this.online ? this.powerLevel(now) / 65535 : 0, colors: list };
   }
 }

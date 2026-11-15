@@ -109,10 +109,10 @@ describe('demo simulator: discovery and device messages', () => {
   });
 
   test('identity queries decode to what the device was built with', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     const spec = FLEET[0]!;
 
-    expect(await client.send(GetLabel(), lamp)).toBe('Desk Lamp');
+    expect(await client.send(GetLabel(), lamp)).toBe('Entry Light');
     expect(await client.send(GetVersion(), lamp)).toEqual({ vendor: 1, product: 27 });
 
     const firmware = await client.send(GetHostFirmware(), lamp);
@@ -125,13 +125,13 @@ describe('demo simulator: discovery and device messages', () => {
     expect(Math.abs(info.time.getTime() - Date.now())).toBeLessThan(5000);
     expect(info.downtimeNs).toBe(0n);
 
-    expect(await client.send(GetLocation(), lamp)).toMatchObject({ location: spec.location.id, label: 'Studio' });
-    expect(await client.send(GetGroup(), lamp)).toMatchObject({ group: spec.group.id, label: 'Lamps' });
+    expect(await client.send(GetLocation(), lamp)).toMatchObject({ location: spec.location.id, label: 'Home' });
+    expect(await client.send(GetGroup(), lamp)).toMatchObject({ group: spec.group.id, label: 'Hallway' });
   });
 
   test('the vendored products excerpt resolves each device\'s capabilities', async () => {
     const products = Products(PRODUCTS_EXCERPT);
-    const strip = await find('Shelf Strip');
+    const strip = await find('Hallway Strip');
     const version = await client.send(GetVersion(), strip);
     const firmware = await client.send(GetHostFirmware(), strip);
     expect(products.get(version.vendor, version.product)?.name).toBe('LIFX Z');
@@ -140,13 +140,13 @@ describe('demo simulator: discovery and device messages', () => {
   });
 
   test('EchoRequest comes back byte for byte', async () => {
-    const lamp = await find('Floor Lamp');
+    const lamp = await find('Kitchen Pendant');
     const sent = Uint8Array.from({ length: 64 }, (_, i) => (i * 37) & 0xFF);
     expect(new Uint8Array(await client.send(EchoRequest(sent), lamp))).toEqual(sent);
   });
 
   test('SetLabel and SetPower change what the matching Get reports', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     await client.send(SetLabel('Reading Nook'), lamp);
     expect(await client.send(GetLabel(), lamp)).toBe('Reading Nook');
 
@@ -160,14 +160,14 @@ describe('demo simulator: discovery and device messages', () => {
 
 describe('demo simulator: light messages', () => {
   test('SetColor is acknowledged and GetColor reads it back', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     await client.send(SetColor({ ...GREEN, durationMs: 0 }), lamp);
-    expect(await client.send(GetColor(), lamp)).toEqual({ ...GREEN, power: 65535, label: 'Desk Lamp' });
+    expect(await client.send(GetColor(), lamp)).toEqual({ ...GREEN, power: 65535, label: 'Entry Light' });
     expect(fleet[0]!.frame().colors[0]).toEqual(GREEN);
   });
 
   test("responseMode 'both' resolves with the state from before the change", async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     await client.send(SetColor({ ...RED, durationMs: 0 }), lamp);
     const before = await client.send(SetColor({ ...BLUE, durationMs: 0 }), lamp, { responseMode: 'both' });
     expect(before).toMatchObject(RED);
@@ -175,7 +175,7 @@ describe('demo simulator: light messages', () => {
   });
 
   test('a transition is mid-way when read mid-way', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     await client.send(SetColor({ hue: 0, saturation: 65535, brightness: 0, kelvin: 3500 }), lamp);
     await client.send(SetColor({ hue: 0, saturation: 65535, brightness: 65535, kelvin: 3500, durationMs: 400 }), lamp);
     await new Promise((resolve) => setTimeout(resolve, 150));
@@ -185,7 +185,7 @@ describe('demo simulator: light messages', () => {
   });
 
   test('a transient waveform returns to the original color, a lasting one keeps the new one', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     await client.send(SetColor({ ...RED, durationMs: 0 }), lamp);
     await client.send(SetWaveform({ ...BLUE, transient: true, periodMs: 40, cycles: 1, waveform: Waveform.SINE }), lamp);
     await new Promise((resolve) => setTimeout(resolve, 80));
@@ -197,14 +197,14 @@ describe('demo simulator: light messages', () => {
   });
 
   test('a message the product does not support rejects with UnhandledCommandError', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     expect(client.send(GetInfrared(), lamp)).rejects.toBeInstanceOf(UnhandledCommandError);
     expect(client.send(GetColorZones({ startIndex: 0, endIndex: 255 }), lamp)).rejects.toBeInstanceOf(UnhandledCommandError);
     expect(client.send(GetDeviceChain(), lamp)).rejects.toBeInstanceOf(UnhandledCommandError);
   });
 
   test('a lost datagram surfaces as TimeoutError', async () => {
-    const lamp = await find('Desk Lamp');
+    const lamp = await find('Entry Light');
     lan.loss = 1;
     expect(client.send(GetColor(), lamp, { timeoutMs: 40 })).rejects.toBeInstanceOf(TimeoutError);
   });
@@ -212,7 +212,7 @@ describe('demo simulator: light messages', () => {
 
 describe('demo simulator: multizone messages', () => {
   test('GetColorZones assembles all 32 zones from four StateMultiZone packets', async () => {
-    const strip = await find('Shelf Strip');
+    const strip = await find('Hallway Strip');
     let packets = 0;
     const zones = await client.send(GetColorZones({ startIndex: 0, endIndex: 255, onResponse: () => { packets++; } }), strip);
     expect(packets).toBe(4);
@@ -221,7 +221,7 @@ describe('demo simulator: multizone messages', () => {
   });
 
   test('SetColorZones paints a range; a single zone answers as StateZone', async () => {
-    const strip = await find('Shelf Strip');
+    const strip = await find('Hallway Strip');
     await client.send(SetColorZones({ startIndex: 4, endIndex: 9, ...RED }), strip);
     const zones = await client.send(GetColorZones({ startIndex: 0, endIndex: 31 }), strip);
     zones.colors.forEach((zone, i) => {
@@ -233,7 +233,7 @@ describe('demo simulator: multizone messages', () => {
   });
 
   test('NO_APPLY buffers a change until a later APPLY', async () => {
-    const strip = await find('Shelf Strip');
+    const strip = await find('Hallway Strip');
     await client.send(SetColorZones({ startIndex: 0, endIndex: 3, ...GREEN, apply: MultiZoneApplicationRequest.NO_APPLY }), strip);
     expect((await client.send(GetColorZones({ startIndex: 0, endIndex: 0 }), strip)).colors[0]).not.toEqual(GREEN);
     await client.send(SetColorZones({ startIndex: 31, endIndex: 31, ...BLUE, apply: MultiZoneApplicationRequest.APPLY }), strip);
@@ -243,15 +243,15 @@ describe('demo simulator: multizone messages', () => {
   });
 
   test('SetExtendedColorZones writes every zone in one packet', async () => {
-    const strip = await find('Shelf Strip');
+    const strip = await find('Hallway Strip');
     const gradient = Array.from({ length: 32 }, (_, i): Color => ({ hue: i * 2000, saturation: 65535, brightness: 30000 + i * 1000, kelvin: 3500 }));
     await client.send(SetExtendedColorZones({ zoneIndex: 0, colors: gradient }), strip);
     expect(await client.send(GetExtendedColorZones(), strip)).toEqual({ zonesCount: 32, zoneIndex: 0, colors: gradient });
-    expect(fleet[2]!.frame().colors).toEqual(gradient);
+    expect(fleet[4]!.frame().colors).toEqual(gradient);
   });
 
   test('the MOVE effect is reported back and scrolls the zones', async () => {
-    const strip = await find('Shelf Strip');
+    const strip = await find('Hallway Strip');
     await client.send(SetColorZones({ startIndex: 0, endIndex: 0, ...RED }), strip);
     const parameters = new Uint8Array(32);
     parameters[4] = 1;
@@ -271,7 +271,7 @@ describe('demo simulator: multizone messages', () => {
 
 describe('demo simulator: tile messages', () => {
   test('GetDeviceChain reports five 8x8 tiles at their positions', async () => {
-    const tiles = await find('Wall Tiles');
+    const tiles = await find('Ceiling Tiles');
     const chain = await client.send(GetDeviceChain(), tiles);
     expect(chain.startIndex).toBe(0);
     expect(chain.devices).toHaveLength(5);
@@ -279,19 +279,19 @@ describe('demo simulator: tile messages', () => {
       expect(tile).toMatchObject({
         width: 8,
         height: 8,
-        userX: FLEET[3]!.tiles![i]!.x,
-        userY: FLEET[3]!.tiles![i]!.y,
+        userX: FLEET[5]!.tiles![i]!.x,
+        userY: FLEET[5]!.tiles![i]!.y,
         deviceVersionVendor: 1,
         deviceVersionProduct: 55,
         firmwareVersionMajor: 3,
         firmwareVersionMinor: 50,
-        firmwareBuild: FLEET[3]!.firmware.build,
+        firmwareBuild: FLEET[5]!.firmware.build,
       });
     });
   });
 
   test('Set64 frames come back through Get64, one State64 per tile', async () => {
-    const tiles = await find('Wall Tiles');
+    const tiles = await find('Ceiling Tiles');
     const frames = Array.from({ length: 5 }, (_, t) => Array.from({ length: 64 }, (_, i): Color => ({
       hue: (t * 13000 + i * 100) % 65536, saturation: 65535, brightness: 20000 + i * 500, kelvin: 3500,
     })));
@@ -304,7 +304,7 @@ describe('demo simulator: tile messages', () => {
   });
 
   test('SetTileEffect is reported back by GetTileEffect, palette included', async () => {
-    const tiles = await find('Wall Tiles');
+    const tiles = await find('Ceiling Tiles');
     await client.send(SetTileEffect({
       instanceId: 99,
       effectType: TileEffectType.SKY,
@@ -326,7 +326,7 @@ describe('demo simulator: tile messages', () => {
       palette: [RED, BLUE],
     });
     // An effect drives the pixels: the frame is no longer one flat color.
-    const frame = fleet[3]!.frame().colors;
+    const frame = fleet[5]!.frame().colors;
     expect(new Set(frame.map((pixel) => Math.round(pixel.brightness))).size).toBeGreaterThan(1);
   });
 });

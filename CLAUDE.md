@@ -77,7 +77,7 @@ Device discovery works by broadcasting `GetService()` and registering responses 
 - `examples/` — self-contained runnable scripts (see `examples/README.md`); they import `lifxlan` by self-reference, so `bun run build` first
 - `docs/` — hand-written protocol guides (field types, querying, changing device state)
 - `scripts/` — the Node/Deno smoke tests CI runs against `dist/`
-- `demo/` — the browser demo (see `demo/README.md`): the library bundled from `src/` and driven against simulated devices (`demo/src/sim`) over an in-memory network. It has its own `tsconfig.json` (DOM lib), so the root `npx tsc` does not cover its UI code; `tests/demo-sim.test.ts` runs the real client against the simulator
+- `demo/` — the browser demo, a game called Nightwire (see `demo/README.md`): the library bundled from `src/` and driven against simulated devices (`demo/src/sim`) over an in-memory network, with the game itself in `demo/src/game`. It has its own `tsconfig.json` (DOM lib), so the root `npx tsc` does not cover its UI code; `tests/demo-sim.test.ts` runs the real client against the simulator and `tests/demo-game.test.ts` runs the game rules headless (these use real timers, so they add several seconds to the suite)
 
 ## TypeScript Support
 

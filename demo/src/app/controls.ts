@@ -83,7 +83,7 @@ export class Controls {
     this.panel = h('div', { class: 'panel' });
     this.status = h('p', { class: 'status', 'aria-live': 'polite' });
     this.root = h('section', { class: 'card controls' },
-      h('header', { class: 'card-head' }, h('h2', null, 'Whole room'), this.scenes),
+      h('header', { class: 'card-head' }, h('h2', null, 'Whole house'), this.scenes),
       h('header', { class: 'card-head devices-head' }, h('h2', null, 'Devices'), this.tabs),
       this.panel,
       this.status,

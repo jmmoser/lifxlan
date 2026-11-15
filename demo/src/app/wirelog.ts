@@ -66,6 +66,8 @@ export class WireLog {
   readonly stats: WireStats = { sent: 0, received: 0, lost: 0, bytes: 0 };
   /** The entry the inspector should show. */
   onSelect: (entry: Entry | undefined) => void = () => {};
+  /** The user clicked a row (as opposed to the log following the latest packet). */
+  onPick: () => void = () => {};
   /** Called when counters change. */
   onStats: () => void = () => {};
 
@@ -264,7 +266,10 @@ export class WireLog {
   /* ---------------------------------------------------------------- */
 
   private select(entry: Entry, byUser: boolean): void {
-    if (byUser) this.setFollowing(false);
+    if (byUser) {
+      this.setFollowing(false);
+      this.onPick();
+    }
     if (this.selected !== entry) {
       this.selected?.row.classList.remove('selected');
       entry.row.classList.add('selected');

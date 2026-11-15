@@ -149,6 +149,8 @@ export class Inspector {
   readonly root: HTMLElement;
   /** Copies a packet's bytes into the raw packet lab. */
   onEdit: (packet: Packet) => void = () => {};
+  /** Whether the raw packet lab is on screen to edit a packet in. */
+  editable = true;
 
   private readonly body: HTMLElement;
   private current: Entry | undefined;
@@ -223,7 +225,7 @@ export class Inspector {
   private renderPacket(packet: Packet): void {
     const { bytes, header } = packet;
     const route = `${packet.from.address}:${packet.from.port} → ${packet.to.address}:${packet.to.port}`;
-    const edit = button('Edit and resend', () => this.onEdit(packet), { class: 'chip', id: 'inspector-edit' });
+    const edit = this.editable && button('Edit and resend', () => this.onEdit(packet), { class: 'chip', id: 'inspector-edit' });
 
     if (!header) {
       let reason = '';

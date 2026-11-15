@@ -20,7 +20,7 @@ This library lets you discover and control LIFX smart lights on your local netwo
 - 🚀 **Zero dependencies** - batteries-included socket setup for Node.js, Bun, and Deno — or bring your own UDP socket if you want
 - 🎛️ **Direct packet control** - each client operation sends exactly one packet with no hidden behavior
 
-Runnable scripts for every runtime live in [`examples/`](examples/). To see the library work without any hardware, [`demo/`](demo/) runs it in a web page against simulated devices and shows every byte it sends and receives (`bun run demo`).
+Runnable scripts for every runtime live in [`examples/`](examples/). To see the library work without any hardware, [`demo/`](demo/) is a game that runs it in a web page against simulated devices, with every call and every byte on the wire shown beside the action (`bun run demo`).
 
 ## Quick Start
 

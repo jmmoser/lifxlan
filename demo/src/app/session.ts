@@ -16,6 +16,7 @@ import {
   GetColor,
   GetColorZones,
   GetDeviceChain,
+  GetService,
   GetExtendedColorZones,
   GetHostFirmware,
   GetInfrared,
@@ -96,6 +97,8 @@ export interface Call {
 }
 
 export interface SessionListener {
+  /** A reliable send timed out and is being tried again (`attempt` of `of`), or was given up on. */
+  retry?(lamp: Lamp, attempt: number, of: number, gaveUp: boolean): void;
   call?(call: Call): void;
   callUpdated?(call: Call): void;
   lampsChanged?(): void;
@@ -119,12 +122,15 @@ export class Session {
   readonly lamps: Lamp[] = [];
   /** How long `client.send()` waits for a reply before rejecting. */
   readonly timeoutMs = 1500;
+  /** How many times a reliable send is attempted before giving up. */
+  readonly attempts = 3;
 
   timeouts = 0;
   partying = false;
   plasmaFor: Lamp | undefined;
 
   private readonly socket: VirtualSocket;
+  private readonly lan: VirtualLan;
   private readonly listeners = new Set<SessionListener>();
   private discovery: Discovery | undefined;
   private nextCallId = 1;
@@ -139,7 +145,13 @@ export class Session {
       onSend: (message, port, address) => this.socket.send(message, port, address),
       onMessage: (message) => this.emit((listener) => listener.message?.(message)),
     });
-    this.devices = Devices();
+    this.lan = lan;
+    // The registry announces what discovery finds; a device that reappears at
+    // a new address is updated in place, so every Lamp keeps working.
+    this.devices = Devices({
+      onAdded: (device) => { void this.identify(device).catch(() => { /* the failed call is already in the log */ }); },
+      onChanged: () => this.changed(),
+    });
     this.client = Client({ router: this.router, defaultTimeoutMs: this.timeoutMs });
     this.socket = lan.bind(this.endpoint, (bytes, remote) => {
       this.devices.register(remote.port, remote.address, this.router.receive(bytes));
@@ -219,24 +231,55 @@ export class Session {
   /* Discovery                                                         */
   /* ---------------------------------------------------------------- */
 
+  /** Runs the discovery helper for a few seconds: GetService now, again after a second, then stop. */
   startDiscovery(): void {
-    const discovery = discover(this.router, this.devices);
+    this.discovery?.dispose();
+    const discovery = discover(this.router, this.devices, { timeoutMs: 2500 });
     this.discovery = discovery;
-    this.begin('for await (const device of discover(router, devices)) { … }', 'sent');
+    this.begin('for await (const device of discover(router, devices, { timeoutMs: 2500 })) { … }', 'sent');
     void (async () => {
-      for await (const device of discovery) {
-        void this.identify(device).catch(() => { /* the failed call is already in the log */ });
-      }
+      for await (const device of discovery) void device;
     })();
   }
 
-  /** Forgets every device and discovers them again. */
-  rescan(): void {
+  /** One GetService broadcast, by hand. Whatever answers lands in the registry. */
+  scan(): void {
+    this.streams.clear();
+    this.begin('client.broadcast(GetService())', 'sent');
+    this.client.broadcast(GetService());
+  }
+
+  /** Forgets every device. */
+  forgetAll(): void {
     this.stopAnimation();
     this.discovery?.dispose();
     for (const lamp of this.lamps.splice(0)) this.devices.remove(lamp.device.serialNumber);
     this.changed();
+  }
+
+  /** Forgets every device and discovers them again. */
+  rescan(): void {
+    this.forgetAll();
     this.startDiscovery();
+  }
+
+  /**
+   * An awaited call that is tried again when it times out — the retry recipe
+   * from the README. Each attempt is its own entry in the log.
+   */
+  async reliably<R>(lamp: Lamp, code: string, run: (timeoutMs: number) => Promise<R>): Promise<R> {
+    // Long enough for a round trip on the network as it is now, short enough to retry while it still matters.
+    const timeoutMs = Math.round(Math.max(450, (this.lan.latencyMs + this.lan.jitterMs) * 2 + 250));
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.track(code, () => run(timeoutMs));
+      } catch (error) {
+        const last = attempt >= this.attempts;
+        if (!(error instanceof TimeoutError)) throw error;
+        this.emit((listener) => listener.retry?.(lamp, attempt, this.attempts, last));
+        if (last) throw error;
+      }
+    }
   }
 
   /** Learns what a newly discovered device is by asking it. */
@@ -251,26 +294,35 @@ export class Session {
     this.lamps.sort((a, b) => a.device.address.localeCompare(b.device.address, undefined, { numeric: true }));
     this.changed();
 
-    lamp.label = await this.track('await client.send(GetLabel(), device)', () => client.send(GetLabel(), device));
+    // Asked with retries: on a lossy network a device should not stay a stranger over one dropped packet.
+    lamp.label = await this.reliably(lamp, 'await client.send(GetLabel(), device)', (timeoutMs) => client.send(GetLabel(), device, { timeoutMs }));
     lamp.name = camel(lamp.label);
     const n = lamp.name;
     this.changed();
 
-    const version = await this.track(`await client.send(GetVersion(), ${n})`, () => client.send(GetVersion(), device));
-    const firmware = await this.track(`await client.send(GetHostFirmware(), ${n})`, () => client.send(GetHostFirmware(), device));
+    const version = await this.reliably(lamp, `await client.send(GetVersion(), ${n})`, (timeoutMs) => client.send(GetVersion(), device, { timeoutMs }));
+    const firmware = await this.reliably(lamp, `await client.send(GetHostFirmware(), ${n})`, (timeoutMs) => client.send(GetHostFirmware(), device, { timeoutMs }));
     lamp.productName = this.products.get(version.vendor, version.product)?.name ?? `Product ${version.product}`;
     lamp.features = this.products.features(version.vendor, version.product, firmware);
     lamp.firmware = `${firmware.versionMajor}.${firmware.versionMinor}`;
     lamp.kind = lamp.features?.matrix ? 'tiles' : lamp.features?.multizone ? 'strip' : 'bulb';
 
-    const wifi = await this.track(`await client.send(GetWifiInfo(), ${n})`, () => client.send(GetWifiInfo(), device));
+    const wifi = await this.reliably(lamp, `await client.send(GetWifiInfo(), ${n})`, (timeoutMs) => client.send(GetWifiInfo(), device, { timeoutMs }));
     lamp.rssi = convertSignalToRssi(wifi.signal);
 
-    await this.readState(lamp);
-    if (lamp.kind === 'strip') await this.readZones(lamp, lamp.features?.extended_multizone === true);
+    const state = await this.reliably(lamp, `await client.send(GetColor(), ${n})`, (timeoutMs) => client.send(GetColor(), device, { timeoutMs }));
+    lamp.color = { hue: state.hue, saturation: state.saturation, brightness: state.brightness, kelvin: state.kelvin };
+    lamp.power = state.power > 0;
+    if (lamp.kind === 'strip') {
+      const zones = await this.reliably(lamp, `await client.send(GetExtendedColorZones(), ${n})`, (timeoutMs) => client.send(GetExtendedColorZones(), device, { timeoutMs }));
+      lamp.zones = zones.colors;
+    }
     if (lamp.kind === 'tiles') {
-      await this.readChain(lamp);
-      await this.readTiles(lamp);
+      const chain = await this.reliably(lamp, `await client.send(GetDeviceChain(), ${n})`, (timeoutMs) => client.send(GetDeviceChain(), device, { timeoutMs }));
+      lamp.tiles = chain.devices.map((tile) => ({ x: tile.userX, y: tile.userY }));
+      const options = { tileIndex: 0, tileCount: lamp.tiles.length };
+      const frames = await this.reliably(lamp, `await client.send(Get64(${literal(options)}), ${n})`, (timeoutMs) => client.send(Get64(options), device, { timeoutMs }));
+      lamp.frames = frames.map((frame) => frame.colors);
     }
     lamp.ready = true;
     this.changed();
@@ -451,6 +503,68 @@ export class Session {
     frame[pixel] = color;
     this.fire(`pixel:${lamp.device.serialNumber}`, `client.sendUnacknowledged(Set64({ tileIndex: ${tileIndex}, colors }), ${lamp.name})`,
       () => this.client.sendUnacknowledged(Set64({ tileIndex, colors: frame }), lamp.device));
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* The game's shots: one aimed, confirmed change each                */
+  /* ---------------------------------------------------------------- */
+
+  /** Colours a whole bulb, eight zones of a strip, or one tile — whichever `part` of the lamp was aimed at. */
+  async shoot(lamp: Lamp, part: number, color: Color, durationMs: number): Promise<void> {
+    const { client } = this;
+    const n = lamp.name;
+    if (lamp.kind === 'strip') {
+      const options = { startIndex: part * 8, endIndex: part * 8 + 7, ...color, durationMs };
+      for (let zone = options.startIndex; zone <= options.endIndex; zone++) lamp.zones[zone] = color;
+      await this.reliably(lamp, `await client.send(SetColorZones(${literal(options)}), ${n})`,
+        (timeoutMs) => client.send(SetColorZones(options), lamp.device, { timeoutMs }));
+    } else if (lamp.kind === 'tiles') {
+      const colors = Array.from({ length: 64 }, () => color);
+      lamp.frames[part] = colors;
+      await this.reliably(lamp, `await client.send(Set64({ tileIndex: ${part}, colors: Array(64).fill(${literal(color)}), durationMs: ${durationMs} }), ${n})`,
+        (timeoutMs) => client.send(Set64({ tileIndex: part, colors, durationMs }), lamp.device, { timeoutMs }));
+    } else {
+      const options = { ...color, durationMs };
+      lamp.color = color;
+      await this.reliably(lamp, `await client.send(SetColor(${literal(options)}), ${n})`,
+        (timeoutMs) => client.send(SetColor(options), lamp.device, { timeoutMs }));
+    }
+  }
+
+  /** A bulb's ability: one SetWaveform packet, and the bulb strobes white by itself. */
+  async flash(lamp: Lamp): Promise<void> {
+    const options = { transient: true, hue: 0, saturation: 0, brightness: 65535, kelvin: 6500, periodMs: 260, cycles: 9, skewRatio: 9000, waveform: Waveform.PULSE };
+    const shown = literal(options).replace(/waveform: \d+/, 'waveform: Waveform.PULSE');
+    await this.reliably(lamp, `await client.send(SetWaveform(${shown}), ${lamp.name})`,
+      (timeoutMs) => this.client.send(SetWaveform(options), lamp.device, { timeoutMs }));
+  }
+
+  /** The strip's ability: a rainbow across every zone, then a MOVE effect the strip runs for `seconds`. */
+  async chase(lamp: Lamp, seconds: number): Promise<void> {
+    const colors = lamp.zones.map((_, zone) => hsbk((zone / lamp.zones.length) * 360, 1, 1));
+    lamp.zones = colors;
+    await this.reliably(lamp, `await client.send(SetExtendedColorZones({ zoneIndex: 0, colors: rainbow }), ${lamp.name})`,
+      (timeoutMs) => this.client.send(SetExtendedColorZones({ zoneIndex: 0, colors }), lamp.device, { timeoutMs }));
+    const parameters = new Uint8Array(32);
+    parameters[4] = 1;
+    const options = { instanceId: this.effectInstance++, effectType: MultiZoneEffectType.MOVE, speedMs: 1600, durationNs: BigInt(seconds) * 1_000_000_000n, parameters };
+    await this.reliably(lamp, `await client.send(SetMultiZoneEffect({ instanceId: ${options.instanceId}, effectType: MultiZoneEffectType.MOVE, speedMs: 1600, durationNs: ${options.durationNs}n, parameters }), ${lamp.name})`,
+      (timeoutMs) => this.client.send(SetMultiZoneEffect(options), lamp.device, { timeoutMs }));
+  }
+
+  /** The tiles' ability: the FLAME effect, which the tiles run themselves for `seconds`. */
+  async firewall(lamp: Lamp, seconds: number): Promise<void> {
+    const options = { instanceId: this.effectInstance++, effectType: TileEffectType.FLAME, speedMs: 3000, durationNs: BigInt(seconds) * 1_000_000_000n, palette: [] };
+    await this.reliably(lamp, `await client.send(SetTileEffect({ instanceId: ${options.instanceId}, effectType: TileEffectType.FLAME, speedMs: 3000, durationNs: ${options.durationNs}n, palette: [] }), ${lamp.name})`,
+      (timeoutMs) => this.client.send(SetTileEffect(options), lamp.device, { timeoutMs }));
+  }
+
+  /** One tagged packet to the broadcast address: every device on the network strobes at once. */
+  broadcastFlash(): void {
+    const options = { transient: true, hue: 0, saturation: 0, brightness: 65535, kelvin: 6500, periodMs: 240, cycles: 12, skewRatio: 9000, waveform: Waveform.PULSE };
+    this.streams.clear();
+    this.begin(`client.broadcast(SetWaveform(${literal(options).replace(/waveform: \d+/, 'waveform: Waveform.PULSE')}))`, 'sent');
+    this.client.broadcast(SetWaveform(options));
   }
 
   /* ---------------------------------------------------------------- */
